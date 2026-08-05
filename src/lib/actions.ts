@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
-import { getTemplate, planAllowsTemplate } from "./sections";
+import { embedUrl, getTemplate, planAllowsTemplate } from "./sections";
+import { extractContent, fetchSiteHtml, validateSiteUrl } from "./scrape";
+import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
+import { blueskySession, publishPost } from "./publish";
 import type { Site, SiteConfig } from "./types";
 
 export interface FormState {
@@ -216,6 +219,272 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   return {};
 }
 
+/* ---------------- chatroom ---------------- */
+
+export async function postChatMessage(_prev: FormState, fd: FormData): Promise<FormState> {
+  const siteId = Number(str(fd, "siteId"));
+  const site = store.getSiteById(siteId);
+  if (!site) return { error: "Page not found." };
+  const plan = getPlan(site.plan);
+  if (!plan.chatroom || site.config.chatroomEnabled === false) return { error: "Chat is not enabled on this page." };
+
+  const author = str(fd, "author").slice(0, 40) || "anon";
+  const body = str(fd, "body").slice(0, 500);
+  if (!body) return { error: "Write a message first." };
+
+  store.addChatMessage(siteId, author, body);
+  revalidatePath(`/s/${site.slug}`);
+  revalidatePath("/dashboard/chatroom");
+  return { ok: true };
+}
+
+export async function deleteChatMessageAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "messageId"));
+  const message = store.getChatMessage(id);
+  if (!message || message.siteId !== site.id) return;
+  store.deleteChatMessage(id);
+  revalidatePath("/dashboard/chatroom");
+  revalidatePath(`/s/${site.slug}`);
+}
+
+export async function toggleChatroom(): Promise<void> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).chatroom) return;
+  store.updateSite(site.id, {
+    config: { ...site.config, chatroomEnabled: site.config.chatroomEnabled === false },
+  });
+  revalidatePath("/dashboard/chatroom");
+  revalidatePath("/dashboard/integrations");
+  revalidatePath(`/s/${site.slug}`);
+}
+
+/* ---------------- audience ---------------- */
+
+export async function deleteLeadAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "leadId"));
+  const lead = store.getLead(id);
+  if (!lead || lead.siteId !== site.id) return;
+  store.deleteLead(id);
+  revalidatePath("/dashboard/audience");
+  revalidatePath("/dashboard/integrations");
+}
+
+/* ---------------- connect website ---------------- */
+
+export async function regenerateEmbedTokenAction(): Promise<void> {
+  const { site } = await requireSite();
+  store.regenerateEmbedToken(site.id);
+  revalidatePath("/dashboard/connect");
+}
+
+async function scanIntoInventory(siteId: number, rawUrl: string): Promise<FormState> {
+  const checked = validateSiteUrl(rawUrl);
+  if ("error" in checked) return { error: checked.error };
+  let html: string;
+  try {
+    html = await fetchSiteHtml(checked.url);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't reach that website." };
+  }
+  const items = extractContent(html, checked.url);
+  if (items.length === 0) return { error: "Couldn't find any editable content on that page." };
+  store.upsertConnection(siteId, checked.url.href);
+  store.replaceSiteContent(siteId, items);
+  revalidatePath("/dashboard/connect");
+  return { ok: true };
+}
+
+export async function connectWebsite(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const url = str(fd, "url");
+  if (!url) return { error: "Enter your website's address." };
+  return scanIntoInventory(site.id, url);
+}
+
+export async function rescanWebsite(_prev: FormState, _fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const connection = store.getConnection(site.id);
+  if (!connection) return { error: "Connect a website first." };
+  return scanIntoInventory(site.id, connection.url);
+}
+
+export async function saveWebsiteContent(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const items = store.getSiteContent(site.id);
+  for (const item of items) {
+    const raw = fd.get(`content_${item.id}`);
+    if (typeof raw !== "string") continue;
+    let value = raw.trim();
+    if (item.kind === "text") value = value.replace(/\s+/g, " ");
+    if (item.kind === "video") value = embedUrl(value) ?? value;
+    if (item.kind !== "text" && value && !/^https?:\/\//.test(value)) continue;
+    // Matching the original (or blanking a URL field) reverts the override.
+    const edited = value === "" || value === item.original ? null : value;
+    if (edited !== item.edited) store.setContentEdit(site.id, item.id, edited);
+  }
+  revalidatePath("/dashboard/connect");
+}
+
+export async function toggleConnection(): Promise<void> {
+  const { site } = await requireSite();
+  const connection = store.getConnection(site.id);
+  if (!connection) return;
+  store.setConnectionEnabled(site.id, !connection.enabled);
+  revalidatePath("/dashboard/connect");
+}
+
+export async function disconnectWebsite(): Promise<void> {
+  const { site } = await requireSite();
+  store.deleteConnection(site.id);
+  revalidatePath("/dashboard/connect");
+}
+
+/* ---------------- social media ---------------- */
+
+export async function connectSocial(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const platform = getPlatform(str(fd, "platform"));
+  if (!platform) return { error: "Unknown platform." };
+
+  if (platform.authType === "bluesky") {
+    const handle = cleanHandle(str(fd, "handle"));
+    const secret = str(fd, "secret");
+    if (!handle || !secret) return { error: "Enter your Bluesky handle and an app password." };
+    try {
+      // Verify the credentials against Bluesky before storing anything.
+      await blueskySession(handle, secret);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Bluesky sign-in failed." };
+    }
+    store.upsertSocialAccount(site.id, platform.id, handle, { authKind: "bluesky", secret });
+  } else if (platform.authType === "webhook") {
+    const secret = str(fd, "secret") || str(fd, "handle");
+    if (!isDiscordWebhook(secret)) {
+      return { error: "Paste a Discord webhook URL (Server Settings → Integrations → Webhooks → New Webhook)." };
+    }
+    store.upsertSocialAccount(site.id, platform.id, "channel webhook", { authKind: "webhook", secret });
+  } else {
+    const handle = cleanHandle(str(fd, "handle"));
+    if (!handle) return { error: "Enter your handle or profile URL." };
+    store.upsertSocialAccount(site.id, platform.id, handle);
+  }
+
+  revalidatePath("/dashboard/integrations");
+  return { ok: true };
+}
+
+export async function disconnectSocial(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  store.deleteSocialAccount(site.id, str(fd, "platform"));
+  revalidatePath("/dashboard/integrations");
+}
+
+export async function createSocialPostAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const body = str(fd, "body").slice(0, 2000);
+  if (!body) return { error: "Write something to post." };
+  const mediaUrl = str(fd, "mediaUrl");
+  if (mediaUrl && !/^https?:\/\//.test(mediaUrl)) return { error: "The media link must be a full http(s) URL." };
+
+  const connected = new Set(store.getSocialAccounts(site.id).map((a) => a.platform));
+  const platforms = fd.getAll("platforms").map(String).filter((p) => connected.has(p));
+  if (platforms.length === 0) return { error: "Pick at least one connected platform." };
+
+  const postId = store.createSocialPost(site.id, body, mediaUrl, platforms);
+  await publishPost(site.id, postId);
+  revalidatePath("/dashboard/integrations");
+  return { ok: true };
+}
+
+/** Re-attempt delivery of a post's queued/failed targets. */
+export async function retrySocialPost(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const postId = Number(str(fd, "postId"));
+  if (postId) await publishPost(site.id, postId);
+  revalidatePath("/dashboard/integrations");
+}
+
+export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const rawTwitch = str(fd, "twitchChannel");
+  const rawFacebook = str(fd, "facebookLiveUrl");
+  const rawInstagram = str(fd, "instagramLiveUser");
+
+  const twitchChannel = cleanTwitchChannel(rawTwitch);
+  if (rawTwitch && !twitchChannel) return { error: "That doesn't look like a Twitch channel name." };
+  const facebookLiveUrl = cleanFacebookLiveUrl(rawFacebook);
+  if (rawFacebook && !facebookLiveUrl) return { error: "The Facebook Live link must be an https facebook.com video URL." };
+  const instagramLiveUser = cleanInstagramUser(rawInstagram);
+  if (rawInstagram && !instagramLiveUser) return { error: "That doesn't look like an Instagram username." };
+
+  store.updateSite(site.id, {
+    config: {
+      ...site.config,
+      twitchChannel,
+      facebookLiveUrl,
+      instagramLiveUser,
+      twitchStreamKey: str(fd, "twitchStreamKey"),
+      facebookStreamKey: str(fd, "facebookStreamKey"),
+      instagramStreamKey: str(fd, "instagramStreamKey"),
+    },
+  });
+  revalidatePath("/dashboard/integrations");
+  revalidatePath(`/s/${site.slug}`);
+  return { ok: true };
+}
+
+/** Flip everything live at once and announce it to every connected platform. */
+export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const c = site.config;
+  const destinations: string[] = [];
+  if (c.twitchChannel) destinations.push(`twitch.tv/${c.twitchChannel}`);
+  if (c.facebookLiveUrl) destinations.push("Facebook Live");
+  if (c.instagramLiveUser) destinations.push(`instagram.com/${c.instagramLiveUser}`);
+  if (destinations.length === 0) {
+    return { error: "Link at least one live platform below before going live." };
+  }
+
+  store.updateSite(site.id, { config: { ...c, liveNow: true } });
+
+  // Auto-announce on every connected social account.
+  const platforms = store.getSocialAccounts(site.id).map((a) => a.platform);
+  if (platforms.length > 0) {
+    const postId = store.createSocialPost(site.id, `I'm live right now — come watch: ${destinations.join(" · ")}`, "", platforms);
+    await publishPost(site.id, postId);
+  }
+
+  revalidatePath("/dashboard/integrations");
+  revalidatePath(`/s/${site.slug}`);
+  return { ok: true };
+}
+
+export async function endLive(): Promise<void> {
+  const { site } = await requireSite();
+  store.updateSite(site.id, { config: { ...site.config, liveNow: false } });
+  revalidatePath("/dashboard/integrations");
+  revalidatePath(`/s/${site.slug}`);
+}
+
+/* ---------------- support ---------------- */
+
+export async function createTicketAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const site = store.getSiteByUser(user.id);
+  if (!site || !getPlan(site.plan).helpdesk) return { error: "Help desk support is an Enterprise feature." };
+
+  const subject = str(fd, "subject").slice(0, 120);
+  const body = str(fd, "body").slice(0, 2000);
+  if (!subject || !body) return { error: "Subject and message are both required." };
+
+  store.createTicket(user.id, subject, body);
+  revalidatePath("/dashboard/support");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 /* ---------------- public site ---------------- */
 
 export async function subscribeAction(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -240,4 +509,25 @@ export async function markQuote(fd: FormData): Promise<void> {
   if (!["new", "quoted", "closed"].includes(status)) return;
   store.updateQuoteStatus(id, status);
   revalidatePath("/admin");
+}
+
+export async function replyTicket(fd: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  const id = Number(str(fd, "ticketId"));
+  const reply = str(fd, "reply");
+  store.updateTicket(id, { reply, status: reply ? "answered" : undefined });
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/support");
+}
+
+export async function setTicketStatus(fd: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || user.email !== ADMIN_EMAIL) return;
+  const id = Number(str(fd, "ticketId"));
+  const status = str(fd, "status");
+  if (!["open", "answered", "closed"].includes(status)) return;
+  store.updateTicket(id, { status });
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/support");
 }

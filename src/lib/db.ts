@@ -1,7 +1,23 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import type { Lead, QuoteRequest, Section, Site, User } from "./types";
+import { randomBytes, scryptSync } from "crypto";
+import type {
+  ChatMessage,
+  Connection,
+  ContentItem,
+  DailyViews,
+  Lead,
+  QuoteRequest,
+  ReferrerViews,
+  Section,
+  Site,
+  SocialAccount,
+  SocialAccountAuth,
+  SocialPost,
+  SupportTicket,
+  User,
+} from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
@@ -58,8 +74,102 @@ function createDb(): Database.Database {
       email TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      author TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      reply TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS page_views (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      day TEXT NOT NULL,
+      referrer TEXT NOT NULL DEFAULT '',
+      count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (site_id, day, referrer)
+    );
+    CREATE TABLE IF NOT EXISTS connections (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_scraped TEXT,
+      last_seen TEXT,
+      seen_host TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS site_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      selector TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      original TEXT NOT NULL,
+      edited TEXT,
+      position INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS social_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      handle TEXT NOT NULL,
+      auth_kind TEXT NOT NULL DEFAULT 'handle',
+      secret TEXT NOT NULL DEFAULT '',
+      refresh_token TEXT NOT NULL DEFAULT '',
+      expires_at TEXT,
+      external_id TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (site_id, platform)
+    );
+    CREATE TABLE IF NOT EXISTS social_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      media_url TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS social_post_targets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      detail TEXT NOT NULL DEFAULT ''
+    );
   `);
+
+  // Publisher-pipeline columns arrived after the social tables shipped.
+  const saCols = new Set((db.prepare("PRAGMA table_info(social_accounts)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!saCols.has("auth_kind")) db.exec("ALTER TABLE social_accounts ADD COLUMN auth_kind TEXT NOT NULL DEFAULT 'handle'");
+  if (!saCols.has("secret")) db.exec("ALTER TABLE social_accounts ADD COLUMN secret TEXT NOT NULL DEFAULT ''");
+  if (!saCols.has("refresh_token")) db.exec("ALTER TABLE social_accounts ADD COLUMN refresh_token TEXT NOT NULL DEFAULT ''");
+  if (!saCols.has("expires_at")) db.exec("ALTER TABLE social_accounts ADD COLUMN expires_at TEXT");
+  if (!saCols.has("external_id")) db.exec("ALTER TABLE social_accounts ADD COLUMN external_id TEXT NOT NULL DEFAULT ''");
+  const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+
+  // Embed tokens arrived after the first schema shipped — migrate in place.
+  const siteCols = db.prepare("PRAGMA table_info(sites)").all() as Array<{ name: string }>;
+  if (!siteCols.some((c) => c.name === "embed_token")) {
+    db.exec("ALTER TABLE sites ADD COLUMN embed_token TEXT");
+  }
+  const untokened = db.prepare("SELECT id FROM sites WHERE embed_token IS NULL OR embed_token = ''").all() as Array<{
+    id: number;
+  }>;
+  const setToken = db.prepare("UPDATE sites SET embed_token = ? WHERE id = ?");
+  for (const row of untokened) setToken.run(newEmbedToken(), row.id);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_embed_token ON sites(embed_token)");
+
   return db;
+}
+
+function newEmbedToken(): string {
+  return randomBytes(12).toString("hex");
 }
 
 // A syntactically valid salt:hash that no real password can produce, so the
@@ -71,7 +181,7 @@ function seedDemo(d: Database.Database): void {
   if (d.prepare("SELECT id FROM sites WHERE slug = 'demo'").get()) return;
 
   let userId: number;
-  const existing = d.prepare("SELECT id FROM users WHERE email = ?").get("demo@socialconstruct.app") as
+  const existing = d.prepare("SELECT id FROM users WHERE email = ?").get("demo@ensemble.app") as
     | { id: number }
     | undefined;
   if (existing) {
@@ -79,7 +189,7 @@ function seedDemo(d: Database.Database): void {
   } else {
     const info = d
       .prepare("INSERT INTO users (email, password_hash, name, business_name) VALUES (?, ?, ?, ?)")
-      .run("demo@socialconstruct.app", DEMO_LOCKED_HASH, "Nova Rae", "Nova Rae");
+      .run("demo@ensemble.app", DEMO_LOCKED_HASH, "Nova Rae", "Nova Rae");
     userId = Number(info.lastInsertRowid);
   }
 
@@ -90,8 +200,8 @@ function seedDemo(d: Database.Database): void {
     chatroomEnabled: true,
   });
   const siteInfo = d
-    .prepare("INSERT INTO sites (user_id, slug, plan, published, config) VALUES (?, 'demo', 'enterprise', 1, ?)")
-    .run(userId, config);
+    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'demo', 'enterprise', 1, ?, ?)")
+    .run(userId, config, newEmbedToken());
   const siteId = Number(siteInfo.lastInsertRowid);
 
   const sections: Array<[string, Record<string, string>]> = [
@@ -165,6 +275,51 @@ function seedDemo(d: Database.Database): void {
   sections.forEach(([type, content], i) => insert.run(siteId, type, i + 1, JSON.stringify(content)));
 }
 
+/** Give the demo chatroom a few messages so it looks alive (idempotent). */
+function seedDemoChat(d: Database.Database): void {
+  const site = d.prepare("SELECT id FROM sites WHERE slug = 'demo'").get() as { id: number } | undefined;
+  if (!site) return;
+  const existing = d.prepare("SELECT COUNT(*) AS c FROM chat_messages WHERE site_id = ?").get(site.id) as { c: number };
+  if (existing.c > 0) return;
+  const insert = d.prepare("INSERT INTO chat_messages (site_id, author, body) VALUES (?, ?, ?)");
+  insert.run(site.id, "mika", "first!");
+  insert.run(site.id, "jae", "the glass hearts demo is stuck in my head");
+  insert.run(site.id, "Nova Rae", "welcome to the clubhouse — new drop friday");
+}
+
+/**
+ * Seed the admin account so /admin is reachable out of the box (idempotent).
+ * Email matches ADMIN_EMAIL in auth.ts; password defaults to "admin1234"
+ * (override with ADMIN_PASSWORD before first run).
+ */
+function seedAdmin(d: Database.Database): void {
+  const email = (process.env.ADMIN_EMAIL || "j@cub.pw").toLowerCase();
+  if (d.prepare("SELECT id FROM users WHERE email = ?").get(email)) return;
+
+  const password = process.env.ADMIN_PASSWORD || "admin1234";
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  const info = d
+    .prepare("INSERT INTO users (email, password_hash, name, business_name) VALUES (?, ?, ?, ?)")
+    .run(email, `${salt}:${hash}`, "Site Admin", "Ensemble HQ");
+  const userId = Number(info.lastInsertRowid);
+
+  const config = JSON.stringify({ themeColor: "#8b5cf6", tagline: "" });
+  const siteInfo = d
+    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'hq', 'enterprise', 0, ?, ?)")
+    .run(userId, config, newEmbedToken());
+  const siteId = Number(siteInfo.lastInsertRowid);
+  d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, 'hero', 1, ?)").run(
+    siteId,
+    JSON.stringify({
+      heading: "Ensemble HQ",
+      subheading: "Admin test page.",
+      ctaLabel: "",
+      ctaUrl: "",
+    })
+  );
+}
+
 // Lazily opened and cached across dev hot-reloads, so importing this module
 // (e.g. during build-time page analysis) doesn't touch the database file.
 const g = globalThis as unknown as { __appDb?: Database.Database; __appDbSeeded?: boolean };
@@ -172,6 +327,8 @@ function db(): Database.Database {
   const d = (g.__appDb ??= createDb());
   if (!g.__appDbSeeded) {
     seedDemo(d);
+    seedDemoChat(d);
+    seedAdmin(d);
     g.__appDbSeeded = true;
   }
   return d;
@@ -194,6 +351,7 @@ interface SiteRow {
   plan: string;
   published: number;
   config: string;
+  embed_token: string | null;
   created_at: string;
 }
 interface SectionRow {
@@ -232,6 +390,7 @@ function toSite(r: SiteRow): Site {
     plan: (r.plan as Site["plan"]) || "basic",
     published: r.published === 1,
     config: { themeColor: "#8b5cf6", tagline: "", ...JSON.parse(r.config || "{}") },
+    embedToken: r.embed_token ?? "",
     createdAt: r.created_at,
   };
 }
@@ -296,8 +455,8 @@ export function deleteSession(token: string): void {
 
 export function createSite(userId: number, slug: string, plan: string, config: object): Site {
   const info = db()
-    .prepare("INSERT INTO sites (user_id, slug, plan, config) VALUES (?, ?, ?, ?)")
-    .run(userId, slug, plan, JSON.stringify(config));
+    .prepare("INSERT INTO sites (user_id, slug, plan, config, embed_token) VALUES (?, ?, ?, ?, ?)")
+    .run(userId, slug, plan, JSON.stringify(config), newEmbedToken());
   return getSiteById(Number(info.lastInsertRowid))!;
 }
 
@@ -314,6 +473,17 @@ export function getSiteByUser(userId: number): Site | null {
 export function getSiteBySlug(slug: string): Site | null {
   const r = db().prepare("SELECT * FROM sites WHERE slug = ?").get(slug) as SiteRow | undefined;
   return r ? toSite(r) : null;
+}
+
+export function getSiteByToken(token: string): Site | null {
+  if (!token) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE embed_token = ?").get(token) as SiteRow | undefined;
+  return r ? toSite(r) : null;
+}
+
+/** Issue a fresh embed token, invalidating any snippets using the old one. */
+export function regenerateEmbedToken(siteId: number): void {
+  db().prepare("UPDATE sites SET embed_token = ? WHERE id = ?").run(newEmbedToken(), siteId);
 }
 
 export function slugTaken(slug: string, excludeSiteId?: number): boolean {
@@ -436,4 +606,413 @@ export function getLeads(siteId: number): Lead[] {
 export function countLeads(siteId: number): number {
   const r = db().prepare("SELECT COUNT(*) AS c FROM leads WHERE site_id = ?").get(siteId) as { c: number };
   return r.c;
+}
+
+export function getLead(id: number): Lead | null {
+  const r = db().prepare("SELECT * FROM leads WHERE id = ?").get(id) as LeadRow | undefined;
+  return r ? toLead(r) : null;
+}
+
+export function deleteLead(id: number): void {
+  db().prepare("DELETE FROM leads WHERE id = ?").run(id);
+}
+
+/* ---------- chat messages ---------- */
+
+interface ChatRow {
+  id: number;
+  site_id: number;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+function toChatMessage(r: ChatRow): ChatMessage {
+  return { id: r.id, siteId: r.site_id, author: r.author, body: r.body, createdAt: r.created_at };
+}
+
+/** Latest `limit` messages, oldest first (chat display order). */
+export function getChatMessages(siteId: number, limit = 50): ChatMessage[] {
+  const rows = db()
+    .prepare("SELECT * FROM chat_messages WHERE site_id = ? ORDER BY id DESC LIMIT ?")
+    .all(siteId, limit) as ChatRow[];
+  return rows.map(toChatMessage).reverse();
+}
+
+export function getChatMessage(id: number): ChatMessage | null {
+  const r = db().prepare("SELECT * FROM chat_messages WHERE id = ?").get(id) as ChatRow | undefined;
+  return r ? toChatMessage(r) : null;
+}
+
+export function addChatMessage(siteId: number, author: string, body: string): ChatMessage {
+  const info = db()
+    .prepare("INSERT INTO chat_messages (site_id, author, body) VALUES (?, ?, ?)")
+    .run(siteId, author, body);
+  return getChatMessage(Number(info.lastInsertRowid))!;
+}
+
+export function deleteChatMessage(id: number): void {
+  db().prepare("DELETE FROM chat_messages WHERE id = ?").run(id);
+}
+
+export function countChatMessages(siteId: number): number {
+  const r = db().prepare("SELECT COUNT(*) AS c FROM chat_messages WHERE site_id = ?").get(siteId) as { c: number };
+  return r.c;
+}
+
+/* ---------- support tickets ---------- */
+
+interface TicketRow {
+  id: number;
+  user_id: number;
+  subject: string;
+  body: string;
+  status: string;
+  reply: string;
+  created_at: string;
+}
+
+function toTicket(r: TicketRow): SupportTicket {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    subject: r.subject,
+    body: r.body,
+    status: r.status as SupportTicket["status"],
+    reply: r.reply,
+    createdAt: r.created_at,
+  };
+}
+
+export function createTicket(userId: number, subject: string, body: string): SupportTicket {
+  const info = db()
+    .prepare("INSERT INTO support_tickets (user_id, subject, body) VALUES (?, ?, ?)")
+    .run(userId, subject, body);
+  const r = db().prepare("SELECT * FROM support_tickets WHERE id = ?").get(Number(info.lastInsertRowid)) as TicketRow;
+  return toTicket(r);
+}
+
+export function getTicketsByUser(userId: number): SupportTicket[] {
+  const rows = db()
+    .prepare("SELECT * FROM support_tickets WHERE user_id = ? ORDER BY id DESC")
+    .all(userId) as TicketRow[];
+  return rows.map(toTicket);
+}
+
+export function getAllTickets(): Array<SupportTicket & { userEmail: string; userName: string }> {
+  const rows = db()
+    .prepare(
+      `SELECT t.*, u.email AS user_email, u.name AS user_name
+       FROM support_tickets t JOIN users u ON u.id = t.user_id ORDER BY t.id DESC`
+    )
+    .all() as Array<TicketRow & { user_email: string; user_name: string }>;
+  return rows.map((r) => ({ ...toTicket(r), userEmail: r.user_email, userName: r.user_name }));
+}
+
+export function updateTicket(id: number, fields: { status?: string; reply?: string }): void {
+  const r = db().prepare("SELECT * FROM support_tickets WHERE id = ?").get(id) as TicketRow | undefined;
+  if (!r) return;
+  db().prepare("UPDATE support_tickets SET status = ?, reply = ? WHERE id = ?").run(
+    fields.status ?? r.status,
+    fields.reply ?? r.reply,
+    id
+  );
+}
+
+/* ---------- page views ---------- */
+
+export function recordPageView(siteId: number, referrer: string): void {
+  db()
+    .prepare(
+      `INSERT INTO page_views (site_id, day, referrer, count) VALUES (?, date('now'), ?, 1)
+       ON CONFLICT(site_id, day, referrer) DO UPDATE SET count = count + 1`
+    )
+    .run(siteId, referrer);
+}
+
+export function getTotalViews(siteId: number): number {
+  const r = db().prepare("SELECT COALESCE(SUM(count), 0) AS c FROM page_views WHERE site_id = ?").get(siteId) as {
+    c: number;
+  };
+  return r.c;
+}
+
+/** Views per day for the last `days` days, oldest first. Days with no views are omitted. */
+export function getDailyViews(siteId: number, days: number): DailyViews[] {
+  const rows = db()
+    .prepare(
+      `SELECT day, SUM(count) AS views FROM page_views
+       WHERE site_id = ? AND day >= date('now', ?)
+       GROUP BY day ORDER BY day`
+    )
+    .all(siteId, `-${days} days`) as Array<{ day: string; views: number }>;
+  return rows;
+}
+
+export function getTopReferrers(siteId: number, limit = 8): ReferrerViews[] {
+  const rows = db()
+    .prepare(
+      `SELECT referrer, SUM(count) AS views FROM page_views
+       WHERE site_id = ? GROUP BY referrer ORDER BY views DESC LIMIT ?`
+    )
+    .all(siteId, limit) as Array<{ referrer: string; views: number }>;
+  return rows;
+}
+
+/* ---------- website connections ---------- */
+
+interface ConnectionRow {
+  site_id: number;
+  url: string;
+  enabled: number;
+  last_scraped: string | null;
+  last_seen: string | null;
+  seen_host: string;
+}
+
+function toConnection(r: ConnectionRow): Connection {
+  return {
+    siteId: r.site_id,
+    url: r.url,
+    enabled: r.enabled === 1,
+    lastScraped: r.last_scraped,
+    lastSeen: r.last_seen,
+    seenHost: r.seen_host,
+  };
+}
+
+export function getConnection(siteId: number): Connection | null {
+  const r = db().prepare("SELECT * FROM connections WHERE site_id = ?").get(siteId) as ConnectionRow | undefined;
+  return r ? toConnection(r) : null;
+}
+
+export function upsertConnection(siteId: number, url: string): void {
+  db()
+    .prepare(
+      `INSERT INTO connections (site_id, url, enabled, last_scraped) VALUES (?, ?, 1, datetime('now'))
+       ON CONFLICT(site_id) DO UPDATE SET url = excluded.url, last_scraped = datetime('now')`
+    )
+    .run(siteId, url);
+}
+
+export function setConnectionEnabled(siteId: number, enabled: boolean): void {
+  db().prepare("UPDATE connections SET enabled = ? WHERE site_id = ?").run(enabled ? 1 : 0, siteId);
+}
+
+export function deleteConnection(siteId: number): void {
+  const tx = db().transaction(() => {
+    db().prepare("DELETE FROM connections WHERE site_id = ?").run(siteId);
+    db().prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
+  });
+  tx();
+}
+
+/** The pasted snippet phoned home — remember when and from where. */
+export function touchConnection(siteId: number, host: string): void {
+  db()
+    .prepare("UPDATE connections SET last_seen = datetime('now'), seen_host = CASE WHEN ? != '' THEN ? ELSE seen_host END WHERE site_id = ?")
+    .run(host, host, siteId);
+}
+
+/* ---------- extracted website content ---------- */
+
+interface ContentRow {
+  id: number;
+  site_id: number;
+  selector: string;
+  kind: string;
+  original: string;
+  edited: string | null;
+  position: number;
+}
+
+function toContentItem(r: ContentRow): ContentItem {
+  return {
+    id: r.id,
+    siteId: r.site_id,
+    selector: r.selector,
+    kind: r.kind as ContentItem["kind"],
+    original: r.original,
+    edited: r.edited,
+    position: r.position,
+  };
+}
+
+export function getSiteContent(siteId: number): ContentItem[] {
+  const rows = db().prepare("SELECT * FROM site_content WHERE site_id = ? ORDER BY position").all(siteId) as ContentRow[];
+  return rows.map(toContentItem);
+}
+
+export function getEditedContent(siteId: number): ContentItem[] {
+  const rows = db()
+    .prepare("SELECT * FROM site_content WHERE site_id = ? AND edited IS NOT NULL ORDER BY position")
+    .all(siteId) as ContentRow[];
+  return rows.map(toContentItem);
+}
+
+/**
+ * Replace the extracted inventory after a (re)scan, carrying edits over to
+ * items that still exist (same selector + kind + original content).
+ */
+export function replaceSiteContent(
+  siteId: number,
+  items: Array<{ selector: string; kind: string; original: string; position: number }>
+): void {
+  const d = db();
+  const tx = d.transaction(() => {
+    const previous = d.prepare("SELECT * FROM site_content WHERE site_id = ?").all(siteId) as ContentRow[];
+    const carried = new Map<string, string>();
+    for (const p of previous) {
+      if (p.edited !== null) carried.set(`${p.selector} ${p.kind} ${p.original}`, p.edited);
+    }
+    d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
+    const insert = d.prepare(
+      "INSERT INTO site_content (site_id, selector, kind, original, edited, position) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    for (const it of items) {
+      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector} ${it.kind} ${it.original}`) ?? null, it.position);
+    }
+  });
+  tx();
+}
+
+export function setContentEdit(siteId: number, contentId: number, edited: string | null): void {
+  db().prepare("UPDATE site_content SET edited = ? WHERE id = ? AND site_id = ?").run(edited, contentId, siteId);
+}
+
+/* ---------- social accounts & posts ---------- */
+
+interface SocialAccountRow {
+  id: number;
+  site_id: number;
+  platform: string;
+  handle: string;
+  auth_kind: string;
+  secret: string;
+  refresh_token: string;
+  expires_at: string | null;
+  external_id: string;
+  created_at: string;
+}
+
+/** Safe shape for the UI — never includes stored credentials. */
+export function getSocialAccounts(siteId: number): SocialAccount[] {
+  const rows = db().prepare("SELECT * FROM social_accounts WHERE site_id = ? ORDER BY id").all(siteId) as SocialAccountRow[];
+  return rows.map((r) => ({
+    id: r.id,
+    siteId: r.site_id,
+    platform: r.platform,
+    handle: r.handle,
+    authKind: r.auth_kind as SocialAccount["authKind"],
+    createdAt: r.created_at,
+  }));
+}
+
+/** Full row including credentials — server-side publishing only. */
+export function getSocialAccountAuth(siteId: number, platform: string): SocialAccountAuth | null {
+  const r = db()
+    .prepare("SELECT * FROM social_accounts WHERE site_id = ? AND platform = ?")
+    .get(siteId, platform) as SocialAccountRow | undefined;
+  if (!r) return null;
+  return {
+    platform: r.platform,
+    handle: r.handle,
+    authKind: r.auth_kind as SocialAccountAuth["authKind"],
+    secret: r.secret,
+    refreshToken: r.refresh_token,
+    expiresAt: r.expires_at,
+    externalId: r.external_id,
+  };
+}
+
+export function upsertSocialAccount(
+  siteId: number,
+  platform: string,
+  handle: string,
+  auth?: { authKind?: string; secret?: string; refreshToken?: string; expiresAt?: string | null; externalId?: string }
+): void {
+  db()
+    .prepare(
+      `INSERT INTO social_accounts (site_id, platform, handle, auth_kind, secret, refresh_token, expires_at, external_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(site_id, platform) DO UPDATE SET
+         handle = excluded.handle, auth_kind = excluded.auth_kind, secret = excluded.secret,
+         refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, external_id = excluded.external_id`
+    )
+    .run(
+      siteId,
+      platform,
+      handle,
+      auth?.authKind ?? "handle",
+      auth?.secret ?? "",
+      auth?.refreshToken ?? "",
+      auth?.expiresAt ?? null,
+      auth?.externalId ?? ""
+    );
+}
+
+export function deleteSocialAccount(siteId: number, platform: string): void {
+  db().prepare("DELETE FROM social_accounts WHERE site_id = ? AND platform = ?").run(siteId, platform);
+}
+
+interface SocialPostRow {
+  id: number;
+  site_id: number;
+  body: string;
+  media_url: string;
+  created_at: string;
+}
+
+export function createSocialPost(siteId: number, body: string, mediaUrl: string, platforms: string[]): number {
+  const d = db();
+  let postId = 0;
+  const tx = d.transaction(() => {
+    const info = d
+      .prepare("INSERT INTO social_posts (site_id, body, media_url) VALUES (?, ?, ?)")
+      .run(siteId, body, mediaUrl);
+    postId = Number(info.lastInsertRowid);
+    const insert = d.prepare("INSERT INTO social_post_targets (post_id, platform) VALUES (?, ?)");
+    for (const p of platforms) insert.run(postId, p);
+  });
+  tx();
+  return postId;
+}
+
+/** Targets of one post that still need a publish attempt, with ownership check. */
+export function getPendingTargets(siteId: number, postId: number): Array<{ id: number; platform: string }> {
+  return db()
+    .prepare(
+      `SELECT t.id, t.platform FROM social_post_targets t
+       JOIN social_posts p ON p.id = t.post_id
+       WHERE p.id = ? AND p.site_id = ? AND t.status != 'posted'`
+    )
+    .all(postId, siteId) as Array<{ id: number; platform: string }>;
+}
+
+export function getPostForSite(siteId: number, postId: number): { id: number; body: string; mediaUrl: string } | null {
+  const r = db()
+    .prepare("SELECT id, body, media_url FROM social_posts WHERE id = ? AND site_id = ?")
+    .get(postId, siteId) as SocialPostRow | undefined;
+  return r ? { id: r.id, body: r.body, mediaUrl: r.media_url } : null;
+}
+
+export function updateTargetStatus(targetId: number, status: string, detail: string): void {
+  db().prepare("UPDATE social_post_targets SET status = ?, detail = ? WHERE id = ?").run(status, detail.slice(0, 500), targetId);
+}
+
+export function getSocialPosts(siteId: number, limit = 20): SocialPost[] {
+  const posts = db()
+    .prepare("SELECT * FROM social_posts WHERE site_id = ? ORDER BY id DESC LIMIT ?")
+    .all(siteId, limit) as SocialPostRow[];
+  const targets = db().prepare("SELECT post_id, platform, status, detail FROM social_post_targets WHERE post_id IN (SELECT id FROM social_posts WHERE site_id = ? ORDER BY id DESC LIMIT ?)").all(siteId, limit) as Array<{ post_id: number; platform: string; status: string; detail: string }>;
+  return posts.map((p) => ({
+    id: p.id,
+    siteId: p.site_id,
+    body: p.body,
+    mediaUrl: p.media_url,
+    createdAt: p.created_at,
+    targets: targets
+      .filter((t) => t.post_id === p.id)
+      .map((t) => ({ platform: t.platform, status: t.status as SocialPost["targets"][number]["status"], detail: t.detail })),
+  }));
 }

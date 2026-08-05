@@ -16,7 +16,7 @@ export default async function OnboardingPage({
   return (
     <div className="glow flex flex-1 flex-col items-center px-6 py-16">
       <div className="mb-10 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Welcome, {user.name.split(" ")[0]} 👋</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome, {user.name.split(" ")[0]}</h1>
         <p className="mt-2 text-mist">How do you want to set up {user.businessName}?</p>
       </div>
       <Onboarding initialPath={path} initialPlan={plan} />

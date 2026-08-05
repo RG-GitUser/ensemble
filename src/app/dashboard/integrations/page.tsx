@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getLeads, getSiteByUser } from "@/lib/db";
+import { getLeads, getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
+import { SocialIntegrations } from "@/components/SocialDashboard";
 
-function LockedCard({ icon, title, body, plan }: { icon: string; title: string; body: string; plan: string }) {
+function LockedCard({ title, body, plan }: { title: string; body: string; plan: string }) {
   return (
     <div className="card border-dashed opacity-75">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-bold">{icon} {title}</h2>
+        <h2 className="font-bold">{title}</h2>
         <span className="rounded-full bg-warn/15 px-2.5 py-1 text-[10px] font-bold uppercase text-warn">{plan}</span>
       </div>
       <p className="mt-1 text-sm text-mist">{body}</p>
@@ -31,6 +32,22 @@ export default async function IntegrationsPage() {
       <p className="mt-1 text-sm text-mist">Connect the tools that power your page. Available integrations depend on your plan.</p>
 
       <div className="mt-6 space-y-5">
+        <SocialIntegrations
+          accounts={getSocialAccounts(site.id)}
+          posts={getSocialPosts(site.id)}
+          twitchChannel={site.config.twitchChannel ?? ""}
+          facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
+          instagramLiveUser={site.config.instagramLiveUser ?? ""}
+          streamKeys={{
+            twitch: site.config.twitchStreamKey ?? "",
+            facebook: site.config.facebookStreamKey ?? "",
+            instagram: site.config.instagramStreamKey ?? "",
+          }}
+          liveNow={site.config.liveNow === true}
+          ingestKey={site.embedToken}
+          threadsOAuthReady={!!process.env.THREADS_APP_ID && !!process.env.THREADS_APP_SECRET}
+        />
+
         <IntegrationsForm
           payments={plan.payments}
           calendar={plan.calendar}
@@ -44,7 +61,6 @@ export default async function IntegrationsPage() {
 
         {!plan.payments && (
           <LockedCard
-            icon="💳"
             title="Stripe payments"
             body="Sell merch directly from your page with Stripe payment links."
             plan="Pro"
@@ -52,7 +68,6 @@ export default async function IntegrationsPage() {
         )}
         {!plan.calendar && (
           <LockedCard
-            icon="📅"
             title="Calendar"
             body="Embed Calendly or Cal.com for events, meet & greets and bookings."
             plan="Enterprise"
@@ -60,7 +75,6 @@ export default async function IntegrationsPage() {
         )}
         {!plan.chatroom && (
           <LockedCard
-            icon="💬"
             title="Community chatroom"
             body="A custom chat space for your followers, right on your page."
             plan="Enterprise"
@@ -68,7 +82,6 @@ export default async function IntegrationsPage() {
         )}
         {!plan.newsletter && (
           <LockedCard
-            icon="💌"
             title="Newsletter / memberships"
             body="Collect subscriber emails and build your membership list."
             plan="Enterprise"
@@ -97,7 +110,7 @@ export default async function IntegrationsPage() {
 
         {plan.helpdesk && (
           <div className="card border-good/40">
-            <h2 className="font-bold">🛟 Help desk support</h2>
+            <h2 className="font-bold">Help desk support</h2>
             <p className="mt-1 text-sm text-mist">
               Enterprise includes priority support. Email{" "}
               <a href="mailto:j@cub.pw" className="text-brand hover:underline">j@cub.pw</a> and you&apos;ll hear back

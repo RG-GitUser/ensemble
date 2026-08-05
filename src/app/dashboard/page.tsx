@@ -33,7 +33,7 @@ export default async function DashboardPage({
 
       {quoteFlag === "submitted" && (
         <div className="card mt-6 border-good/40 bg-good/5">
-          <p className="font-semibold text-good">🎉 Quote request received!</p>
+          <p className="font-semibold text-good">Quote request received!</p>
           <p className="mt-1 text-sm text-mist">
             We&apos;ll look at your site and reach out at <span className="text-snow">{user.email}</span> with an actual
             quote for the integration.
@@ -62,7 +62,7 @@ export default async function DashboardPage({
               <div>
                 <h2 className="font-bold">Your page</h2>
                 <p className="mt-1 text-sm text-mist">
-                  socialconstruct / <span className="font-mono text-snow">s/{site.slug}</span>
+                  ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
                 </p>
               </div>
               <div className="flex items-center gap-3">

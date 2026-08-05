@@ -12,7 +12,6 @@ export interface FieldSpec {
 export interface SectionTemplate {
   type: string;
   name: string;
-  icon: string;
   description: string;
   /** Minimum plan required, or null if available to every plan. */
   requires: "pro" | "enterprise" | null;
@@ -24,7 +23,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "hero",
     name: "Hero",
-    icon: "✨",
     description: "Big headline, tagline and call-to-action at the top of your page.",
     requires: null,
     fields: [
@@ -43,7 +41,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "about",
     name: "About the Creator",
-    icon: "👤",
     description: "Tell your audience who you are.",
     requires: null,
     fields: [
@@ -60,7 +57,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "bonus",
     name: "Bonus Content",
-    icon: "🎁",
     description: "Exclusive drops, behind-the-scenes, early access links.",
     requires: null,
     fields: [
@@ -82,7 +78,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "video",
     name: "Featured Video",
-    icon: "🎬",
     description: "Embed a YouTube or Vimeo video.",
     requires: null,
     fields: [
@@ -94,7 +89,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "links",
     name: "Link List",
-    icon: "🔗",
     description: "Link-in-bio style list of your socials and platforms.",
     requires: null,
     fields: [
@@ -115,7 +109,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "merch",
     name: "Merch Store",
-    icon: "🛍️",
     description: "Showcase merchandise. On Pro & Enterprise, paste Stripe payment links to sell directly.",
     requires: null,
     fields: [
@@ -137,7 +130,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "newsletter",
     name: "Newsletter / Membership",
-    icon: "💌",
     description: "Collect emails from your followers for newsletters & memberships.",
     requires: "enterprise",
     fields: [
@@ -154,7 +146,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "calendar",
     name: "Event Calendar",
-    icon: "📅",
     description: "Embed a third-party calendar (Calendly, Cal.com) for events or bookings.",
     requires: "enterprise",
     fields: [
@@ -171,7 +162,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "chatroom",
     name: "Community Chatroom",
-    icon: "💬",
     description: "A custom chatroom space for your followers.",
     requires: "enterprise",
     fields: [
@@ -184,9 +174,22 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     },
   },
   {
+    type: "live",
+    name: "Live Streams",
+    description: "Your Twitch, Facebook Live and Instagram Live in one place. Link them in Integrations.",
+    requires: null,
+    fields: [
+      { key: "heading", label: "Heading", kind: "text" },
+      { key: "body", label: "Description", kind: "textarea" },
+    ],
+    defaults: {
+      heading: "Watch me live",
+      body: "When I go live, it's right here.",
+    },
+  },
+  {
     type: "contact",
     name: "Contact",
-    icon: "✉️",
     description: "A simple way for fans and brands to reach you.",
     requires: null,
     fields: [
@@ -219,4 +222,13 @@ export function parseLines(value: string): string[][] {
     .map((l) => l.trim())
     .filter(Boolean)
     .map((l) => l.split("|").map((p) => p.trim()));
+}
+
+/** Convert a YouTube/Vimeo watch URL into an embeddable player URL. */
+export function embedUrl(url: string): string | null {
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  return null;
 }

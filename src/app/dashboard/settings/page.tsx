@@ -51,7 +51,7 @@ export default async function SettingsPage() {
             })}
           </div>
           <p className="mt-4 text-xs text-mist/70">
-            Billing isn&apos;t wired up yet — plan changes are instant and free while SocialConstruct is in preview.
+            Billing isn&apos;t wired up yet — plan changes are instant and free while Ensemble is in preview.
           </p>
         </div>
 

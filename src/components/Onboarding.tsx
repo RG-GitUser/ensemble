@@ -19,7 +19,6 @@ export function Onboarding({ initialPath, initialPlan }: { initialPath?: string;
           onClick={() => setPath("scratch")}
           className={`card text-left transition hover:border-brand/60 ${path === "scratch" ? "border-brand ring-1 ring-brand" : ""}`}
         >
-          <div className="text-2xl">🚀</div>
           <h2 className="mt-3 font-bold">Start From Scratch</h2>
           <p className="mt-1 text-sm text-mist">
             We host a new landing page for your bonus content, your story and merch sales. Live today.
@@ -30,10 +29,9 @@ export function Onboarding({ initialPath, initialPlan }: { initialPath?: string;
           onClick={() => setPath("integrate")}
           className={`card text-left transition hover:border-brand2/60 ${path === "integrate" ? "border-brand2 ring-1 ring-brand2" : ""}`}
         >
-          <div className="text-2xl">🔌</div>
           <h2 className="mt-3 font-bold">Integrate a Current Website</h2>
           <p className="mt-1 text-sm text-mist">
-            We rework your existing platform to connect to the SocialConstruct dashboard. Starts with a personal quote.
+            We rework your existing platform to connect to the Ensemble dashboard. Starts with a personal quote.
           </p>
         </button>
       </div>

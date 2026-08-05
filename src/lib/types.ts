@@ -16,6 +16,16 @@ export interface SiteConfig {
   calendlyUrl?: string;
   chatroomEnabled?: boolean;
   newsletterEnabled?: boolean;
+  /** Live stream sources shown by the Live Streams section. */
+  twitchChannel?: string;
+  facebookLiveUrl?: string;
+  instagramLiveUser?: string;
+  /** Per-platform RTMP stream keys for simulcast fan-out (stored for the relay). */
+  twitchStreamKey?: string;
+  facebookStreamKey?: string;
+  instagramStreamKey?: string;
+  /** Creator hit Go Live — the Live section shows the on-air state. */
+  liveNow?: boolean;
 }
 
 export interface Site {
@@ -25,6 +35,8 @@ export interface Site {
   plan: Plan;
   published: boolean;
   config: SiteConfig;
+  /** Public token external websites use to pull this site's content via the embed. */
+  embedToken: string;
   createdAt: string;
 }
 
@@ -53,4 +65,103 @@ export interface Lead {
   siteId: number;
   email: string;
   createdAt: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  siteId: number;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export type TicketStatus = "open" | "answered" | "closed";
+
+export interface SupportTicket {
+  id: number;
+  userId: number;
+  subject: string;
+  body: string;
+  status: TicketStatus;
+  reply: string;
+  createdAt: string;
+}
+
+export interface DailyViews {
+  day: string;
+  views: number;
+}
+
+/** A creator's existing website paired with the dashboard. */
+export interface Connection {
+  siteId: number;
+  url: string;
+  enabled: boolean;
+  lastScraped: string | null;
+  /** Last time the pasted snippet phoned home, and from which host. */
+  lastSeen: string | null;
+  seenHost: string;
+}
+
+export type ContentKind = "text" | "image" | "video";
+
+/** One editable piece of content extracted from the paired website. */
+export interface ContentItem {
+  id: number;
+  siteId: number;
+  /** CSS path used to find the element again on the live site. */
+  selector: string;
+  kind: ContentKind;
+  /** What the element contained when the site was scanned. */
+  original: string;
+  /** The creator's replacement, or null if untouched. */
+  edited: string | null;
+  position: number;
+}
+
+export interface ReferrerViews {
+  referrer: string;
+  views: number;
+}
+
+export type SocialAuthKind = "handle" | "bluesky" | "webhook" | "oauth";
+
+/** A social platform account the creator connected to their dashboard (no credentials). */
+export interface SocialAccount {
+  id: number;
+  siteId: number;
+  platform: string;
+  handle: string;
+  authKind: SocialAuthKind;
+  createdAt: string;
+}
+
+/** Full credentials row — server-side publishing only, never sent to the client. */
+export interface SocialAccountAuth {
+  platform: string;
+  handle: string;
+  authKind: SocialAuthKind;
+  secret: string;
+  refreshToken: string;
+  expiresAt: string | null;
+  externalId: string;
+}
+
+export type PostTargetStatus = "queued" | "posted" | "failed";
+
+export interface SocialPostTarget {
+  platform: string;
+  status: PostTargetStatus;
+  /** Post URL when posted; error or waiting reason otherwise. */
+  detail: string;
+}
+
+/** One composed post, fanned out to the selected platforms. */
+export interface SocialPost {
+  id: number;
+  siteId: number;
+  body: string;
+  mediaUrl: string;
+  createdAt: string;
+  targets: SocialPostTarget[];
 }

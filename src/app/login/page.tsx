@@ -9,7 +9,7 @@ export default async function LoginPage() {
     <div className="glow flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 block text-center text-lg font-bold tracking-tight">
-          Social<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">Construct</span>
+          En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
         </Link>
         <div className="card">
           <h1 className="text-2xl font-bold">Welcome back</h1>

@@ -42,9 +42,7 @@ function SectionCard({ section, index, total }: { section: Section; index: numbe
   return (
     <div className="card">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 font-bold">
-          <span>{tpl.icon}</span> {tpl.name}
-        </h3>
+        <h3 className="font-bold">{tpl.name}</h3>
         <div className="flex items-center gap-1.5">
           <form action={moveSectionAction}>
             <input type="hidden" name="sectionId" value={section.id} />
@@ -134,7 +132,7 @@ export default async function BuilderPage() {
                   title={!allowed ? `Requires the ${tpl.requires === "pro" ? "Pro" : "Enterprise"} plan` : tpl.description}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{tpl.icon} {tpl.name}</span>
+                    <span className="font-semibold text-sm">{tpl.name}</span>
                     {!allowed && (
                       <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
                         {tpl.requires}

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local database
 data/
+
+# keep the credential template
+!.env.example

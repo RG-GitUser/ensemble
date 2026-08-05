@@ -3,12 +3,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
 
 const FEATURES = [
-  { icon: "🧩", title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
-  { icon: "🎁", title: "Bonus content hub", body: "Give your followers exclusive drops, behind-the-scenes and early access, all from one link." },
-  { icon: "🛍️", title: "Merch storefront", body: "Showcase merchandise on every plan. On Pro, paste Stripe payment links and sell directly." },
-  { icon: "💌", title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
-  { icon: "💬", title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
-  { icon: "📅", title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
+  { title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
+  { title: "Bonus content hub", body: "Give your followers exclusive drops, behind-the-scenes and early access, all from one link." },
+  { title: "Merch storefront", body: "Showcase merchandise on every plan. On Pro, paste Stripe payment links and sell directly." },
+  { title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
+  { title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
+  { title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
 ];
 
 export default async function Home() {
@@ -19,7 +19,7 @@ export default async function Home() {
       <header className="sticky top-0 z-40 border-b border-edge/60 bg-ink/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-lg font-bold tracking-tight">
-            Social<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">Construct</span>
+            En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">
             <a href="#how" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">How it works</a>
@@ -47,7 +47,7 @@ export default async function Home() {
             Keep your site. Keep 100% of your sales. One dashboard.
           </p>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-mist">
-            SocialConstruct gives creators a landing page for bonus content, merch and community — copy &amp; paste
+            Ensemble gives creators a landing page for bonus content, merch and community — copy &amp; paste
             setup, and we never take a cut of what you sell. Already have a website? We&apos;ll wire it into the
             dashboard for you.
           </p>
@@ -55,12 +55,18 @@ export default async function Home() {
             <Link href="/signup" className="btn-primary text-base">Start from scratch — $25/mo</Link>
             <a href="#how" className="btn-ghost text-base">Integrate my website</a>
           </div>
-          <p className="mt-6">
+          <p className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+            <Link
+              href="/demo/dashboard"
+              className="font-medium text-mist underline underline-offset-4 transition hover:text-snow"
+            >
+              tour a live demo dashboard ↗
+            </Link>
             <Link
               href="/s/demo"
-              className="text-sm font-medium text-mist underline underline-offset-4 transition hover:text-snow"
+              className="font-medium text-mist underline underline-offset-4 transition hover:text-snow"
             >
-              or take a look at a live example page ↗
+              see a live example page ↗
             </Link>
           </p>
         </div>
@@ -75,7 +81,6 @@ export default async function Home() {
         <div className="mt-12 grid gap-6 md:grid-cols-2">
           <div className="card relative overflow-hidden">
             <span className="absolute right-4 top-4 rounded-full bg-brand/15 px-3 py-1 text-xs font-semibold text-brand">Option 1</span>
-            <div className="text-3xl">🚀</div>
             <h3 className="mt-4 text-xl font-bold">Start From Scratch</h3>
             <p className="mt-2 text-mist">
               We host a brand-new landing page for you — bonus content for your followers, your story, merchandise sales,
@@ -86,18 +91,24 @@ export default async function Home() {
               <Link href="/s/demo" className="text-sm font-semibold text-brand hover:underline">
                 See an example ↗
               </Link>
+              <Link href="/demo/dashboard" className="text-sm font-semibold text-brand hover:underline">
+                Tour the dashboard ↗
+              </Link>
             </div>
           </div>
           <div className="card relative overflow-hidden">
             <span className="absolute right-4 top-4 rounded-full bg-brand2/15 px-3 py-1 text-xs font-semibold text-brand2">Option 2</span>
-            <div className="text-3xl">🔌</div>
             <h3 className="mt-4 text-xl font-bold">Integrate a Current Website</h3>
             <p className="mt-2 text-mist">
-              Already have a platform? We&apos;ll take your existing website and rework it to connect to the SocialConstruct
-              dashboard. Every site is different, so this one starts with a conversation — request a quote and we&apos;ll
-              get back to you personally.
+              Already have a platform? Paste our one-line embed snippet and your existing site pulls content straight
+              from the Ensemble dashboard — or request a quote and we&apos;ll rework your site for you personally.
             </p>
-            <Link href="/signup?path=integrate" className="btn-ghost mt-6">Request a quote</Link>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <Link href="/signup?path=integrate" className="btn-ghost">Request a quote</Link>
+              <Link href="/embed-demo" className="text-sm font-semibold text-brand2 hover:underline">
+                See the embed in action ↗
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -125,8 +136,7 @@ export default async function Home() {
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((f) => (
               <div key={f.title} className="card">
-                <div className="text-2xl">{f.icon}</div>
-                <h3 className="mt-3 font-bold">{f.title}</h3>
+                <h3 className="font-bold">{f.title}</h3>
                 <p className="mt-1.5 text-sm text-mist">{f.body}</p>
               </div>
             ))}
@@ -138,7 +148,7 @@ export default async function Home() {
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
         <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">Simple monthly pricing</h2>
         <p className="mx-auto mt-3 max-w-xl text-center text-mist">
-          Every plan includes your hosted landing page and the SocialConstruct dashboard. Flat monthly pricing —{" "}
+          Every plan includes your hosted landing page and the Ensemble dashboard. Flat monthly pricing —{" "}
           <span className="font-semibold text-snow">we never take a percentage of your sales.</span>
         </p>
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
@@ -189,7 +199,7 @@ export default async function Home() {
       </section>
 
       <footer className="border-t border-edge/60 py-10 text-center text-sm text-mist">
-        <p>© {new Date().getFullYear()} SocialConstruct. Built for creators.</p>
+        <p>© {new Date().getFullYear()} Ensemble. Built for creators.</p>
       </footer>
     </div>
   );

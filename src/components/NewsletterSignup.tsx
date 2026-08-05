@@ -7,7 +7,7 @@ export function NewsletterSignup({ siteId, buttonLabel }: { siteId: number; butt
   const [state, formAction, pending] = useActionState<FormState, FormData>(subscribeAction, {});
 
   if (state.ok) {
-    return <p className="mt-6 text-center font-semibold text-white/90">🎉 You&apos;re in — check your inbox soon.</p>;
+    return <p className="mt-6 text-center font-semibold text-white/90">You&apos;re in — check your inbox soon.</p>;
   }
 
   return (

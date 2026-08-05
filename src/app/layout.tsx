@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SocialConstruct — Landing pages & dashboards for creators",
+  title: "Ensemble — Landing pages & dashboards for creators",
   description:
     "Spin up a landing page for your bonus content, merch and community — or plug your existing website into one powerful creator dashboard.",
 };

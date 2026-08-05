@@ -27,7 +27,7 @@ export function IntegrationsForm({
     <form action={formAction} className="space-y-5">
       {payments && (
         <div className="card">
-          <h2 className="font-bold">💳 Stripe payments</h2>
+          <h2 className="font-bold">Stripe payments</h2>
           <p className="mt-1 text-sm text-mist">
             Paste your Stripe publishable key to brand your checkout, then add Stripe payment links to merch items in
             the Page Builder (Name | Price | Image | <span className="font-mono">https://buy.stripe.com/…</span>).
@@ -42,7 +42,7 @@ export function IntegrationsForm({
       )}
       {calendar && (
         <div className="card">
-          <h2 className="font-bold">📅 Calendar</h2>
+          <h2 className="font-bold">Calendar</h2>
           <p className="mt-1 text-sm text-mist">
             Default calendar link used by Event Calendar sections when they don&apos;t set their own.
           </p>
@@ -52,7 +52,7 @@ export function IntegrationsForm({
       {chatroom && (
         <div className="card flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold">💬 Community chatroom</h2>
+            <h2 className="font-bold">Community chatroom</h2>
             <p className="mt-1 text-sm text-mist">Show the chatroom space on your page&apos;s Chatroom sections.</p>
           </div>
           <input type="checkbox" name="chatroomEnabled" defaultChecked={chatroomEnabled} className="h-5 w-5 accent-brand" />
@@ -61,7 +61,7 @@ export function IntegrationsForm({
       {newsletter && (
         <div className="card flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold">💌 Newsletter / memberships</h2>
+            <h2 className="font-bold">Newsletter / memberships</h2>
             <p className="mt-1 text-sm text-mist">Let followers subscribe from Newsletter sections on your page.</p>
           </div>
           <input type="checkbox" name="newsletterEnabled" defaultChecked={newsletterEnabled} className="h-5 w-5 accent-brand" />
