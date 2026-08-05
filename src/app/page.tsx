@@ -43,9 +43,13 @@ export default async function Home() {
             Your audience. Your page.{" "}
             <span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">Your business.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-mist">
-            SocialConstruct gives creators a landing page for bonus content, merch and community — managed from one simple
-            dashboard with copy &amp; paste setup. Already have a website? We&apos;ll wire it into the dashboard for you.
+          <p className="mx-auto mt-6 max-w-2xl text-xl font-semibold text-snow sm:text-2xl">
+            Keep your site. Keep 100% of your sales. One dashboard.
+          </p>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-mist">
+            SocialConstruct gives creators a landing page for bonus content, merch and community — copy &amp; paste
+            setup, and we never take a cut of what you sell. Already have a website? We&apos;ll wire it into the
+            dashboard for you.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
             <Link href="/signup" className="btn-primary text-base">Start from scratch — $25/mo</Link>
@@ -134,7 +138,8 @@ export default async function Home() {
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
         <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">Simple monthly pricing</h2>
         <p className="mx-auto mt-3 max-w-xl text-center text-mist">
-          Every plan includes your hosted landing page and the SocialConstruct dashboard.
+          Every plan includes your hosted landing page and the SocialConstruct dashboard. Flat monthly pricing —{" "}
+          <span className="font-semibold text-snow">we never take a percentage of your sales.</span>
         </p>
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {PLAN_ORDER.map((id) => {
