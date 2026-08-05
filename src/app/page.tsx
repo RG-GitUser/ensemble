@@ -1,69 +1,191 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { PLAN_ORDER, PLANS } from "@/lib/plans";
 
-export default function Home() {
+const FEATURES = [
+  { icon: "🧩", title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
+  { icon: "🎁", title: "Bonus content hub", body: "Give your followers exclusive drops, behind-the-scenes and early access, all from one link." },
+  { icon: "🛍️", title: "Merch storefront", body: "Showcase merchandise on every plan. On Pro, paste Stripe payment links and sell directly." },
+  { icon: "💌", title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
+  { icon: "💬", title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
+  { icon: "📅", title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
+];
+
+export default async function Home() {
+  const user = await getCurrentUser();
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <div className="flex-1">
+      {/* Nav */}
+      <header className="sticky top-0 z-40 border-b border-edge/60 bg-ink/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <Link href="/" className="text-lg font-bold tracking-tight">
+            Social<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">Construct</span>
+          </Link>
+          <nav className="flex items-center gap-2 sm:gap-4">
+            <a href="#how" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">How it works</a>
+            <a href="#pricing" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Pricing</a>
+            {user ? (
+              <Link href="/dashboard" className="btn-primary !py-2 text-sm">Open dashboard</Link>
+            ) : (
+              <>
+                <Link href="/login" className="px-2 text-sm text-mist hover:text-snow">Log in</Link>
+                <Link href="/signup" className="btn-primary !py-2 text-sm">Get started</Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="glow">
+        <div className="mx-auto max-w-6xl px-6 pb-20 pt-24 text-center">
+          <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
+            Your audience. Your page.{" "}
+            <span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">Your business.</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-mist">
+            SocialConstruct gives creators a landing page for bonus content, merch and community — managed from one simple
+            dashboard with copy &amp; paste setup. Already have a website? We&apos;ll wire it into the dashboard for you.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/signup" className="btn-primary text-base">Start from scratch — $25/mo</Link>
+            <a href="#how" className="btn-ghost text-base">Integrate my website</a>
+          </div>
+          <p className="mt-6">
+            <Link
+              href="/s/demo"
+              className="text-sm font-medium text-mist underline underline-offset-4 transition hover:text-snow"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              or take a look at a live example page ↗
+            </Link>
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Two paths */}
+      <section id="how" className="mx-auto max-w-6xl px-6 py-20">
+        <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">Two ways to get started</h2>
+        <p className="mx-auto mt-3 max-w-xl text-center text-mist">
+          Whether you&apos;re starting fresh or already have a site, your dashboard is the same.
+        </p>
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+          <div className="card relative overflow-hidden">
+            <span className="absolute right-4 top-4 rounded-full bg-brand/15 px-3 py-1 text-xs font-semibold text-brand">Option 1</span>
+            <div className="text-3xl">🚀</div>
+            <h3 className="mt-4 text-xl font-bold">Start From Scratch</h3>
+            <p className="mt-2 text-mist">
+              We host a brand-new landing page for you — bonus content for your followers, your story, merchandise sales,
+              links and more. Sign up, pick a package, paste in your content, publish. Live in minutes.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <Link href="/signup" className="btn-primary">Build my page</Link>
+              <Link href="/s/demo" className="text-sm font-semibold text-brand hover:underline">
+                See an example ↗
+              </Link>
+            </div>
+          </div>
+          <div className="card relative overflow-hidden">
+            <span className="absolute right-4 top-4 rounded-full bg-brand2/15 px-3 py-1 text-xs font-semibold text-brand2">Option 2</span>
+            <div className="text-3xl">🔌</div>
+            <h3 className="mt-4 text-xl font-bold">Integrate a Current Website</h3>
+            <p className="mt-2 text-mist">
+              Already have a platform? We&apos;ll take your existing website and rework it to connect to the SocialConstruct
+              dashboard. Every site is different, so this one starts with a conversation — request a quote and we&apos;ll
+              get back to you personally.
+            </p>
+            <Link href="/signup?path=integrate" className="btn-ghost mt-6">Request a quote</Link>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Statement */}
+      <section className="border-t border-edge/60">
+        <div className="mx-auto max-w-6xl px-6 py-24 text-center">
+          <p className="text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
+            Built for{" "}
+            <span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">
+              content creators.
+            </span>
+          </p>
+          <p className="mx-auto mt-5 max-w-2xl text-lg text-mist">
+            Not another website builder. Every section, plan and integration exists for one job — turning your audience
+            into your business.
+          </p>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-y border-edge/60 bg-panel/40">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">Everything a creator page needs</h2>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="card">
+                <div className="text-2xl">{f.icon}</div>
+                <h3 className="mt-3 font-bold">{f.title}</h3>
+                <p className="mt-1.5 text-sm text-mist">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="mx-auto max-w-6xl px-6 py-20">
+        <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">Simple monthly pricing</h2>
+        <p className="mx-auto mt-3 max-w-xl text-center text-mist">
+          Every plan includes your hosted landing page and the SocialConstruct dashboard.
+        </p>
+        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+          {PLAN_ORDER.map((id) => {
+            const p = PLANS[id];
+            return (
+              <div
+                key={id}
+                className={`card relative flex flex-col ${p.highlight ? "border-brand shadow-xl shadow-brand/10" : ""}`}
+              >
+                {p.highlight && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-brand to-brand2 px-3 py-1 text-xs font-bold text-white">
+                    Most popular
+                  </span>
+                )}
+                <h3 className="text-lg font-bold">{p.name}</h3>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold">${p.price}</span>
+                  <span className="text-mist">/month</span>
+                </div>
+                <p className="mt-2 text-sm text-mist">{p.blurb}</p>
+                <ul className="mt-6 flex-1 space-y-2.5 text-sm">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex gap-2.5">
+                      <span className={f.startsWith("No ") ? "text-mist" : "text-good"}>{f.startsWith("No ") ? "—" : "✓"}</span>
+                      <span className={f.startsWith("No ") ? "text-mist" : ""}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href={`/signup?plan=${id}`} className={`${p.highlight ? "btn-primary" : "btn-ghost"} mt-8 w-full`}>
+                  Choose {p.name}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="glow border-t border-edge/60">
+        <div className="mx-auto max-w-6xl px-6 py-20 text-center">
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready when you are</h2>
+          <p className="mx-auto mt-3 max-w-xl text-mist">
+            Your followers are one link away from everything you make.
+          </p>
+          <Link href="/signup" className="btn-primary mt-8 text-base">Create your page</Link>
+        </div>
+      </section>
+
+      <footer className="border-t border-edge/60 py-10 text-center text-sm text-mist">
+        <p>© {new Date().getFullYear()} SocialConstruct. Built for creators.</p>
+      </footer>
     </div>
   );
 }

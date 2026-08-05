@@ -1,0 +1,111 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { getLeads, getSiteByUser } from "@/lib/db";
+import { getPlan } from "@/lib/plans";
+import { IntegrationsForm } from "@/components/IntegrationsForm";
+
+function LockedCard({ icon, title, body, plan }: { icon: string; title: string; body: string; plan: string }) {
+  return (
+    <div className="card border-dashed opacity-75">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-bold">{icon} {title}</h2>
+        <span className="rounded-full bg-warn/15 px-2.5 py-1 text-[10px] font-bold uppercase text-warn">{plan}</span>
+      </div>
+      <p className="mt-1 text-sm text-mist">{body}</p>
+      <Link href="/dashboard/settings" className="btn-ghost mt-4 !py-2 text-sm">Upgrade in Settings</Link>
+    </div>
+  );
+}
+
+export default async function IntegrationsPage() {
+  const user = await requireUser();
+  const site = getSiteByUser(user.id);
+  if (!site) redirect("/dashboard");
+  const plan = getPlan(site.plan);
+  const leads = plan.newsletter ? getLeads(site.id) : [];
+
+  return (
+    <div className="mx-auto max-w-4xl">
+      <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+      <p className="mt-1 text-sm text-mist">Connect the tools that power your page. Available integrations depend on your plan.</p>
+
+      <div className="mt-6 space-y-5">
+        <IntegrationsForm
+          payments={plan.payments}
+          calendar={plan.calendar}
+          chatroom={plan.chatroom}
+          newsletter={plan.newsletter}
+          stripeKey={site.config.stripeKey ?? ""}
+          calendlyUrl={site.config.calendlyUrl ?? ""}
+          chatroomEnabled={site.config.chatroomEnabled ?? true}
+          newsletterEnabled={site.config.newsletterEnabled ?? true}
+        />
+
+        {!plan.payments && (
+          <LockedCard
+            icon="💳"
+            title="Stripe payments"
+            body="Sell merch directly from your page with Stripe payment links."
+            plan="Pro"
+          />
+        )}
+        {!plan.calendar && (
+          <LockedCard
+            icon="📅"
+            title="Calendar"
+            body="Embed Calendly or Cal.com for events, meet & greets and bookings."
+            plan="Enterprise"
+          />
+        )}
+        {!plan.chatroom && (
+          <LockedCard
+            icon="💬"
+            title="Community chatroom"
+            body="A custom chat space for your followers, right on your page."
+            plan="Enterprise"
+          />
+        )}
+        {!plan.newsletter && (
+          <LockedCard
+            icon="💌"
+            title="Newsletter / memberships"
+            body="Collect subscriber emails and build your membership list."
+            plan="Enterprise"
+          />
+        )}
+
+        {plan.newsletter && (
+          <div className="card">
+            <h2 className="font-bold">Subscribers ({leads.length})</h2>
+            {leads.length === 0 ? (
+              <p className="mt-2 text-sm text-mist">
+                No signups yet — add a Newsletter section to your page and publish it.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-edge text-sm">
+                {leads.map((l) => (
+                  <li key={l.id} className="flex justify-between py-2">
+                    <span>{l.email}</span>
+                    <span className="text-mist">{l.createdAt.slice(0, 10)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {plan.helpdesk && (
+          <div className="card border-good/40">
+            <h2 className="font-bold">🛟 Help desk support</h2>
+            <p className="mt-1 text-sm text-mist">
+              Enterprise includes priority support. Email{" "}
+              <a href="mailto:j@cub.pw" className="text-brand hover:underline">j@cub.pw</a> and you&apos;ll hear back
+              first.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

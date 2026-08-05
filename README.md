@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SocialConstruct
 
-## Getting Started
+A platform for content creators to manage their landing pages/websites from one dashboard.
+Creators sign up with their name and business name, then pick one of two paths:
 
-First, run the development server:
+1. **Start From Scratch** — SocialConstruct hosts a landing page for bonus content, creator info,
+   and merch sales. Built with a copy & paste section editor, published at `/s/<their-slug>`.
+2. **Integrate a Current Website** — they submit their existing site for a custom quote;
+   requests land in the admin inbox at `/admin`.
+
+## Packages
+
+| Plan | Price | Includes |
+|------|-------|----------|
+| Basic | $25/mo | Landing page builder, basic database limits (6 sections), standard server, no payment integrations |
+| Pro | $35/mo | Large database (20 sections), fast reliable server, Stripe payment integrations |
+| Enterprise | $75/mo* | Everything in Pro + best server, help desk support, 3rd-party calendar integrations, custom chatrooms, newsletters/memberships |
+
+\* Enterprise price is a placeholder — edit it in `src/lib/plans.ts` (single source of truth
+for prices, feature lists, and limits; the marketing page, onboarding, and settings all read from it).
+
+## Run it
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Admin
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Sign up with the admin email (defaults to `j@cub.pw`, override with the `ADMIN_EMAIL` env var)
+to get the **Quote Requests** inbox at `/admin`, where integration requests can be marked
+new / quoted / closed.
 
-## Learn More
+## How it's put together
 
-To learn more about Next.js, take a look at the following resources:
+- **Next.js App Router + Tailwind**, server actions for all mutations (no client API layer).
+- **SQLite** (`better-sqlite3`) at `data/app.db`, created automatically on first run.
+  Tables: users, sessions, sites, sections, quote_requests, leads. Delete `data/` to reset.
+- **Auth**: scrypt-hashed passwords, httpOnly cookie sessions (30 days). `src/lib/auth.ts`.
+- **Builder**: section templates live in `src/lib/sections.ts` — each defines its fields,
+  defaults, and the minimum plan required (Newsletter/Calendar/Chatroom are Enterprise-only).
+  Adding a new section type there makes it appear in the builder and requires a matching
+  renderer case in `src/app/s/[slug]/page.tsx`.
+- **Plan gating**: section limits, Stripe buy buttons, and integrations all check the
+  creator's plan at render/action time, so downgrades gate features without deleting content.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Not wired up yet (next steps)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Billing**: plan selection is instant/free right now. Wire Stripe subscriptions
+  ($25/$35/$75 prices) around `startFromScratch` and `changePlan` in `src/lib/actions.ts`.
+- **Creator merch checkout** works today via pasted Stripe payment links (Pro+).
+- **Chatroom** renders a static clubhouse preview — needs a real-time backend.
+- **Newsletter sending**: emails are collected (visible in Integrations) but nothing sends yet.
