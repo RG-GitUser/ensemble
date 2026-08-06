@@ -2,9 +2,11 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, getSiteBySlug, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
+import { themeCss } from "@/lib/themes";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import type { PlanDef } from "@/lib/plans";
@@ -299,7 +301,11 @@ export default async function PublicSitePage({
   const user = await getCurrentUser();
   const isOwner = user?.id === site.userId;
 
-  if (!site.published && !(preview && isOwner)) {
+  // A live page needs a live subscription — sites published in preview mode
+  // (or whose subscription lapsed) stop serving once billing is enabled.
+  const billingBlocked = !billingOk(site);
+
+  if ((!site.published || billingBlocked) && !(preview && isOwner)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center">
         <h1 className="mt-4 text-2xl font-bold">This page isn&apos;t live yet</h1>
@@ -323,13 +329,16 @@ export default async function PublicSitePage({
     recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : refHost);
   }
 
+  const pageTheme = themeCss(site.config.themeId, site.config.themeColor);
   return (
     <div
       className="flex-1 text-white"
       style={
         {
           "--site-accent": site.config.themeColor,
-          background: `radial-gradient(800px 400px at 50% -10%, ${site.config.themeColor}33, transparent 70%), #0a0812`,
+          ...(pageTheme ?? {
+            background: `radial-gradient(800px 400px at 50% -10%, ${site.config.themeColor}33, transparent 70%), #0a0812`,
+          }),
         } as React.CSSProperties
       }
     >
@@ -343,9 +352,20 @@ export default async function PublicSitePage({
           </Link>
         </div>
       )}
-      {sections.map((s) => (
-        <SectionView key={s.id} section={s} site={site} plan={plan} chat={chat} host={host} />
-      ))}
+      {sections.map((s) => {
+        const containerTheme = themeCss(s.theme, site.config.themeColor);
+        return containerTheme ? (
+          <div
+            key={s.id}
+            className="mx-auto my-8 w-[min(100%-2rem,72rem)] overflow-hidden rounded-3xl border border-white/10"
+            style={containerTheme}
+          >
+            <SectionView section={s} site={site} plan={plan} chat={chat} host={host} />
+          </div>
+        ) : (
+          <SectionView key={s.id} section={s} site={site} plan={plan} chat={chat} host={host} />
+        );
+      })}
       <footer className="border-t border-white/10 px-6 py-10 text-center text-sm text-white/40">
         {site.config.tagline && <p className="mb-2 text-white/60">{site.config.tagline}</p>}
         <p>

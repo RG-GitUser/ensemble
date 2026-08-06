@@ -4,13 +4,87 @@ import { requireUser } from "@/lib/auth";
 import { getSections, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { getTemplate, planAllowsTemplate, SECTION_TEMPLATES, type FieldSpec } from "@/lib/sections";
+import { THEMES, themeCss } from "@/lib/themes";
 import {
   addSectionAction,
   deleteSectionAction,
   moveSectionAction,
+  setSectionThemeAction,
+  setSiteTheme,
   updateSectionAction,
 } from "@/lib/actions";
 import type { Section } from "@/lib/types";
+
+/** The classic look when no theme is chosen. */
+function defaultCss(accent: string): React.CSSProperties {
+  return {
+    backgroundImage: `radial-gradient(120px 60px at 50% -10%, ${accent}55, transparent 70%)`,
+    backgroundColor: "#0a0812",
+  };
+}
+
+function SiteThemePicker({ accent, current }: { accent: string; current: string }) {
+  const options = [{ id: "", name: "Midnight" }, ...THEMES];
+  return (
+    <div className="card mt-6 !bg-panel/60">
+      <h2 className="font-bold">Design theme</h2>
+      <p className="mt-1 text-sm text-mist">
+        The backdrop for your whole page — gradients, textures and glow. Any section can override it below.
+      </p>
+      <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        {options.map((t) => {
+          const selected = current === t.id;
+          return (
+            <form key={t.id || "default"} action={setSiteTheme}>
+              <input type="hidden" name="themeId" value={t.id} />
+              <button
+                className={`w-full overflow-hidden rounded-xl border text-left transition ${
+                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                }`}
+                title={t.name}
+              >
+                <div className="h-14 w-full" style={themeCss(t.id, accent) ?? defaultCss(accent)} />
+                <p className="truncate px-2 py-1.5 text-xs font-medium">
+                  {t.name}
+                  {t.id === "" && <span className="text-mist"> (default)</span>}
+                </p>
+              </button>
+            </form>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SectionThemeRow({ section, accent }: { section: Section; accent: string }) {
+  const options = [{ id: "", name: "Page theme" }, ...THEMES];
+  return (
+    <div className="mb-4 border-b border-edge pb-4">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">Container theme</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((t) => {
+          const selected = section.theme === t.id;
+          return (
+            <form key={t.id || "inherit"} action={setSectionThemeAction}>
+              <input type="hidden" name="sectionId" value={section.id} />
+              <input type="hidden" name="theme" value={t.id} />
+              <button
+                className={`block h-8 w-12 overflow-hidden rounded-lg border transition ${
+                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                }`}
+                title={t.name}
+                style={themeCss(t.id, accent) ?? defaultCss(accent)}
+              >
+                {t.id === "" && <span className="text-[9px] font-semibold text-white/70">page</span>}
+              </button>
+            </form>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function Field({ spec, value }: { spec: FieldSpec; value: string }) {
   const name = `field_${spec.key}`;
@@ -36,7 +110,17 @@ function Field({ spec, value }: { spec: FieldSpec; value: string }) {
   );
 }
 
-function SectionCard({ section, index, total }: { section: Section; index: number; total: number }) {
+function SectionCard({
+  section,
+  index,
+  total,
+  accent,
+}: {
+  section: Section;
+  index: number;
+  total: number;
+  accent: string;
+}) {
   const tpl = getTemplate(section.type);
   if (!tpl) return null;
   return (
@@ -77,6 +161,7 @@ function SectionCard({ section, index, total }: { section: Section; index: numbe
           </form>
         </div>
       </div>
+      <SectionThemeRow section={section} accent={accent} />
       <form action={updateSectionAction} className="space-y-4">
         <input type="hidden" name="sectionId" value={section.id} />
         {tpl.fields.map((f) => (
@@ -109,6 +194,8 @@ export default async function BuilderPage() {
           Preview page ↗
         </Link>
       </div>
+
+      <SiteThemePicker accent={site.config.themeColor} current={site.config.themeId ?? ""} />
 
       {/* Add-section gallery */}
       <div className="card mt-6 !bg-panel/60">
@@ -153,7 +240,7 @@ export default async function BuilderPage() {
           <div className="card text-center text-mist">Your page is empty — add a section above to get started.</div>
         )}
         {sections.map((s, i) => (
-          <SectionCard key={s.id} section={s} index={i} total={sections.length} />
+          <SectionCard key={s.id} section={s} index={i} total={sections.length} accent={site.config.themeColor} />
         ))}
       </div>
     </div>

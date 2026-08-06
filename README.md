@@ -21,7 +21,7 @@ Creators sign up with their name and business name, then pick one of two paths:
 | Plan | Price | Includes |
 |------|-------|----------|
 | Basic | $25/mo | Landing page builder, basic database limits (6 sections), standard server, no payment integrations |
-| Pro | $35/mo | Large database (20 sections), fast reliable server, Stripe payment integrations, daily analytics chart |
+| Pro | $45/mo | Large database (20 sections), fast reliable server, Stripe payment integrations, daily analytics chart |
 | Enterprise | $75/mo* | Everything in Pro + best server, help desk support, 3rd-party calendar integrations, custom chatrooms, newsletters/memberships, referrer analytics, unlimited sections |
 
 \* Enterprise price is a placeholder — edit it in `src/lib/plans.ts` (single source of truth
@@ -94,12 +94,37 @@ enforced server-side in the actions/APIs, not just hidden in the UI.
 - **Plan gating**: section limits, Stripe buy buttons, and integrations all check the
   creator's plan at render/action time, so downgrades gate features without deleting content.
 
+## Billing (Stripe)
+
+Subscription billing is built in and activates when Stripe keys are present. Without
+keys the app runs in **preview mode**: plan changes are instant and free.
+
+Set these env vars (e.g. in `.env.local`):
+
+```
+STRIPE_SECRET_KEY=sk_test_...    # from dashboard.stripe.com/apikeys
+STRIPE_WEBHOOK_SECRET=whsec_...  # from `stripe listen` or the webhook dashboard
+APP_URL=http://localhost:3000    # public origin used in checkout redirect URLs
+```
+
+For local webhooks: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+
+How it behaves with keys set:
+
+- Products/prices are created automatically on first use (lookup keys
+  `ensemble_<plan>_monthly`) — no manual Stripe dashboard setup.
+- **Start From Scratch** creates the site, then redirects to Stripe Checkout; the page
+  can't be published until the subscription is active (webhook-confirmed).
+- **Plan switches** on an active subscription are prorated in place; without one they
+  go through checkout.
+- **Settings → Billing** opens the Stripe customer portal (invoices, card, cancel).
+- Webhooks handled at `/api/stripe/webhook`: checkout completed, subscription
+  updated/deleted (deletion unpublishes the page), payment failed (marks past due).
+
 ## Not wired up yet (next steps)
 
 - **Public URL**: pairing/embed snippets point at localhost until the app is deployed
   (needs a persistent host for SQLite — Fly/Railway/VPS) or tunneled (cloudflared/ngrok).
-- **Billing**: plan selection is instant/free right now. Wire Stripe subscriptions
-  around `startFromScratch` and `changePlan` in `src/lib/actions.ts`.
 - **Multi-page pairing**: a connection scans one URL (usually the homepage); per-page
   connections would need a `connections`/`site_content` keyed by page.
 - **Rate limiting**: newsletter signup and chat posting have no throttling.

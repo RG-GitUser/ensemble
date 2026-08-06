@@ -165,6 +165,29 @@ function createDb(): Database.Database {
   for (const row of untokened) setToken.run(newEmbedToken(), row.id);
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_embed_token ON sites(embed_token)");
 
+  // Stripe billing columns arrived after the first schema shipped.
+  if (!siteCols.some((c) => c.name === "stripe_customer_id")) {
+    db.exec("ALTER TABLE sites ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (!siteCols.some((c) => c.name === "stripe_subscription_id")) {
+    db.exec("ALTER TABLE sites ADD COLUMN stripe_subscription_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (!siteCols.some((c) => c.name === "billing_status")) {
+    db.exec("ALTER TABLE sites ADD COLUMN billing_status TEXT NOT NULL DEFAULT ''");
+  }
+  // Unix seconds of the newest applied Stripe event (webhook ordering guard).
+  if (!siteCols.some((c) => c.name === "billing_event_at")) {
+    db.exec("ALTER TABLE sites ADD COLUMN billing_event_at INTEGER NOT NULL DEFAULT 0");
+  }
+  // Per-section visual theme (design themes shipped after sections).
+  const sectionCols = db.prepare("PRAGMA table_info(sections)").all() as Array<{ name: string }>;
+  if (!sectionCols.some((c) => c.name === "theme")) {
+    db.exec("ALTER TABLE sections ADD COLUMN theme TEXT NOT NULL DEFAULT ''");
+  }
+  // The demo/hq showcase sites are exempt from billing on databases seeded
+  // before the billing columns existed.
+  db.exec("UPDATE sites SET billing_status = 'active' WHERE slug IN ('demo', 'hq') AND billing_status = ''");
+
   return db;
 }
 
@@ -200,7 +223,9 @@ function seedDemo(d: Database.Database): void {
     chatroomEnabled: true,
   });
   const siteInfo = d
-    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'demo', 'enterprise', 1, ?, ?)")
+    .prepare(
+      "INSERT INTO sites (user_id, slug, plan, published, config, embed_token, billing_status) VALUES (?, 'demo', 'enterprise', 1, ?, ?, 'active')"
+    )
     .run(userId, config, newEmbedToken());
   const siteId = Number(siteInfo.lastInsertRowid);
 
@@ -273,6 +298,11 @@ function seedDemo(d: Database.Database): void {
   ];
   const insert = d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, ?, ?, ?)");
   sections.forEach(([type, content], i) => insert.run(siteId, type, i + 1, JSON.stringify(content)));
+  // Show off container themes on the example page.
+  const setTheme = d.prepare("UPDATE sections SET theme = ? WHERE site_id = ? AND type = ?");
+  setTheme.run("sunset", siteId, "merch");
+  setTheme.run("aurora", siteId, "newsletter");
+  setTheme.run("ocean", siteId, "chatroom");
 }
 
 /** Give the demo chatroom a few messages so it looks alive (idempotent). */
@@ -306,7 +336,9 @@ function seedAdmin(d: Database.Database): void {
 
   const config = JSON.stringify({ themeColor: "#8b5cf6", tagline: "" });
   const siteInfo = d
-    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'hq', 'enterprise', 0, ?, ?)")
+    .prepare(
+      "INSERT INTO sites (user_id, slug, plan, published, config, embed_token, billing_status) VALUES (?, 'hq', 'enterprise', 0, ?, ?, 'active')"
+    )
     .run(userId, config, newEmbedToken());
   const siteId = Number(siteInfo.lastInsertRowid);
   d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, 'hero', 1, ?)").run(
@@ -352,6 +384,10 @@ interface SiteRow {
   published: number;
   config: string;
   embed_token: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  billing_status: string | null;
+  billing_event_at: number | null;
   created_at: string;
 }
 interface SectionRow {
@@ -360,6 +396,7 @@ interface SectionRow {
   type: string;
   position: number;
   content: string;
+  theme: string | null;
 }
 interface QuoteRow {
   id: number;
@@ -391,11 +428,22 @@ function toSite(r: SiteRow): Site {
     published: r.published === 1,
     config: { themeColor: "#8b5cf6", tagline: "", ...JSON.parse(r.config || "{}") },
     embedToken: r.embed_token ?? "",
+    stripeCustomerId: r.stripe_customer_id ?? "",
+    stripeSubscriptionId: r.stripe_subscription_id ?? "",
+    billingStatus: r.billing_status ?? "",
+    billingEventAt: r.billing_event_at ?? 0,
     createdAt: r.created_at,
   };
 }
 function toSection(r: SectionRow): Section {
-  return { id: r.id, siteId: r.site_id, type: r.type, position: r.position, content: JSON.parse(r.content || "{}") };
+  return {
+    id: r.id,
+    siteId: r.site_id,
+    type: r.type,
+    position: r.position,
+    content: JSON.parse(r.content || "{}"),
+    theme: r.theme ?? "",
+  };
 }
 function toQuote(r: QuoteRow): QuoteRequest {
   return {
@@ -503,6 +551,39 @@ export function updateSite(id: number, fields: { slug?: string; plan?: string; p
   );
 }
 
+export function setSiteBilling(
+  id: number,
+  fields: { stripeCustomerId?: string; stripeSubscriptionId?: string; billingStatus?: string; billingEventAt?: number }
+): void {
+  const site = getSiteById(id);
+  if (!site) return;
+  db()
+    .prepare(
+      "UPDATE sites SET stripe_customer_id = ?, stripe_subscription_id = ?, billing_status = ?, billing_event_at = ? WHERE id = ?"
+    )
+    .run(
+      fields.stripeCustomerId ?? site.stripeCustomerId,
+      fields.stripeSubscriptionId ?? site.stripeSubscriptionId,
+      fields.billingStatus ?? site.billingStatus,
+      fields.billingEventAt ?? site.billingEventAt,
+      id
+    );
+}
+
+export function getSiteByStripeSubscription(subscriptionId: string): Site | null {
+  if (!subscriptionId) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE stripe_subscription_id = ?").get(subscriptionId) as
+    | SiteRow
+    | undefined;
+  return r ? toSite(r) : null;
+}
+
+export function getSiteByStripeCustomer(customerId: string): Site | null {
+  if (!customerId) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE stripe_customer_id = ?").get(customerId) as SiteRow | undefined;
+  return r ? toSite(r) : null;
+}
+
 /* ---------- sections ---------- */
 
 export function getSections(siteId: number): Section[] {
@@ -528,6 +609,10 @@ export function addSection(siteId: number, type: string, content: Record<string,
     .prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, ?, ?, ?)")
     .run(siteId, type, pos.p + 1, JSON.stringify(content));
   return getSection(Number(info.lastInsertRowid))!;
+}
+
+export function setSectionTheme(id: number, theme: string): void {
+  db().prepare("UPDATE sections SET theme = ? WHERE id = ?").run(theme, id);
 }
 
 export function updateSectionContent(id: number, content: Record<string, string>): void {
@@ -863,14 +948,14 @@ export function replaceSiteContent(
     const previous = d.prepare("SELECT * FROM site_content WHERE site_id = ?").all(siteId) as ContentRow[];
     const carried = new Map<string, string>();
     for (const p of previous) {
-      if (p.edited !== null) carried.set(`${p.selector} ${p.kind} ${p.original}`, p.edited);
+      if (p.edited !== null) carried.set(`${p.selector}\x00${p.kind}\x00${p.original}`, p.edited);
     }
     d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
     const insert = d.prepare(
       "INSERT INTO site_content (site_id, selector, kind, original, edited, position) VALUES (?, ?, ?, ?, ?, ?)"
     );
     for (const it of items) {
-      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector} ${it.kind} ${it.original}`) ?? null, it.position);
+      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector}\x00${it.kind}\x00${it.original}`) ?? null, it.position);
     }
   });
   tx();

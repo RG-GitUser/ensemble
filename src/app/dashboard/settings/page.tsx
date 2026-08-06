@@ -1,9 +1,17 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { billingEnabled, billingOk } from "@/lib/billing";
 import { getSiteByUser } from "@/lib/db";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
-import { changePlan } from "@/lib/actions";
+import { changePlan, openBillingPortal } from "@/lib/actions";
 import { SettingsForm } from "@/components/SettingsForm";
+
+const BILLING_LABELS: Record<string, { label: string; tone: string }> = {
+  active: { label: "Active", tone: "bg-good/15 text-good" },
+  past_due: { label: "Past due — update your payment method", tone: "bg-warn/15 text-warn" },
+  unpaid: { label: "Awaiting first payment", tone: "bg-warn/15 text-warn" },
+  canceled: { label: "Canceled", tone: "bg-brand2/15 text-brand2" },
+};
 
 export default async function SettingsPage() {
   const user = await requireUser();
@@ -50,10 +58,49 @@ export default async function SettingsPage() {
               );
             })}
           </div>
-          <p className="mt-4 text-xs text-mist/70">
-            Billing isn&apos;t wired up yet — plan changes are instant and free while Ensemble is in preview.
-          </p>
+          {billingEnabled() ? (
+            <p className="mt-4 text-xs text-mist/70">
+              Plan changes on an active subscription are prorated automatically. Without one, switching sends you
+              through checkout.
+            </p>
+          ) : (
+            <p className="mt-4 text-xs text-mist/70">
+              Billing isn&apos;t connected in this environment — plan changes are instant and free while Ensemble is in
+              preview.
+            </p>
+          )}
         </div>
+
+        {billingEnabled() && (
+          <div className="card">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-bold">Billing</h2>
+                <p className="mt-2 text-sm text-mist">
+                  {PLANS[site.plan].name} plan · ${PLANS[site.plan].price}/month
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  (BILLING_LABELS[site.billingStatus] ?? BILLING_LABELS.unpaid).tone
+                }`}
+              >
+                {(BILLING_LABELS[site.billingStatus] ?? BILLING_LABELS.unpaid).label}
+              </span>
+            </div>
+            {site.stripeCustomerId ? (
+              <form action={openBillingPortal} className="mt-4">
+                <button className="btn-ghost !py-2 text-sm">Manage billing — invoices, card, cancel ↗</button>
+              </form>
+            ) : (
+              <p className="mt-3 text-sm text-mist">
+                {billingOk(site)
+                  ? "Billing details will appear here after your first checkout."
+                  : "Complete checkout from the Overview page to start your subscription."}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="card">
           <h2 className="font-bold">Account</h2>

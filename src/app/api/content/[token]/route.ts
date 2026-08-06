@@ -1,3 +1,4 @@
+import { billingOk } from "@/lib/billing";
 import { getSiteByToken, recordPageView } from "@/lib/db";
 import { buildEmbedContent } from "@/lib/embed";
 
@@ -10,8 +11,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   const { token } = await ctx.params;
   const site = getSiteByToken(token);
   // Draft sites 404 like an unknown token — Unpublish must take content down
-  // everywhere at once, embeds included, just like the hosted page.
-  if (!site || !site.published) {
+  // everywhere at once, embeds included, just like the hosted page. The same
+  // applies to sites without a live subscription once billing is enabled.
+  if (!site || !site.published || !billingOk(site)) {
     return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
   }
 

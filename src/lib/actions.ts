@@ -6,10 +6,19 @@ import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
 import { embedUrl, getTemplate, planAllowsTemplate } from "./sections";
+import { getThemeDef } from "./themes";
 import { extractContent, fetchSiteHtml, validateSiteUrl } from "./scrape";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
 import { blueskySession, publishPost } from "./publish";
-import type { Site, SiteConfig } from "./types";
+import {
+  billingEnabled,
+  billingOk,
+  changeSubscriptionPlan,
+  createCheckoutUrl,
+  createPortalUrl,
+  reconcileBilling,
+} from "./billing";
+import type { Plan, Site, SiteConfig } from "./types";
 
 export interface FormState {
   error?: string;
@@ -113,6 +122,18 @@ export async function startFromScratch(fd: FormData): Promise<void> {
       ...(type === "hero" ? { heading: user.businessName } : {}),
     });
   }
+
+  // With Stripe configured, the page needs a subscription before it can go live.
+  if (billingEnabled()) {
+    store.setSiteBilling(site.id, { billingStatus: "unpaid" });
+    let checkoutUrl: string;
+    try {
+      checkoutUrl = await createCheckoutUrl(store.getSiteById(site.id)!, user, planId as Plan);
+    } catch {
+      redirect("/dashboard?billing=error");
+    }
+    redirect(checkoutUrl);
+  }
   redirect("/dashboard");
 }
 
@@ -171,6 +192,54 @@ export async function deleteSectionAction(fd: FormData): Promise<void> {
   revalidateSite(site);
 }
 
+/* ---------------- finance connections ---------------- */
+
+export async function connectFinanceStripe(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).payments) return { error: "Financial breakdowns are a Pro feature." };
+  const key = str(fd, "financeStripeKey");
+  if (!/^(sk|rk)_(live|test)_/.test(key)) {
+    return { error: "That doesn't look like a Stripe secret or restricted key (sk_... / rk_...)." };
+  }
+  // Prove the key works before storing it.
+  try {
+    const { fetchStripeFinance } = await import("./finance");
+    await fetchStripeFinance(key);
+  } catch {
+    return { error: "Stripe rejected that key — check it has read access to Balance and Charges." };
+  }
+  store.updateSite(site.id, { config: { ...site.config, financeStripeKey: key } });
+  revalidatePath("/dashboard/analytics");
+  return { ok: true };
+}
+
+export async function disconnectFinanceStripe(): Promise<void> {
+  const { site } = await requireSite();
+  store.updateSite(site.id, { config: { ...site.config, financeStripeKey: "" } });
+  revalidatePath("/dashboard/analytics");
+}
+
+/* ---------------- design themes ---------------- */
+
+export async function setSiteTheme(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const themeId = str(fd, "themeId");
+  if (themeId && !getThemeDef(themeId)) return;
+  store.updateSite(site.id, { config: { ...site.config, themeId } });
+  revalidateSite(site);
+}
+
+export async function setSectionThemeAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const theme = str(fd, "theme");
+  if (theme && !getThemeDef(theme)) return;
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id) return;
+  store.setSectionTheme(id, theme);
+  revalidateSite(site);
+}
+
 /* ---------------- site settings ---------------- */
 
 export async function updateSettings(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -189,6 +258,10 @@ export async function updateSettings(_prev: FormState, fd: FormData): Promise<Fo
 
 export async function togglePublish(): Promise<void> {
   const { site } = await requireSite();
+  // Publishing requires an active subscription once billing is configured.
+  if (!site.published && !billingOk(site)) {
+    redirect("/dashboard?billing=required");
+  }
   store.updateSite(site.id, { published: !site.published });
   revalidateSite(site);
 }
@@ -197,12 +270,81 @@ export async function changePlan(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const planId = str(fd, "plan");
   if (!(planId in PLANS)) return;
-  store.updateSite(site.id, { plan: planId });
+
+  if (billingEnabled()) {
+    const user = await requireUser();
+    // A webhook may not have landed yet — ask Stripe for the truth first.
+    let current = site;
+    try {
+      current = await reconcileBilling(site);
+    } catch {
+      // Stripe unreachable: fall through to the state we have.
+    }
+    if (current.stripeSubscriptionId && billingOk(current)) {
+      // Existing subscription: swap the price (prorated). The webhook confirms
+      // the change, but we update optimistically so the UI reflects it now.
+      try {
+        await changeSubscriptionPlan(current.stripeSubscriptionId, planId as Plan);
+      } catch {
+        redirect("/dashboard/settings?billing=error");
+      }
+      store.updateSite(site.id, { plan: planId });
+    } else {
+      // No live subscription — checkout for the chosen plan. The plan is NOT
+      // persisted here: it travels in the session metadata and is applied by
+      // the checkout.session.completed webhook only after payment.
+      let checkoutUrl: string;
+      try {
+        checkoutUrl = await createCheckoutUrl(current, user, planId as Plan);
+      } catch {
+        redirect("/dashboard/settings?billing=error");
+      }
+      redirect(checkoutUrl);
+    }
+  } else {
+    store.updateSite(site.id, { plan: planId });
+  }
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/integrations");
   revalidatePath("/dashboard/builder");
   revalidatePath(`/s/${site.slug}`);
+}
+
+/** Restart checkout for a site whose subscription never started or lapsed. */
+export async function resumeCheckout(): Promise<void> {
+  const user = await requireUser();
+  let site = store.getSiteByUser(user.id);
+  if (!site) redirect("/onboarding");
+  if (!billingEnabled() || billingOk(site)) redirect("/dashboard");
+  // If a just-paid checkout's webhook hasn't landed, Stripe already has the
+  // subscription — reconcile instead of selling a second one.
+  try {
+    site = await reconcileBilling(site);
+  } catch {
+    // Stripe unreachable: proceed with what we have.
+  }
+  if (billingOk(site)) redirect("/dashboard?billing=success");
+  let checkoutUrl: string;
+  try {
+    checkoutUrl = await createCheckoutUrl(site, user, site.plan);
+  } catch {
+    redirect("/dashboard?billing=error");
+  }
+  redirect(checkoutUrl);
+}
+
+/** Open the Stripe customer portal (payment method, invoices, cancel). */
+export async function openBillingPortal(): Promise<void> {
+  const { site } = await requireSite();
+  if (!billingEnabled() || !site.stripeCustomerId) redirect("/dashboard/settings");
+  let portalUrl: string;
+  try {
+    portalUrl = await createPortalUrl(site.stripeCustomerId);
+  } catch {
+    redirect("/dashboard/settings?billing=error");
+  }
+  redirect(portalUrl);
 }
 
 export async function updateIntegrations(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -225,6 +367,11 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   const siteId = Number(str(fd, "siteId"));
   const site = store.getSiteById(siteId);
   if (!site) return { error: "Page not found." };
+  if (!site.published) {
+    // Drafts accept messages only from their owner (dashboard chatroom).
+    const user = await getCurrentUser();
+    if (!user || user.id !== site.userId) return { error: "Page not found." };
+  }
   const plan = getPlan(site.plan);
   if (!plan.chatroom || site.config.chatroomEnabled === false) return { error: "Chat is not enabled on this page." };
 
@@ -474,6 +621,7 @@ export async function createTicketAction(_prev: FormState, fd: FormData): Promis
   const user = await requireUser();
   const site = store.getSiteByUser(user.id);
   if (!site || !getPlan(site.plan).helpdesk) return { error: "Help desk support is an Enterprise feature." };
+  if (!billingOk(site)) return { error: "Help desk opens once your subscription is active." };
 
   const subject = str(fd, "subject").slice(0, 120);
   const body = str(fd, "body").slice(0, 2000);

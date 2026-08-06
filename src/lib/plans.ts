@@ -46,7 +46,7 @@ export const PLANS: Record<Plan, PlanDef> = {
   pro: {
     id: "pro",
     name: "Pro",
-    price: 35,
+    price: 45,
     blurb: "For creators with a growing, engaged audience.",
     features: [
       "Everything in Basic",
