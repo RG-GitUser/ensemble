@@ -22,7 +22,13 @@ export interface SiteConfig {
   /** Accent glow gradient at the top of the page (default on). */
   gradient?: boolean;
   tagline: string;
+  /** Site-wide visual theme id from lib/themes.ts ("" = classic midnight). */
+  themeId?: string;
   stripeKey?: string;
+  /** Creator's own Stripe key for the Finance tab (restricted key advised). */
+  financeStripeKey?: string;
+  /** QuickBooks company shown as connected on the Finance tab. */
+  quickbooksCompany?: string;
   calendlyUrl?: string;
   chatroomEnabled?: boolean;
   newsletterEnabled?: boolean;
@@ -47,6 +53,13 @@ export interface Site {
   config: SiteConfig;
   /** Public token external websites use to pull this site's content via the embed. */
   embedToken: string;
+  /** Stripe billing state — empty strings until billing is set up. */
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  /** "" (preview mode) | "unpaid" | "active" | "past_due" | "canceled" */
+  billingStatus: string;
+  /** Unix seconds of the newest applied Stripe event (ordering guard). */
+  billingEventAt: number;
   createdAt: string;
 }
 
@@ -56,6 +69,8 @@ export interface Section {
   type: string;
   position: number;
   content: Record<string, string>;
+  /** Visual theme id from lib/themes.ts, or "" to inherit the page theme. */
+  theme: string;
 }
 
 export interface QuoteRequest {

@@ -5,8 +5,8 @@ import { randomBytes, scryptSync } from "crypto";
 import type {
   ChatMessage,
   Connection,
-  ContentItem,
   CustomDomain,
+  ContentItem,
   DailyViews,
   Lead,
   QuoteRequest,
@@ -98,6 +98,12 @@ function createDb(): Database.Database {
       count INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (site_id, day, referrer)
     );
+    CREATE TABLE IF NOT EXISTS custom_domains (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      hostname TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen TEXT
+    );
     CREATE TABLE IF NOT EXISTS connections (
       site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
       url TEXT NOT NULL,
@@ -105,12 +111,6 @@ function createDb(): Database.Database {
       last_scraped TEXT,
       last_seen TEXT,
       seen_host TEXT NOT NULL DEFAULT ''
-    );
-    CREATE TABLE IF NOT EXISTS custom_domains (
-      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
-      hostname TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_seen TEXT
     );
     CREATE TABLE IF NOT EXISTS site_content (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +176,29 @@ function createDb(): Database.Database {
   for (const row of untokened) setToken.run(newEmbedToken(), row.id);
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_embed_token ON sites(embed_token)");
 
+  // Stripe billing columns arrived after the first schema shipped.
+  if (!siteCols.some((c) => c.name === "stripe_customer_id")) {
+    db.exec("ALTER TABLE sites ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (!siteCols.some((c) => c.name === "stripe_subscription_id")) {
+    db.exec("ALTER TABLE sites ADD COLUMN stripe_subscription_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (!siteCols.some((c) => c.name === "billing_status")) {
+    db.exec("ALTER TABLE sites ADD COLUMN billing_status TEXT NOT NULL DEFAULT ''");
+  }
+  // Unix seconds of the newest applied Stripe event (webhook ordering guard).
+  if (!siteCols.some((c) => c.name === "billing_event_at")) {
+    db.exec("ALTER TABLE sites ADD COLUMN billing_event_at INTEGER NOT NULL DEFAULT 0");
+  }
+  // Per-section visual theme (design themes shipped after sections).
+  const sectionCols = db.prepare("PRAGMA table_info(sections)").all() as Array<{ name: string }>;
+  if (!sectionCols.some((c) => c.name === "theme")) {
+    db.exec("ALTER TABLE sections ADD COLUMN theme TEXT NOT NULL DEFAULT ''");
+  }
+  // The demo/hq showcase sites are exempt from billing on databases seeded
+  // before the billing columns existed.
+  db.exec("UPDATE sites SET billing_status = 'active' WHERE slug IN ('demo', 'hq') AND billing_status = ''");
+
   return db;
 }
 
@@ -211,7 +234,9 @@ function seedDemo(d: Database.Database): void {
     chatroomEnabled: true,
   });
   const siteInfo = d
-    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'demo', 'enterprise', 1, ?, ?)")
+    .prepare(
+      "INSERT INTO sites (user_id, slug, plan, published, config, embed_token, billing_status) VALUES (?, 'demo', 'enterprise', 1, ?, ?, 'active')"
+    )
     .run(userId, config, newEmbedToken());
   const siteId = Number(siteInfo.lastInsertRowid);
 
@@ -284,6 +309,11 @@ function seedDemo(d: Database.Database): void {
   ];
   const insert = d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, ?, ?, ?)");
   sections.forEach(([type, content], i) => insert.run(siteId, type, i + 1, JSON.stringify(content)));
+  // Show off container themes on the example page.
+  const setTheme = d.prepare("UPDATE sections SET theme = ? WHERE site_id = ? AND type = ?");
+  setTheme.run("sunset", siteId, "merch");
+  setTheme.run("aurora", siteId, "newsletter");
+  setTheme.run("ocean", siteId, "chatroom");
 }
 
 /** Give the demo chatroom a few messages so it looks alive (idempotent). */
@@ -317,7 +347,9 @@ function seedAdmin(d: Database.Database): void {
 
   const config = JSON.stringify({ themeColor: "#8b5cf6", tagline: "" });
   const siteInfo = d
-    .prepare("INSERT INTO sites (user_id, slug, plan, published, config, embed_token) VALUES (?, 'hq', 'enterprise', 0, ?, ?)")
+    .prepare(
+      "INSERT INTO sites (user_id, slug, plan, published, config, embed_token, billing_status) VALUES (?, 'hq', 'enterprise', 0, ?, ?, 'active')"
+    )
     .run(userId, config, newEmbedToken());
   const siteId = Number(siteInfo.lastInsertRowid);
   d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, 'hero', 1, ?)").run(
@@ -363,6 +395,10 @@ interface SiteRow {
   published: number;
   config: string;
   embed_token: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  billing_status: string | null;
+  billing_event_at: number | null;
   created_at: string;
 }
 interface SectionRow {
@@ -371,6 +407,7 @@ interface SectionRow {
   type: string;
   position: number;
   content: string;
+  theme: string | null;
 }
 interface QuoteRow {
   id: number;
@@ -411,11 +448,22 @@ function toSite(r: SiteRow): Site {
       ...JSON.parse(r.config || "{}"),
     },
     embedToken: r.embed_token ?? "",
+    stripeCustomerId: r.stripe_customer_id ?? "",
+    stripeSubscriptionId: r.stripe_subscription_id ?? "",
+    billingStatus: r.billing_status ?? "",
+    billingEventAt: r.billing_event_at ?? 0,
     createdAt: r.created_at,
   };
 }
 function toSection(r: SectionRow): Section {
-  return { id: r.id, siteId: r.site_id, type: r.type, position: r.position, content: JSON.parse(r.content || "{}") };
+  return {
+    id: r.id,
+    siteId: r.site_id,
+    type: r.type,
+    position: r.position,
+    content: JSON.parse(r.content || "{}"),
+    theme: r.theme ?? "",
+  };
 }
 function toQuote(r: QuoteRow): QuoteRequest {
   return {
@@ -526,6 +574,39 @@ export function updateSite(id: number, fields: { slug?: string; plan?: string; p
   );
 }
 
+export function setSiteBilling(
+  id: number,
+  fields: { stripeCustomerId?: string; stripeSubscriptionId?: string; billingStatus?: string; billingEventAt?: number }
+): void {
+  const site = getSiteById(id);
+  if (!site) return;
+  db()
+    .prepare(
+      "UPDATE sites SET stripe_customer_id = ?, stripe_subscription_id = ?, billing_status = ?, billing_event_at = ? WHERE id = ?"
+    )
+    .run(
+      fields.stripeCustomerId ?? site.stripeCustomerId,
+      fields.stripeSubscriptionId ?? site.stripeSubscriptionId,
+      fields.billingStatus ?? site.billingStatus,
+      fields.billingEventAt ?? site.billingEventAt,
+      id
+    );
+}
+
+export function getSiteByStripeSubscription(subscriptionId: string): Site | null {
+  if (!subscriptionId) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE stripe_subscription_id = ?").get(subscriptionId) as
+    | SiteRow
+    | undefined;
+  return r ? toSite(r) : null;
+}
+
+export function getSiteByStripeCustomer(customerId: string): Site | null {
+  if (!customerId) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE stripe_customer_id = ?").get(customerId) as SiteRow | undefined;
+  return r ? toSite(r) : null;
+}
+
 /* ---------- sections ---------- */
 
 export function getSections(siteId: number): Section[] {
@@ -551,6 +632,10 @@ export function addSection(siteId: number, type: string, content: Record<string,
     .prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, ?, ?, ?)")
     .run(siteId, type, pos.p + 1, JSON.stringify(content));
   return getSection(Number(info.lastInsertRowid))!;
+}
+
+export function setSectionTheme(id: number, theme: string): void {
+  db().prepare("UPDATE sections SET theme = ? WHERE id = ?").run(theme, id);
 }
 
 export function updateSectionContent(id: number, content: Record<string, string>): void {
@@ -794,6 +879,59 @@ export function getTopReferrers(siteId: number, limit = 8): ReferrerViews[] {
   return rows;
 }
 
+/* ---------- custom domains ---------- */
+
+interface DomainRow {
+  site_id: number;
+  hostname: string;
+  created_at: string;
+  last_seen: string | null;
+}
+
+function toDomain(r: DomainRow): CustomDomain {
+  return { siteId: r.site_id, hostname: r.hostname, createdAt: r.created_at, lastSeen: r.last_seen };
+}
+
+export function getDomainBySite(siteId: number): CustomDomain | null {
+  const r = db().prepare("SELECT * FROM custom_domains WHERE site_id = ?").get(siteId) as DomainRow | undefined;
+  return r ? toDomain(r) : null;
+}
+
+/** Exact hostname match first, then the www-flipped variant, so one record covers both. */
+export function resolveDomain(hostname: string): CustomDomain | null {
+  const h = hostname.toLowerCase();
+  const flipped = h.startsWith("www.") ? h.slice(4) : `www.${h}`;
+  const byHost = db().prepare("SELECT * FROM custom_domains WHERE hostname = ?");
+  const r = (byHost.get(h) ?? byHost.get(flipped)) as DomainRow | undefined;
+  return r ? toDomain(r) : null;
+}
+
+export function domainTaken(hostname: string, excludeSiteId?: number): boolean {
+  const r = db().prepare("SELECT site_id FROM custom_domains WHERE hostname = ?").get(hostname) as
+    | { site_id: number }
+    | undefined;
+  return !!r && r.site_id !== excludeSiteId;
+}
+
+/** Point `hostname` at this site (one domain per site — replaces any previous one). */
+export function setCustomDomain(siteId: number, hostname: string): void {
+  db()
+    .prepare(
+      `INSERT INTO custom_domains (site_id, hostname) VALUES (?, ?)
+       ON CONFLICT(site_id) DO UPDATE SET hostname = excluded.hostname, last_seen = NULL, created_at = datetime('now')`
+    )
+    .run(siteId, hostname);
+}
+
+export function deleteCustomDomain(siteId: number): void {
+  db().prepare("DELETE FROM custom_domains WHERE site_id = ?").run(siteId);
+}
+
+/** A request for this domain reached us — DNS and the proxy chain work. */
+export function touchDomain(siteId: number): void {
+  db().prepare("UPDATE custom_domains SET last_seen = datetime('now') WHERE site_id = ?").run(siteId);
+}
+
 /* ---------- website connections ---------- */
 
 interface ConnectionRow {
@@ -849,59 +987,6 @@ export function touchConnection(siteId: number, host: string): void {
     .run(host, host, siteId);
 }
 
-/* ---------- custom domains ---------- */
-
-interface DomainRow {
-  site_id: number;
-  hostname: string;
-  created_at: string;
-  last_seen: string | null;
-}
-
-function toDomain(r: DomainRow): CustomDomain {
-  return { siteId: r.site_id, hostname: r.hostname, createdAt: r.created_at, lastSeen: r.last_seen };
-}
-
-export function getDomainBySite(siteId: number): CustomDomain | null {
-  const r = db().prepare("SELECT * FROM custom_domains WHERE site_id = ?").get(siteId) as DomainRow | undefined;
-  return r ? toDomain(r) : null;
-}
-
-/** Exact hostname match first, then the www-flipped variant, so one record covers both. */
-export function resolveDomain(hostname: string): CustomDomain | null {
-  const h = hostname.toLowerCase();
-  const flipped = h.startsWith("www.") ? h.slice(4) : `www.${h}`;
-  const byHost = db().prepare("SELECT * FROM custom_domains WHERE hostname = ?");
-  const r = (byHost.get(h) ?? byHost.get(flipped)) as DomainRow | undefined;
-  return r ? toDomain(r) : null;
-}
-
-export function domainTaken(hostname: string, excludeSiteId?: number): boolean {
-  const r = db().prepare("SELECT site_id FROM custom_domains WHERE hostname = ?").get(hostname) as
-    | { site_id: number }
-    | undefined;
-  return !!r && r.site_id !== excludeSiteId;
-}
-
-/** Point `hostname` at this site (one domain per site — replaces any previous one). */
-export function setCustomDomain(siteId: number, hostname: string): void {
-  db()
-    .prepare(
-      `INSERT INTO custom_domains (site_id, hostname) VALUES (?, ?)
-       ON CONFLICT(site_id) DO UPDATE SET hostname = excluded.hostname, last_seen = NULL, created_at = datetime('now')`
-    )
-    .run(siteId, hostname);
-}
-
-export function deleteCustomDomain(siteId: number): void {
-  db().prepare("DELETE FROM custom_domains WHERE site_id = ?").run(siteId);
-}
-
-/** A request for this domain reached us — DNS and the proxy chain work. */
-export function touchDomain(siteId: number): void {
-  db().prepare("UPDATE custom_domains SET last_seen = datetime('now') WHERE site_id = ?").run(siteId);
-}
-
 /* ---------- extracted website content ---------- */
 
 interface ContentRow {
@@ -951,14 +1036,14 @@ export function replaceSiteContent(
     const previous = d.prepare("SELECT * FROM site_content WHERE site_id = ?").all(siteId) as ContentRow[];
     const carried = new Map<string, string>();
     for (const p of previous) {
-      if (p.edited !== null) carried.set(`${p.selector} ${p.kind} ${p.original}`, p.edited);
+      if (p.edited !== null) carried.set(`${p.selector}\x00${p.kind}\x00${p.original}`, p.edited);
     }
     d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
     const insert = d.prepare(
       "INSERT INTO site_content (site_id, selector, kind, original, edited, position) VALUES (?, ?, ?, ?, ?, ?)"
     );
     for (const it of items) {
-      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector} ${it.kind} ${it.original}`) ?? null, it.position);
+      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector}\x00${it.kind}\x00${it.original}`) ?? null, it.position);
     }
   });
   tx();

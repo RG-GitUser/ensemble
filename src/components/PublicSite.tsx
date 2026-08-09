@@ -1,8 +1,10 @@
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
+import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
+import { themeCss } from "@/lib/themes";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import type { PlanDef } from "@/lib/plans";
@@ -294,7 +296,9 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   const user = await getCurrentUser();
   const isOwner = user?.id === site.userId;
 
-  if (!site.published && !(preview && isOwner)) {
+  // A live page needs a live subscription — sites published in preview mode
+  // (or whose subscription lapsed) stop serving once billing is enabled.
+  if ((!site.published || !billingOk(site)) && !(preview && isOwner)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center">
         <h1 className="mt-4 text-2xl font-bold">This page isn&apos;t live yet</h1>
@@ -321,17 +325,20 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : refHost);
   }
 
-  // Layered background: accent glow (unless switched off) → uploaded/generated
-  // image → base color. Image URLs only ever come from our own /api/uploads.
-  // Rendered on a fixed, viewport-sized underlay: `cover` on the page element
-  // itself would scale the image to the FULL page height, magnifying it into
+  // Backdrop precedence: a chosen theme preset (config.themeId) styles the
+  // whole page; otherwise the custom layers apply — accent glow (unless
+  // switched off) → uploaded/generated image → base color. Either way it's
+  // rendered on a fixed, viewport-sized underlay: `cover` on the page element
+  // itself would scale images to the FULL page height, magnifying them into
   // an invisible wash on long pages.
   const cfg = site.config;
+  const preset = themeCss(cfg.themeId, cfg.themeColor);
   const bgLayers = [
     ...(cfg.gradient !== false ? [`radial-gradient(800px 400px at 50% -10%, ${cfg.themeColor}33, transparent 70%)`] : []),
     ...(cfg.bgImage ? [`url("${cfg.bgImage}") center / cover no-repeat`] : []),
     cfg.bgColor ?? "#0a0812",
   ];
+  const underlay: React.CSSProperties = preset ?? { background: bgLayers.join(", ") };
   const cardBg = `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${cfg.cardColor ?? "rgba(255,255,255,0.05)"}`;
 
   return (
@@ -344,7 +351,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         } as React.CSSProperties
       }
     >
-      <div aria-hidden className="fixed inset-0 -z-10" style={{ background: bgLayers.join(", ") }} />
+      <div aria-hidden className="fixed inset-0 -z-10" style={underlay} />
       {isOwner && (
         <div className="sticky top-0 z-50 flex items-center justify-center gap-3 border-b border-white/10 bg-black/60 px-4 py-2 text-xs backdrop-blur">
           <span className={site.published ? "text-emerald-400" : "text-amber-400"}>
@@ -355,9 +362,21 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           </a>
         </div>
       )}
-      {sections.map((s) => (
-        <SectionView key={s.id} section={s} site={site} plan={plan} chat={chat} host={host} />
-      ))}
+      {sections.map((s) => {
+        // A per-section theme renders the section inside a themed band.
+        const containerTheme = themeCss(s.theme, cfg.themeColor);
+        return containerTheme ? (
+          <div
+            key={s.id}
+            className="mx-auto my-8 w-[min(100%-2rem,72rem)] overflow-hidden rounded-3xl border border-white/10"
+            style={containerTheme}
+          >
+            <SectionView section={s} site={site} plan={plan} chat={chat} host={host} />
+          </div>
+        ) : (
+          <SectionView key={s.id} section={s} site={site} plan={plan} chat={chat} host={host} />
+        );
+      })}
       {(site.config.tagline || !plan.whiteLabel) && (
         <footer className="border-t border-white/10 px-6 py-10 text-center text-sm text-white/40">
           {site.config.tagline && <p className="mb-2 text-white/60">{site.config.tagline}</p>}
