@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { countLeads, countSections, getQuoteByUser, getSiteByUser } from "@/lib/db";
+import { countLeads, countSections, getDomainBySite, getQuoteByUser, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { togglePublish } from "@/lib/actions";
 
@@ -23,6 +23,7 @@ export default async function DashboardPage({
   if (!site && !quote) redirect("/onboarding");
 
   const plan = site ? getPlan(site.plan) : null;
+  const domain = site ? getDomainBySite(site.id) : null;
   const sectionsUsed = site ? countSections(site.id) : 0;
   const leads = site && plan?.newsletter ? countLeads(site.id) : 0;
 
@@ -62,7 +63,13 @@ export default async function DashboardPage({
               <div>
                 <h2 className="font-bold">Your page</h2>
                 <p className="mt-1 text-sm text-mist">
-                  ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
+                  {domain ? (
+                    <span className="font-mono text-snow">{domain.hostname}</span>
+                  ) : (
+                    <>
+                      ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
+                    </>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-3">

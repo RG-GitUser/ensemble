@@ -280,6 +280,7 @@ export function SocialIntegrations({
   liveNow,
   ingestKey,
   threadsOAuthReady,
+  showLive,
 }: {
   accounts: SocialAccount[];
   posts: SocialPost[];
@@ -290,23 +291,29 @@ export function SocialIntegrations({
   liveNow: boolean;
   ingestKey: string;
   threadsOAuthReady: boolean;
+  /** Live-stream tools are Enterprise — hidden (page shows a locked card) on lower plans. */
+  showLive: boolean;
 }) {
   return (
     <div className="card">
       <h2 className="font-bold">Social media</h2>
-      <p className="mt-1 text-sm text-mist">Connect your platforms, post to all of them at once, link your lives.</p>
+      <p className="mt-1 text-sm text-mist">
+        Connect your platforms, post to all of them at once{showLive ? ", link your lives" : ""}.
+      </p>
       <div className="mt-4">
         <ConnectGrid accounts={accounts} threadsOAuthReady={threadsOAuthReady} />
       </div>
       <Composer accounts={accounts} />
-      <LiveStreamsForm
-        twitchChannel={twitchChannel}
-        facebookLiveUrl={facebookLiveUrl}
-        instagramLiveUser={instagramLiveUser}
-        streamKeys={streamKeys}
-        liveNow={liveNow}
-        ingestKey={ingestKey}
-      />
+      {showLive && (
+        <LiveStreamsForm
+          twitchChannel={twitchChannel}
+          facebookLiveUrl={facebookLiveUrl}
+          instagramLiveUser={instagramLiveUser}
+          streamKeys={streamKeys}
+          liveNow={liveNow}
+          ingestKey={ingestKey}
+        />
+      )}
       {posts.length > 0 && (
         <div className="mt-5 border-t border-edge pt-5">
           <h3 className="text-sm font-bold">Recent posts</h3>

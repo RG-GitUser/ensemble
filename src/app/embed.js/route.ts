@@ -209,7 +209,7 @@ const EMBED_JS = `(function () {
     }
     var main = document.getElementById("ensemble-content") || document.querySelector("[data-ensemble]");
     if (!main) { console.warn('[ensemble] no <div id="ensemble-content"> or [data-ensemble-section] container found'); return; }
-    fill(main, data.sections, true);
+    fill(main, data.sections, data.branding !== false);
   }
 
   function onReady(fn) {

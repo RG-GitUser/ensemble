@@ -11,6 +11,16 @@ export interface User {
 
 export interface SiteConfig {
   themeColor: string;
+  /** Page background color (curated palette — see lib/theme.ts). */
+  bgColor?: string;
+  /** Container/card background on the public page (curated palette). */
+  cardColor?: string;
+  /** Uploaded or generated background image URL (/api/uploads/...). */
+  bgImage?: string;
+  /** Uploaded container/card background image URL. */
+  cardImage?: string;
+  /** Accent glow gradient at the top of the page (default on). */
+  gradient?: boolean;
   tagline: string;
   stripeKey?: string;
   calendlyUrl?: string;
@@ -56,6 +66,12 @@ export interface QuoteRequest {
   email: string;
   websiteUrl: string;
   details: string;
+  /** Platform the site runs on (see QUOTE_PLATFORMS). */
+  platform: string;
+  /** How the creator will give us access (see QUOTE_ACCESS_METHODS). */
+  accessMethod: string;
+  /** Stored name of an uploaded project zip in data/uploads, or "". */
+  fileName: string;
   status: "new" | "quoted" | "closed";
   createdAt: string;
 }
@@ -101,6 +117,15 @@ export interface Connection {
   /** Last time the pasted snippet phoned home, and from which host. */
   lastSeen: string | null;
   seenHost: string;
+}
+
+/** A creator-owned domain serving their hosted page. */
+export interface CustomDomain {
+  siteId: number;
+  hostname: string;
+  createdAt: string;
+  /** Last time a request for this hostname actually reached us — null until DNS works. */
+  lastSeen: string | null;
 }
 
 export type ContentKind = "text" | "image" | "video";

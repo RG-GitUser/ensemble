@@ -33,7 +33,7 @@ export default async function SupportPage() {
     <div className="mx-auto max-w-4xl">
       <h1 className="text-2xl font-bold tracking-tight">Support</h1>
       <p className="mt-1 text-sm text-mist">
-        Priority help desk, included with Enterprise. We reply here and to {user.email}.
+        Open a ticket any time, on any plan — we reply here and to {user.email}.
       </p>
 
       <div className="mt-6 space-y-6">

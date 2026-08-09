@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { getLeads, getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
+import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialIntegrations } from "@/components/SocialDashboard";
 
 function LockedCard({ title, body, plan }: { title: string; body: string; plan: string }) {
@@ -32,21 +33,34 @@ export default async function IntegrationsPage() {
       <p className="mt-1 text-sm text-mist">Connect the tools that power your page. Available integrations depend on your plan.</p>
 
       <div className="mt-6 space-y-5">
-        <SocialIntegrations
-          accounts={getSocialAccounts(site.id)}
-          posts={getSocialPosts(site.id)}
-          twitchChannel={site.config.twitchChannel ?? ""}
-          facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
-          instagramLiveUser={site.config.instagramLiveUser ?? ""}
-          streamKeys={{
-            twitch: site.config.twitchStreamKey ?? "",
-            facebook: site.config.facebookStreamKey ?? "",
-            instagram: site.config.instagramStreamKey ?? "",
-          }}
-          liveNow={site.config.liveNow === true}
-          ingestKey={site.embedToken}
-          threadsOAuthReady={!!process.env.THREADS_APP_ID && !!process.env.THREADS_APP_SECRET}
-        />
+        {(() => {
+          const social = (
+            <SocialIntegrations
+              accounts={getSocialAccounts(site.id)}
+              posts={getSocialPosts(site.id)}
+              twitchChannel={site.config.twitchChannel ?? ""}
+              facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
+              instagramLiveUser={site.config.instagramLiveUser ?? ""}
+              streamKeys={{
+                twitch: site.config.twitchStreamKey ?? "",
+                facebook: site.config.facebookStreamKey ?? "",
+                instagram: site.config.instagramStreamKey ?? "",
+              }}
+              liveNow={site.config.liveNow === true}
+              ingestKey={site.embedToken}
+              threadsOAuthReady={!!process.env.THREADS_APP_ID && !!process.env.THREADS_APP_SECRET}
+              showLive={plan.live}
+            />
+          );
+          return plan.social ? social : <LockedOverlay plan="Pro">{social}</LockedOverlay>;
+        })()}
+        {!plan.live && (
+          <LockedCard
+            title="Live streams & simulcast"
+            body="Link Twitch, Facebook and Instagram Live, show the players on your page, and go live everywhere with one click."
+            plan="Enterprise"
+          />
+        )}
 
         <IntegrationsForm
           payments={plan.payments}

@@ -1,5 +1,5 @@
 import type { Plan } from "./types";
-import { PLANS } from "./plans";
+import { PLAN_ORDER } from "./plans";
 
 export interface FieldSpec {
   key: string;
@@ -177,7 +177,7 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     type: "live",
     name: "Live Streams",
     description: "Your Twitch, Facebook Live and Instagram Live in one place. Link them in Integrations.",
-    requires: null,
+    requires: "enterprise",
     fields: [
       { key: "heading", label: "Heading", kind: "text" },
       { key: "body", label: "Description", kind: "textarea" },
@@ -211,8 +211,7 @@ export function getTemplate(type: string): SectionTemplate | undefined {
 
 export function planAllowsTemplate(plan: Plan, tpl: SectionTemplate): boolean {
   if (!tpl.requires) return true;
-  if (tpl.requires === "pro") return PLANS[plan].payments;
-  return plan === "enterprise";
+  return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(tpl.requires);
 }
 
 /** Parse a "lines" field: each line is pipe-separated values. */

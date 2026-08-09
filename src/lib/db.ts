@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   Connection,
   ContentItem,
+  CustomDomain,
   DailyViews,
   Lead,
   QuoteRequest,
@@ -105,6 +106,12 @@ function createDb(): Database.Database {
       last_seen TEXT,
       seen_host TEXT NOT NULL DEFAULT ''
     );
+    CREATE TABLE IF NOT EXISTS custom_domains (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      hostname TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen TEXT
+    );
     CREATE TABLE IF NOT EXISTS site_content (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -152,6 +159,10 @@ function createDb(): Database.Database {
   if (!saCols.has("external_id")) db.exec("ALTER TABLE social_accounts ADD COLUMN external_id TEXT NOT NULL DEFAULT ''");
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+  const qCols = new Set((db.prepare("PRAGMA table_info(quote_requests)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!qCols.has("platform")) db.exec("ALTER TABLE quote_requests ADD COLUMN platform TEXT NOT NULL DEFAULT ''");
+  if (!qCols.has("access_method")) db.exec("ALTER TABLE quote_requests ADD COLUMN access_method TEXT NOT NULL DEFAULT ''");
+  if (!qCols.has("file_name")) db.exec("ALTER TABLE quote_requests ADD COLUMN file_name TEXT NOT NULL DEFAULT ''");
 
   // Embed tokens arrived after the first schema shipped — migrate in place.
   const siteCols = db.prepare("PRAGMA table_info(sites)").all() as Array<{ name: string }>;
@@ -369,6 +380,9 @@ interface QuoteRow {
   email: string;
   website_url: string;
   details: string;
+  platform: string;
+  access_method: string;
+  file_name: string;
   status: string;
   created_at: string;
 }
@@ -389,7 +403,13 @@ function toSite(r: SiteRow): Site {
     slug: r.slug,
     plan: (r.plan as Site["plan"]) || "basic",
     published: r.published === 1,
-    config: { themeColor: "#8b5cf6", tagline: "", ...JSON.parse(r.config || "{}") },
+    config: {
+      themeColor: "#8b5cf6",
+      bgColor: "#0a0812",
+      cardColor: "rgba(255,255,255,0.05)",
+      tagline: "",
+      ...JSON.parse(r.config || "{}"),
+    },
     embedToken: r.embed_token ?? "",
     createdAt: r.created_at,
   };
@@ -406,6 +426,9 @@ function toQuote(r: QuoteRow): QuoteRequest {
     email: r.email,
     websiteUrl: r.website_url,
     details: r.details,
+    platform: r.platform ?? "",
+    accessMethod: r.access_method ?? "",
+    fileName: r.file_name ?? "",
     status: r.status as QuoteRequest["status"],
     createdAt: r.created_at,
   };
@@ -565,15 +588,27 @@ export function createQuoteRequest(
   businessName: string,
   email: string,
   websiteUrl: string,
-  details: string
+  details: string,
+  platform: string,
+  accessMethod: string
 ): QuoteRequest {
   const info = db()
     .prepare(
-      "INSERT INTO quote_requests (user_id, name, business_name, email, website_url, details) VALUES (?, ?, ?, ?, ?, ?)"
+      `INSERT INTO quote_requests (user_id, name, business_name, email, website_url, details, platform, access_method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(userId, name, businessName, email, websiteUrl, details);
+    .run(userId, name, businessName, email, websiteUrl, details, platform, accessMethod);
   const r = db().prepare("SELECT * FROM quote_requests WHERE id = ?").get(Number(info.lastInsertRowid)) as QuoteRow;
   return toQuote(r);
+}
+
+export function getQuoteById(id: number): QuoteRequest | null {
+  const r = db().prepare("SELECT * FROM quote_requests WHERE id = ?").get(id) as QuoteRow | undefined;
+  return r ? toQuote(r) : null;
+}
+
+export function setQuoteFileName(id: number, fileName: string): void {
+  db().prepare("UPDATE quote_requests SET file_name = ? WHERE id = ?").run(fileName, id);
 }
 
 export function getQuoteByUser(userId: number): QuoteRequest | null {
@@ -812,6 +847,59 @@ export function touchConnection(siteId: number, host: string): void {
   db()
     .prepare("UPDATE connections SET last_seen = datetime('now'), seen_host = CASE WHEN ? != '' THEN ? ELSE seen_host END WHERE site_id = ?")
     .run(host, host, siteId);
+}
+
+/* ---------- custom domains ---------- */
+
+interface DomainRow {
+  site_id: number;
+  hostname: string;
+  created_at: string;
+  last_seen: string | null;
+}
+
+function toDomain(r: DomainRow): CustomDomain {
+  return { siteId: r.site_id, hostname: r.hostname, createdAt: r.created_at, lastSeen: r.last_seen };
+}
+
+export function getDomainBySite(siteId: number): CustomDomain | null {
+  const r = db().prepare("SELECT * FROM custom_domains WHERE site_id = ?").get(siteId) as DomainRow | undefined;
+  return r ? toDomain(r) : null;
+}
+
+/** Exact hostname match first, then the www-flipped variant, so one record covers both. */
+export function resolveDomain(hostname: string): CustomDomain | null {
+  const h = hostname.toLowerCase();
+  const flipped = h.startsWith("www.") ? h.slice(4) : `www.${h}`;
+  const byHost = db().prepare("SELECT * FROM custom_domains WHERE hostname = ?");
+  const r = (byHost.get(h) ?? byHost.get(flipped)) as DomainRow | undefined;
+  return r ? toDomain(r) : null;
+}
+
+export function domainTaken(hostname: string, excludeSiteId?: number): boolean {
+  const r = db().prepare("SELECT site_id FROM custom_domains WHERE hostname = ?").get(hostname) as
+    | { site_id: number }
+    | undefined;
+  return !!r && r.site_id !== excludeSiteId;
+}
+
+/** Point `hostname` at this site (one domain per site — replaces any previous one). */
+export function setCustomDomain(siteId: number, hostname: string): void {
+  db()
+    .prepare(
+      `INSERT INTO custom_domains (site_id, hostname) VALUES (?, ?)
+       ON CONFLICT(site_id) DO UPDATE SET hostname = excluded.hostname, last_seen = NULL, created_at = datetime('now')`
+    )
+    .run(siteId, hostname);
+}
+
+export function deleteCustomDomain(siteId: number): void {
+  db().prepare("DELETE FROM custom_domains WHERE site_id = ?").run(siteId);
+}
+
+/** A request for this domain reached us — DNS and the proxy chain work. */
+export function touchDomain(siteId: number): void {
+  db().prepare("UPDATE custom_domains SET last_seen = datetime('now') WHERE site_id = ?").run(siteId);
 }
 
 /* ---------- extracted website content ---------- */

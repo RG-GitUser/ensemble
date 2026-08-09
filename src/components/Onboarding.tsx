@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { startFromScratch, submitQuote, type FormState } from "@/lib/actions";
-import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { PLAN_ORDER, PLANS, planFeatureLines } from "@/lib/plans";
+import { QUOTE_ACCESS_METHODS, QUOTE_PLATFORMS } from "@/lib/quotes";
 import type { Plan } from "@/lib/types";
 
 export function Onboarding({ initialPath, initialPlan }: { initialPath?: string; initialPlan?: string }) {
@@ -71,7 +72,7 @@ function PlanPicker({ initialPlan }: { initialPlan?: string }) {
                 ${p.price}<span className="text-sm font-normal text-mist">/mo</span>
               </div>
               <ul className="mt-3 space-y-1.5 text-xs text-mist">
-                {p.features.slice(0, 4).map((f) => (
+                {planFeatureLines(id).slice(0, 4).map((f) => (
                   <li key={f}>• {f}</li>
                 ))}
               </ul>
@@ -88,26 +89,66 @@ function PlanPicker({ initialPlan }: { initialPlan?: string }) {
 
 function QuoteForm() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(submitQuote, {});
+  const [access, setAccess] = useState<string>("invite");
+  const accessHint = QUOTE_ACCESS_METHODS.find((a) => a.id === access)?.hint;
+
   return (
     <form action={formAction} className="card mt-8 space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Tell us about your website</h2>
+        <h2 className="text-xl font-bold">We&apos;ll connect it for you</h2>
         <p className="mt-1 text-sm text-mist">
-          Integrations are custom work, so pricing is quoted per project. Share the details and we&apos;ll reach out
-          with an actual quote.
+          Tell us about your site and how to reach it, and we do the integration — most sites take under a day. Pricing
+          is quoted per project.
         </p>
       </div>
       <div>
         <label className="label" htmlFor="websiteUrl">Current website URL</label>
         <input className="field" id="websiteUrl" name="websiteUrl" type="url" placeholder="https://yoursite.com" required />
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="platform">What does it run on?</label>
+          <select className="field" id="platform" name="platform" defaultValue="wordpress">
+            {QUOTE_PLATFORMS.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="accessMethod">How should we connect it?</label>
+          <select
+            className="field"
+            id="accessMethod"
+            name="accessMethod"
+            value={access}
+            onChange={(e) => setAccess(e.target.value)}
+          >
+            {QUOTE_ACCESS_METHODS.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {accessHint && <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">{accessHint}</p>}
+      {access === "zip" && (
+        <div>
+          <label className="label" htmlFor="projectFile">Project files (.zip, up to 25MB)</label>
+          <input
+            className="field file:mr-3 file:rounded-lg file:border-0 file:bg-panel2 file:px-3 file:py-1.5 file:text-sm file:text-snow"
+            id="projectFile"
+            name="projectFile"
+            type="file"
+            accept=".zip"
+          />
+        </div>
+      )}
       <div>
-        <label className="label" htmlFor="details">What does your site run on, and what do you want it to do?</label>
+        <label className="label" htmlFor="details">What should your site do once it&apos;s connected?</label>
         <textarea
           className="field min-h-28"
           id="details"
           name="details"
-          placeholder="e.g. WordPress store with 2k members — want merch, memberships and a community chat connected to one dashboard."
+          placeholder="e.g. WordPress store with 2k members — want merch, memberships and a community chat managed from one dashboard."
         />
       </div>
       {state.error && (
@@ -116,6 +157,9 @@ function QuoteForm() {
       <button className="btn-primary" disabled={pending}>
         {pending ? "Sending…" : "Request my quote"}
       </button>
+      <p className="text-xs text-mist/70">
+        We never ask for passwords — access is always an invite you control and can revoke.
+      </p>
     </form>
   );
 }

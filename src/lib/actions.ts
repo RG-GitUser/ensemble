@@ -9,6 +9,11 @@ import { embedUrl, getTemplate, planAllowsTemplate } from "./sections";
 import { extractContent, fetchSiteHtml, validateSiteUrl } from "./scrape";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
 import { blueskySession, publishPost } from "./publish";
+import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
+import { cleanHostname, platformHosts } from "./domains";
+import { ACCENTS, BACKGROUNDS, CONTAINERS, DEFAULT_BG, DEFAULT_CARD, pickSwatch } from "./theme";
+import fs from "fs";
+import path from "path";
 import type { Site, SiteConfig } from "./types";
 
 export interface FormState {
@@ -121,7 +126,43 @@ export async function submitQuote(_prev: FormState, fd: FormData): Promise<FormS
   const websiteUrl = str(fd, "websiteUrl");
   const details = str(fd, "details");
   if (!websiteUrl) return { error: "Please include your current website URL." };
-  store.createQuoteRequest(user.id, user.name, user.businessName, user.email, websiteUrl, details);
+
+  const platform = str(fd, "platform");
+  if (!QUOTE_PLATFORMS.some((p) => p.id === platform)) return { error: "Pick what your site runs on." };
+  const accessMethod = str(fd, "accessMethod");
+  if (!QUOTE_ACCESS_METHODS.some((a) => a.id === accessMethod)) return { error: "Pick how we should connect your site." };
+
+  // Validate any project zip before touching the database.
+  const file = fd.get("projectFile");
+  const hasFile = file instanceof File && file.size > 0;
+  if (hasFile) {
+    if (accessMethod !== "zip") return { error: "Attach a file only with the 'upload my project files' option." };
+    if (!/\.zip$/i.test(file.name)) return { error: "Project files must be a single .zip archive." };
+    if (file.size > QUOTE_FILE_MAX_BYTES) return { error: "Zips are capped at 25MB — trim node_modules/media and retry." };
+  } else if (accessMethod === "zip") {
+    return { error: "Attach your project zip, or pick a different access option." };
+  }
+
+  const quote = store.createQuoteRequest(
+    user.id,
+    user.name,
+    user.businessName,
+    user.email,
+    websiteUrl,
+    details,
+    platform,
+    accessMethod
+  );
+
+  if (hasFile) {
+    const safe = path.basename(file.name).replace(/[^\w.-]/g, "_").slice(-80);
+    const storedName = `quote-${quote.id}-${safe}`;
+    const dir = path.join(process.cwd(), "data", "uploads");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, storedName), Buffer.from(await file.arrayBuffer()));
+    store.setQuoteFileName(quote.id, storedName);
+  }
+
   redirect("/dashboard?quote=submitted");
 }
 
@@ -177,14 +218,116 @@ export async function updateSettings(_prev: FormState, fd: FormData): Promise<Fo
   const { site } = await requireSite();
   const slug = slugify(str(fd, "slug"));
   const tagline = str(fd, "tagline");
-  const themeColor = str(fd, "themeColor") || site.config.themeColor;
-  if (slug.length < 3) return { error: "Your page URL must be at least 3 characters." };
+  // Length rule only applies to slug changes, so sites with a shorter
+  // pre-existing slug can still save their other settings.
+  if (slug.length < 3 && slug !== site.slug) return { error: "Your page URL must be at least 3 characters." };
   if (store.slugTaken(slug, site.id)) return { error: "That page URL is taken — try another." };
-  store.updateSite(site.id, { slug, config: { ...site.config, tagline, themeColor } });
+  store.updateSite(site.id, { slug, config: { ...site.config, tagline } });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath(`/s/${slug}`);
   return {};
+}
+
+const THEME_IMAGE_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/svg+xml": "svg",
+};
+const THEME_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+/** Reject SVGs with anything active or external — they get served from our origin. */
+function svgSafe(svg: string): boolean {
+  if (svg.length > 100_000 || !/^\s*<svg[\s\S]*<\/svg>\s*$/i.test(svg)) return false;
+  return !/<script|<foreignobject|<iframe|<image|<use|\bon\w+\s*=|javascript:|href\s*=/i.test(svg);
+}
+
+function storeThemeAsset(siteId: number, kind: "bg" | "card", data: Buffer, ext: string): string {
+  const dir = path.join(process.cwd(), "data", "uploads");
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `theme-${siteId}-${kind}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(dir, name), data);
+  return `/api/uploads/${name}`;
+}
+
+/** Uploaded theme image → stored URL, or a form error string. */
+async function themeImageFrom(fd: FormData, field: string, siteId: number, kind: "bg" | "card"): Promise<string | { error: string } | null> {
+  const file = fd.get(field);
+  if (!(file instanceof File) || file.size === 0) return null;
+  const ext = THEME_IMAGE_TYPES[file.type];
+  if (!ext) return { error: "Images can be SVG, PNG, JPG, WebP or GIF." };
+  if (file.size > THEME_IMAGE_MAX_BYTES) return { error: "Theme images are capped at 4MB." };
+  const buf = Buffer.from(await file.arrayBuffer());
+  if (ext === "svg" && !svgSafe(buf.toString("utf8"))) {
+    return { error: "That SVG has features we can't safely serve (scripts or links) — export it as a plain graphic." };
+  }
+  return storeThemeAsset(siteId, kind, buf, ext);
+}
+
+/** Saves the Design tab of the page builder. */
+export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  // Theme values go into inline styles on the public page — only accept
+  // curated palette values, keeping whatever the site already had otherwise.
+  const themeColor = pickSwatch(ACCENTS, str(fd, "themeColor"), site.config.themeColor);
+  const bgColor = pickSwatch(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
+  const cardColor = pickSwatch(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
+  const config: SiteConfig = {
+    ...site.config,
+    themeColor,
+    bgColor,
+    cardColor,
+    gradient: fd.get("gradient") === "on",
+  };
+
+  // Background image: an upload wins, then a client-generated random SVG,
+  // then an explicit remove; otherwise whatever was there stays.
+  const bgUpload = await themeImageFrom(fd, "bgImageFile", site.id, "bg");
+  if (bgUpload && typeof bgUpload === "object") return bgUpload;
+  const bgSvg = str(fd, "bgSvg");
+  if (bgUpload) {
+    config.bgImage = bgUpload;
+  } else if (bgSvg) {
+    if (!svgSafe(bgSvg)) return { error: "That generated SVG couldn't be validated — try randomizing again." };
+    config.bgImage = storeThemeAsset(site.id, "bg", Buffer.from(bgSvg, "utf8"), "svg");
+  } else if (str(fd, "clearBgImage") === "1") {
+    delete config.bgImage;
+  }
+
+  const cardUpload = await themeImageFrom(fd, "cardImageFile", site.id, "card");
+  if (cardUpload && typeof cardUpload === "object") return cardUpload;
+  if (cardUpload) {
+    config.cardImage = cardUpload;
+  } else if (str(fd, "clearCardImage") === "1") {
+    delete config.cardImage;
+  }
+
+  store.updateSite(site.id, { config });
+  revalidatePath("/dashboard/builder");
+  revalidatePath(`/s/${site.slug}`);
+  return { ok: true };
+}
+
+export async function setCustomDomainAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).customDomain) return { error: "Custom domains need the Pro plan — upgrade below." };
+  const hostname = cleanHostname(str(fd, "hostname"));
+  if (!hostname) return { error: "Enter just your domain, like janedoe.com — no https:// or paths needed." };
+  if (platformHosts().has(hostname)) return { error: "That domain is reserved." };
+  if (store.domainTaken(hostname, site.id)) return { error: "That domain is already connected to another Ensemble page." };
+  store.setCustomDomain(site.id, hostname);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function removeCustomDomainAction(): Promise<void> {
+  const { site } = await requireSite();
+  store.deleteCustomDomain(site.id);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
 }
 
 export async function togglePublish(): Promise<void> {
@@ -345,6 +488,7 @@ export async function disconnectWebsite(): Promise<void> {
 
 export async function connectSocial(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
+  if (!getPlan(site.plan).social) return { error: "Social accounts are a Pro feature — upgrade in Settings." };
   const platform = getPlatform(str(fd, "platform"));
   if (!platform) return { error: "Unknown platform." };
 
@@ -383,6 +527,7 @@ export async function disconnectSocial(fd: FormData): Promise<void> {
 
 export async function createSocialPostAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
+  if (!getPlan(site.plan).social) return { error: "Posting is a Pro feature — upgrade in Settings." };
   const body = str(fd, "body").slice(0, 2000);
   if (!body) return { error: "Write something to post." };
   const mediaUrl = str(fd, "mediaUrl");
@@ -401,6 +546,7 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
 /** Re-attempt delivery of a post's queued/failed targets. */
 export async function retrySocialPost(fd: FormData): Promise<void> {
   const { site } = await requireSite();
+  if (!getPlan(site.plan).social) return;
   const postId = Number(str(fd, "postId"));
   if (postId) await publishPost(site.id, postId);
   revalidatePath("/dashboard/integrations");
@@ -408,6 +554,7 @@ export async function retrySocialPost(fd: FormData): Promise<void> {
 
 export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
+  if (!getPlan(site.plan).live) return { error: "Live streams are an Enterprise feature — upgrade in Settings." };
   const rawTwitch = str(fd, "twitchChannel");
   const rawFacebook = str(fd, "facebookLiveUrl");
   const rawInstagram = str(fd, "instagramLiveUser");
@@ -438,6 +585,7 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
 /** Flip everything live at once and announce it to every connected platform. */
 export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
+  if (!getPlan(site.plan).live) return { error: "Going live is an Enterprise feature — upgrade in Settings." };
   const c = site.config;
   const destinations: string[] = [];
   if (c.twitchChannel) destinations.push(`twitch.tv/${c.twitchChannel}`);
@@ -473,7 +621,7 @@ export async function endLive(): Promise<void> {
 export async function createTicketAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
   const site = store.getSiteByUser(user.id);
-  if (!site || !getPlan(site.plan).helpdesk) return { error: "Help desk support is an Enterprise feature." };
+  if (!site || !getPlan(site.plan).helpdesk) return { error: "Support isn't available on your plan." };
 
   const subject = str(fd, "subject").slice(0, 120);
   const body = str(fd, "body").slice(0, 2000);

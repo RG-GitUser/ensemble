@@ -10,6 +10,7 @@ import {
   moveSectionAction,
   updateSectionAction,
 } from "@/lib/actions";
+import { ThemeForm } from "@/components/ThemeForm";
 import type { Section } from "@/lib/types";
 
 function Field({ spec, value }: { spec: FieldSpec; value: string }) {
@@ -88,10 +89,25 @@ function SectionCard({ section, index, total }: { section: Section; index: numbe
   );
 }
 
-export default async function BuilderPage() {
+function Tab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+        active ? "border-brand text-snow" : "border-transparent text-mist hover:text-snow"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export default async function BuilderPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
+  const { tab } = await searchParams;
+  const designTab = tab === "design";
   const plan = getPlan(site.plan);
   const sections = getSections(site.id);
   const atLimit = sections.length >= plan.maxSections;
@@ -102,7 +118,9 @@ export default async function BuilderPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Page Builder</h1>
           <p className="mt-1 text-sm text-mist">
-            Copy &amp; paste your content into sections below — changes go live when you save.
+            {designTab
+              ? "Style your page — colors apply the moment you save."
+              : "Copy & paste your content into sections below — changes go live when you save."}
           </p>
         </div>
         <Link href={`/s/${site.slug}?preview=1`} target="_blank" className="btn-ghost !py-2 text-sm">
@@ -110,6 +128,42 @@ export default async function BuilderPage() {
         </Link>
       </div>
 
+      <div className="mt-6 flex border-b border-edge">
+        <Tab href="/dashboard/builder" active={!designTab}>Sections</Tab>
+        <Tab href="/dashboard/builder?tab=design" active={designTab}>Design</Tab>
+      </div>
+
+      {designTab ? (
+        <div className="mt-6">
+          <ThemeForm
+            themeColor={site.config.themeColor}
+            bgColor={site.config.bgColor ?? "#0a0812"}
+            cardColor={site.config.cardColor ?? "rgba(255,255,255,0.05)"}
+            bgImage={site.config.bgImage ?? ""}
+            cardImage={site.config.cardImage ?? ""}
+            gradient={site.config.gradient !== false}
+          />
+        </div>
+      ) : (
+        <BuilderSections site={site} plan={plan} sections={sections} atLimit={atLimit} />
+      )}
+    </div>
+  );
+}
+
+function BuilderSections({
+  site,
+  plan,
+  sections,
+  atLimit,
+}: {
+  site: NonNullable<ReturnType<typeof getSiteByUser>>;
+  plan: ReturnType<typeof getPlan>;
+  sections: Section[];
+  atLimit: boolean;
+}) {
+  return (
+    <>
       {/* Add-section gallery */}
       <div className="card mt-6 !bg-panel/60">
         <div className="flex items-baseline justify-between gap-3">
@@ -156,6 +210,6 @@ export default async function BuilderPage() {
           <SectionCard key={s.id} section={s} index={i} total={sections.length} />
         ))}
       </div>
-    </div>
+    </>
   );
 }

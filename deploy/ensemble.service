@@ -1,0 +1,19 @@
+# Ensemble — systemd unit (goes to /etc/systemd/system/ensemble.service).
+# Assumes the app lives at /srv/ensemble and runs as user "ensemble".
+
+[Unit]
+Description=Ensemble (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=ensemble
+WorkingDirectory=/srv/ensemble
+# Next.js loads .env from the working directory at runtime.
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

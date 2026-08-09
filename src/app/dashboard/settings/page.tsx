@@ -1,22 +1,32 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getSiteByUser } from "@/lib/db";
-import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { getDomainBySite, getSiteByUser } from "@/lib/db";
+import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
 import { changePlan } from "@/lib/actions";
 import { SettingsForm } from "@/components/SettingsForm";
+import { DomainCard } from "@/components/DomainCard";
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
+  const domain = getDomainBySite(site.id);
 
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <p className="mt-1 text-sm text-mist">Your page URL, branding and plan.</p>
+      <p className="mt-1 text-sm text-mist">Your page URL, domain, branding and plan.</p>
 
       <div className="mt-6 space-y-6">
-        <SettingsForm slug={site.slug} tagline={site.config.tagline} themeColor={site.config.themeColor} />
+        <SettingsForm slug={site.slug} tagline={site.config.tagline} />
+
+        <DomainCard
+          hostname={domain?.hostname ?? ""}
+          lastSeen={domain?.lastSeen ?? null}
+          allowed={getPlan(site.plan).customDomain}
+          aRecord={process.env.DOMAIN_A_RECORD ?? "our server IP (announced at launch)"}
+          cnameTarget={process.env.DOMAIN_CNAME_TARGET ?? "our platform host (announced at launch)"}
+        />
 
         <div className="card">
           <h2 className="font-bold">Your plan</h2>

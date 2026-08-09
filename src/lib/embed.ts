@@ -12,12 +12,15 @@ import type { Site } from "./types";
 export interface EmbedPayload {
   site: { slug: string; tagline: string; themeColor: string };
   canSubscribe: boolean;
+  /** Show the "Powered by Ensemble" footer in full-page embeds (plans without white-label). */
+  branding: boolean;
   sections: Array<Record<string, unknown> & { type: string }>;
 }
 
 export function buildEmbedContent(site: Site): EmbedPayload {
   const plan = getPlan(site.plan);
-  const sections = getSections(site.id).flatMap((s): Array<Record<string, unknown> & { type: string }> => {
+  // Same over-limit rule as the hosted page: extra sections unpublish on downgrade.
+  const sections = getSections(site.id).slice(0, plan.maxSections).flatMap((s): Array<Record<string, unknown> & { type: string }> => {
     const c = s.content;
     switch (s.type) {
       case "hero":
@@ -68,6 +71,7 @@ export function buildEmbedContent(site: Site): EmbedPayload {
         return url ? [{ type: "calendar", heading: c.heading, body: c.body, url }] : [];
       }
       case "live": {
+        if (!plan.live) return [];
         const { twitchChannel, facebookLiveUrl, instagramLiveUser } = site.config;
         if (!twitchChannel && !facebookLiveUrl && !instagramLiveUser) return [];
         return [
@@ -94,6 +98,7 @@ export function buildEmbedContent(site: Site): EmbedPayload {
   return {
     site: { slug: site.slug, tagline: site.config.tagline, themeColor: site.config.themeColor },
     canSubscribe: plan.newsletter,
+    branding: !plan.whiteLabel,
     sections,
   };
 }

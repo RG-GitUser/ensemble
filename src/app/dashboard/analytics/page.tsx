@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import {
@@ -11,6 +10,7 @@ import {
   getTotalViews,
 } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
+import { LockedOverlay } from "@/components/LockedOverlay";
 
 const CHART_DAYS = 30;
 
@@ -31,7 +31,8 @@ export default async function AnalyticsPage() {
   const chatMessages = plan.chatroom ? countChatMessages(site.id) : null;
 
   // Fill the last CHART_DAYS days so the chart shows gaps, not just active days.
-  const daily = plan.payments ? getDailyViews(site.id, CHART_DAYS) : [];
+  // Fetched on every plan — lower tiers see it dimmed behind the upgrade overlay.
+  const daily = getDailyViews(site.id, CHART_DAYS);
   const byDay = new Map(daily.map((d) => [d.day, d.views]));
   const days: Array<{ day: string; views: number }> = [];
   const now = new Date();
@@ -43,7 +44,48 @@ export default async function AnalyticsPage() {
   }
   const maxViews = Math.max(1, ...days.map((d) => d.views));
 
-  const referrers = plan.helpdesk ? getTopReferrers(site.id) : [];
+  const referrers = getTopReferrers(site.id);
+
+  const chartCard = (
+    <div className="card">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="font-bold">Views — last {CHART_DAYS} days</h2>
+        <span className="text-xs text-mist">{days.reduce((s, d) => s + d.views, 0)} total</span>
+      </div>
+      <div className="mt-5 flex h-36 items-end gap-[3px]">
+        {days.map((d) => (
+          <div
+            key={d.day}
+            title={`${dayLabel(d.day)}: ${d.views} view${d.views === 1 ? "" : "s"}`}
+            className="flex-1 rounded-t bg-gradient-to-t from-brand/60 to-brand2/60"
+            style={{ height: `${Math.max(2, (d.views / maxViews) * 100)}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex justify-between text-[10px] text-mist">
+        <span>{dayLabel(days[0].day)}</span>
+        <span>{dayLabel(days[days.length - 1].day)}</span>
+      </div>
+    </div>
+  );
+
+  const referrerCard = (
+    <div className="card">
+      <h2 className="font-bold">Top referrers</h2>
+      {referrers.length === 0 ? (
+        <p className="mt-2 text-sm text-mist">No referrer data yet — share your page link around.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-edge text-sm">
+          {referrers.map((r) => (
+            <li key={r.referrer || "direct"} className="flex justify-between py-2">
+              <span>{r.referrer || "Direct / unknown"}</span>
+              <span className="text-mist">{r.views}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -76,65 +118,16 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {plan.payments ? (
-        <div className="card mt-6">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-bold">Views — last {CHART_DAYS} days</h2>
-            <span className="text-xs text-mist">{days.reduce((s, d) => s + d.views, 0)} total</span>
-          </div>
-          <div className="mt-5 flex h-36 items-end gap-[3px]">
-            {days.map((d) => (
-              <div
-                key={d.day}
-                title={`${dayLabel(d.day)}: ${d.views} view${d.views === 1 ? "" : "s"}`}
-                className="flex-1 rounded-t bg-gradient-to-t from-brand/60 to-brand2/60"
-                style={{ height: `${Math.max(2, (d.views / maxViews) * 100)}%` }}
-              />
-            ))}
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] text-mist">
-            <span>{dayLabel(days[0].day)}</span>
-            <span>{dayLabel(days[days.length - 1].day)}</span>
-          </div>
-        </div>
+      {plan.dailyAnalytics ? (
+        <div className="mt-6">{chartCard}</div>
       ) : (
-        <div className="card mt-6 border-dashed text-center">
-          <span className="rounded-full bg-warn/15 px-3 py-1 text-xs font-bold uppercase text-warn">Pro feature</span>
-          <p className="mt-3 font-bold">Daily view trends</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-mist">
-            See how traffic moves day by day with the {CHART_DAYS}-day view chart on Pro and Enterprise.
-          </p>
-          <Link href="/dashboard/settings" className="btn-ghost mt-4 !py-2 text-sm">Upgrade in Settings</Link>
-        </div>
+        <LockedOverlay plan="Pro" className="mt-6">{chartCard}</LockedOverlay>
       )}
 
-      {plan.helpdesk ? (
-        <div className="card mt-6">
-          <h2 className="font-bold">Top referrers</h2>
-          {referrers.length === 0 ? (
-            <p className="mt-2 text-sm text-mist">No referrer data yet — share your page link around.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-edge text-sm">
-              {referrers.map((r) => (
-                <li key={r.referrer || "direct"} className="flex justify-between py-2">
-                  <span>{r.referrer || "Direct / unknown"}</span>
-                  <span className="text-mist">{r.views}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {plan.referrerAnalytics ? (
+        <div className="mt-6">{referrerCard}</div>
       ) : (
-        <div className="card mt-6 border-dashed text-center">
-          <span className="rounded-full bg-warn/15 px-3 py-1 text-xs font-bold uppercase text-warn">
-            Enterprise feature
-          </span>
-          <p className="mt-3 font-bold">Referrer breakdown</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-mist">
-            See where your visitors come from — socials, search, embeds — on Enterprise.
-          </p>
-          <Link href="/dashboard/settings" className="btn-ghost mt-4 !py-2 text-sm">Upgrade in Settings</Link>
-        </div>
+        <LockedOverlay plan="Enterprise" className="mt-6">{referrerCard}</LockedOverlay>
       )}
     </div>
   );

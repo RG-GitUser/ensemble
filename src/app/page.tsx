@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@/lib/plans";
 
 const FEATURES = [
   { title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
   { title: "Bonus content hub", body: "Give your followers exclusive drops, behind-the-scenes and early access, all from one link." },
   { title: "Merch storefront", body: "Showcase merchandise on every plan. On Pro, paste Stripe payment links and sell directly." },
+  { title: "Your own domain", body: "Connect a domain you own on Pro — your page, your URL, no Ensemble branding anywhere." },
+  { title: "Post everywhere at once", body: "Write once and cross-post to every connected social account, straight from your dashboard on Pro." },
   { title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
   { title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
+  { title: "Live streams & simulcast", body: "Link Twitch, Facebook and Instagram Live, and go live everywhere with one click on Enterprise." },
   { title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
 ];
 
@@ -100,8 +103,8 @@ export default async function Home() {
             <span className="absolute right-4 top-4 rounded-full bg-brand2/15 px-3 py-1 text-xs font-semibold text-brand2">Option 2</span>
             <h3 className="mt-4 text-xl font-bold">Integrate a Current Website</h3>
             <p className="mt-2 text-mist">
-              Already have a platform? Paste our one-line embed snippet and your existing site pulls content straight
-              from the Ensemble dashboard — or request a quote and we&apos;ll rework your site for you personally.
+              Already have a platform? Connect it yourself with our one-line snippet — or have us do it for you: invite
+              us to your WordPress/Squarespace, or send your project files, and we handle the rest.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <Link href="/signup?path=integrate" className="btn-ghost">Request a quote</Link>
@@ -171,12 +174,26 @@ export default async function Home() {
                 </div>
                 <p className="mt-2 text-sm text-mist">{p.blurb}</p>
                 <ul className="mt-6 flex-1 space-y-2.5 text-sm">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex gap-2.5">
-                      <span className={f.startsWith("No ") ? "text-mist" : "text-good"}>{f.startsWith("No ") ? "—" : "✓"}</span>
-                      <span className={f.startsWith("No ") ? "text-mist" : ""}>{f}</span>
-                    </li>
-                  ))}
+                  <li className="flex gap-2.5">
+                    <span className="text-good">✓</span>
+                    <span>{sectionsLabel(p)}</span>
+                  </li>
+                  {TIER_FEATURES.map((f) => {
+                    const has = planIncludes(id, f);
+                    return (
+                      <li key={f.label} className="flex items-start gap-2.5">
+                        <span className={has ? "text-good" : "text-mist/40"}>{has ? "✓" : "—"}</span>
+                        <span className={has ? "" : "text-mist/50"}>
+                          {f.label}
+                          {!has && (
+                            <span className="ml-2 inline-block rounded-full bg-warn/15 px-2 py-0.5 align-middle text-[10px] font-bold uppercase text-warn">
+                              {f.requires === "pro" ? "Pro" : "Ent"}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
                 <Link href={`/signup?plan=${id}`} className={`${p.highlight ? "btn-primary" : "btn-ghost"} mt-8 w-full`}>
                   Choose {p.name}
@@ -185,6 +202,7 @@ export default async function Home() {
             );
           })}
         </div>
+
       </section>
 
       {/* CTA */}

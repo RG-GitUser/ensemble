@@ -1,0 +1,27 @@
+# Ensemble — Caddy config (goes to /etc/caddy/Caddyfile on the droplet).
+
+{
+	# Let's Encrypt account email — expiry warnings go here.
+	email j@cub.pw
+
+	# Customer-domain certificates are only issued if the app says the
+	# hostname is a registered custom domain (fast SQLite lookup).
+	on_demand_tls {
+		ask http://localhost:3000/api/domains/check
+	}
+}
+
+# The platform itself — normal managed certificates.
+ensemble.it.com, www.ensemble.it.com, sites.ensemble.it.com {
+	reverse_proxy localhost:3000
+}
+
+# Every other hostname is a creator's custom domain: mint a cert on demand
+# (gated by the ask endpoint above) and hand the request to the app, which
+# routes by Host header (src/proxy.ts).
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:3000
+}

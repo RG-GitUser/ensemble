@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ADMIN_EMAIL, requireUser } from "@/lib/auth";
 import { getAllQuotes, getAllTickets } from "@/lib/db";
 import { markQuote, replyTicket, setTicketStatus } from "@/lib/actions";
+import { quoteAccessLabel, quotePlatformLabel } from "@/lib/quotes";
 
 const STATUSES = ["new", "quoted", "closed"] as const;
 const TICKET_STATUSES = ["open", "answered", "closed"] as const;
@@ -95,6 +96,22 @@ export default async function AdminPage() {
                   </p>
                 </div>
                 <span className="text-xs text-mist">{q.createdAt.slice(0, 16).replace("T", " ")}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                {q.platform && (
+                  <span className="rounded-full bg-panel2 px-2.5 py-1 font-semibold">{quotePlatformLabel(q.platform)}</span>
+                )}
+                {q.accessMethod && (
+                  <span className="rounded-full bg-panel2 px-2.5 py-1 text-mist">{quoteAccessLabel(q.accessMethod)}</span>
+                )}
+                {q.fileName && (
+                  <a
+                    href={`/admin/quotes/${q.id}/file`}
+                    className="rounded-full bg-brand/15 px-2.5 py-1 font-semibold text-brand hover:bg-brand/25"
+                  >
+                    Download project zip
+                  </a>
+                )}
               </div>
               {q.details && <p className="mt-3 whitespace-pre-line rounded-xl bg-panel2 p-3 text-sm text-mist">{q.details}</p>}
               <div className="mt-4 flex items-center gap-2">
