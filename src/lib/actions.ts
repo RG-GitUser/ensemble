@@ -343,12 +343,15 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   const themeColor = pickSwatch(ACCENTS, str(fd, "themeColor"), site.config.themeColor);
   const bgColor = pickSwatch(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
   const cardColor = pickSwatch(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
+  const themeIdRaw = str(fd, "themeId");
   const config: SiteConfig = {
     ...site.config,
     themeColor,
     bgColor,
     cardColor,
     gradient: fd.get("gradient") === "on",
+    // Preset backdrop — only known preset ids; "" = custom backdrop.
+    themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
   };
 
   // Background image: an upload wins, then a client-generated random SVG,

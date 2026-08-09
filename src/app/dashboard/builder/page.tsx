@@ -10,7 +10,6 @@ import {
   deleteSectionAction,
   moveSectionAction,
   setSectionThemeAction,
-  setSiteTheme,
   updateSectionAction,
 } from "@/lib/actions";
 import { ThemeForm } from "@/components/ThemeForm";
@@ -22,40 +21,6 @@ function defaultCss(accent: string): React.CSSProperties {
     backgroundImage: `radial-gradient(120px 60px at 50% -10%, ${accent}55, transparent 70%)`,
     backgroundColor: "#0a0812",
   };
-}
-
-function SiteThemePicker({ accent, current }: { accent: string; current: string }) {
-  const options = [{ id: "", name: "Midnight" }, ...THEMES];
-  return (
-    <div className="card mt-6 !bg-panel/60">
-      <h2 className="font-bold">Design theme</h2>
-      <p className="mt-1 text-sm text-mist">
-        The backdrop for your whole page — gradients, textures and glow. Any section can override it below.
-      </p>
-      <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-        {options.map((t) => {
-          const selected = current === t.id;
-          return (
-            <form key={t.id || "default"} action={setSiteTheme}>
-              <input type="hidden" name="themeId" value={t.id} />
-              <button
-                className={`w-full overflow-hidden rounded-xl border text-left transition ${
-                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
-                }`}
-                title={t.name}
-              >
-                <div className="h-14 w-full" style={themeCss(t.id, accent) ?? defaultCss(accent)} />
-                <p className="truncate px-2 py-1.5 text-xs font-medium">
-                  {t.name}
-                  {t.id === "" && <span className="text-mist"> (default)</span>}
-                </p>
-              </button>
-            </form>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function SectionThemeRow({ section, accent }: { section: Section; accent: string }) {
@@ -219,9 +184,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
       </div>
 
       {designTab ? (
-        <div className="mt-6 space-y-6">
-          {/* Preset backdrops; picking one overrides the custom colors below. */}
-          <SiteThemePicker accent={site.config.themeColor} current={site.config.themeId ?? ""} />
+        <div className="mt-6">
           <ThemeForm
             themeColor={site.config.themeColor}
             bgColor={site.config.bgColor ?? "#0a0812"}
@@ -229,6 +192,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             bgImage={site.config.bgImage ?? ""}
             cardImage={site.config.cardImage ?? ""}
             gradient={site.config.gradient !== false}
+            themeId={site.config.themeId ?? ""}
           />
         </div>
       ) : (

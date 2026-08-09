@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { updateTheme, type FormState } from "@/lib/actions";
 import { ACCENTS, BACKGROUNDS, CONTAINERS, type Swatch } from "@/lib/theme";
+import { THEMES, themeCss } from "@/lib/themes";
 
 function SwatchRow({
   label,
@@ -74,7 +75,7 @@ function randomOf<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-/** The page builder's Design tab — colors, images, gradient and randomizers. */
+/** The page builder's Design tab — presets, colors, images, gradient and randomizers. */
 export function ThemeForm({
   themeColor,
   bgColor,
@@ -82,6 +83,7 @@ export function ThemeForm({
   bgImage,
   cardImage,
   gradient: gradientProp,
+  themeId: themeIdProp,
 }: {
   themeColor: string;
   bgColor: string;
@@ -89,12 +91,15 @@ export function ThemeForm({
   bgImage: string;
   cardImage: string;
   gradient: boolean;
+  /** Active preset backdrop id ("" = custom/Midnight). */
+  themeId: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateTheme, {});
   const [accent, setAccent] = useState(themeColor);
   const [bg, setBg] = useState(bgColor);
   const [card, setCard] = useState(cardColor);
   const [gradient, setGradient] = useState(gradientProp);
+  const [themeId, setThemeId] = useState(themeIdProp);
   /** What the preview shows: saved URL, object URL of a picked file, or a generated data URI. */
   const [bgImg, setBgImg] = useState<string>(bgImage);
   const [cardImg, setCardImg] = useState<string>(cardImage);
@@ -131,6 +136,8 @@ export function ThemeForm({
     setBgSvg(svg);
     setBgImg(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
     setClearBg(false);
+    // Rolling a custom backdrop implies leaving any preset.
+    setThemeId("");
     if (bgFileRef.current) bgFileRef.current.value = "";
   }
 
@@ -163,6 +170,15 @@ export function ThemeForm({
     `${gradient ? `radial-gradient(280px 150px at 50% -10%, ${accent}44, transparent 70%), ` : ""}` +
     `${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`;
   const previewCard = `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${card}`;
+  // An active preset owns the backdrop — in the preview and on the page.
+  const previewStyle = themeCss(themeId, accent) ?? { background: previewBg };
+  /** Thumbnail for the "Midnight (custom)" tile — reflects the current custom picks. */
+  const customTileStyle = {
+    backgroundImage: `${gradient ? `radial-gradient(60px 30px at 50% -10%, ${accent}66, transparent 70%), ` : ""}${
+      bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
+    }`,
+    backgroundColor: bg,
+  };
 
   return (
     <form action={formAction} className="card space-y-5">
@@ -181,17 +197,56 @@ export function ThemeForm({
       <input type="hidden" name="themeColor" value={accent} />
       <input type="hidden" name="bgColor" value={bg} />
       <input type="hidden" name="cardColor" value={card} />
+      <input type="hidden" name="themeId" value={themeId} />
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
 
+      {/* Preset backdrops — previewed live, saved with the same button. */}
+      <div>
+        <span className="label">Theme preset</span>
+        <p className="mt-0.5 text-xs text-mist/70">
+          A complete backdrop look. Pick <span className="text-snow">Custom</span> to design your own with the controls
+          below.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {[{ id: "", name: "Custom" }, ...THEMES].map((t) => {
+            const selected = themeId === t.id;
+            return (
+              <button
+                key={t.id || "custom"}
+                type="button"
+                title={t.name}
+                aria-pressed={selected}
+                onClick={() => setThemeId(t.id)}
+                className={`overflow-hidden rounded-xl border text-left transition ${
+                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                }`}
+              >
+                <div className="h-12 w-full" style={themeCss(t.id, accent) ?? customTileStyle} />
+                <p className="truncate px-2 py-1 text-[10px] font-medium">{t.name}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid gap-6 sm:grid-cols-[1fr_16rem]">
         <div className="space-y-5">
-          <SwatchRow label="Background" swatches={BACKGROUNDS} value={bg} onPick={setBg} />
+          {themeId && (
+            <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
+              The <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span> preset
+              controls your backdrop — the background color, image and glow below are ignored until you switch back to
+              Custom. Accent and container choices still apply.
+            </p>
+          )}
+          <div className={themeId ? "pointer-events-none select-none opacity-40" : ""}>
+            <SwatchRow label="Background" swatches={BACKGROUNDS} value={bg} onPick={setBg} />
+          </div>
           <SwatchRow label="Containers" swatches={CONTAINERS} value={card} onPick={setCard} base={bg} />
           <SwatchRow label="Accent" swatches={ACCENTS} value={accent} onPick={setAccent} />
 
-          <div>
+          <div className={themeId ? "pointer-events-none select-none opacity-40" : ""}>
             <span className="label">Background image</span>
             <p className="mt-0.5 text-xs text-mist/70">
               Optional — sits on top of your background color. Upload your own SVG or image, or roll a random abstract
@@ -243,7 +298,11 @@ export function ThemeForm({
             </div>
           </div>
 
-          <label className="flex w-fit cursor-pointer items-center gap-2.5 text-sm">
+          <label
+            className={`flex w-fit cursor-pointer items-center gap-2.5 text-sm ${
+              themeId ? "pointer-events-none select-none opacity-40" : ""
+            }`}
+          >
             <input
               type="checkbox"
               name="gradient"
@@ -256,7 +315,7 @@ export function ThemeForm({
         </div>
 
         <div className="overflow-hidden rounded-xl border border-edge">
-          <div className="flex h-full flex-col justify-center p-5" style={{ background: previewBg }}>
+          <div className="flex h-full flex-col justify-center p-5" style={previewStyle}>
             <p className="text-center text-base font-extrabold text-white">Your name here</p>
             <p className="mt-0.5 text-center text-[10px] text-white/60">This is how your page will feel</p>
             <div className="mt-4 rounded-lg border border-white/10 p-3" style={{ background: previewCard }}>
