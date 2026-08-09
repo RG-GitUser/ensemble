@@ -11,9 +11,22 @@
 	}
 }
 
+# Caddy calls the ask endpoint directly over localhost, so it never passes
+# through a site block — blocking it at the edge costs nothing and stops
+# anyone enumerating which hostnames are customers (it answers 200 vs 404).
+# Imported into EVERY site block; a block missing it re-exposes the endpoint.
+(block-ask-endpoint) {
+	handle /api/domains/check* {
+		respond 403
+	}
+}
+
 # The platform itself — normal managed certificates.
 ensemble.it.com, www.ensemble.it.com, sites.ensemble.it.com {
-	reverse_proxy localhost:3000
+	import block-ask-endpoint
+	handle {
+		reverse_proxy localhost:3000
+	}
 }
 
 # Every other hostname is a creator's custom domain: mint a cert on demand
@@ -23,5 +36,8 @@ https:// {
 	tls {
 		on_demand
 	}
-	reverse_proxy localhost:3000
+	import block-ask-endpoint
+	handle {
+		reverse_proxy localhost:3000
+	}
 }

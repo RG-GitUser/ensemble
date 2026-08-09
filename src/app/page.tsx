@@ -174,26 +174,16 @@ export default async function Home() {
                 </div>
                 <p className="mt-2 text-sm text-mist">{p.blurb}</p>
                 <ul className="mt-6 flex-1 space-y-2.5 text-sm">
-                  <li className="flex gap-2.5">
-                    <span className="text-good">✓</span>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-3.5 shrink-0 text-good">✓</span>
                     <span>{sectionsLabel(p)}</span>
                   </li>
-                  {TIER_FEATURES.map((f) => {
-                    const has = planIncludes(id, f);
-                    return (
-                      <li key={f.label} className="flex items-start gap-2.5">
-                        <span className={has ? "text-good" : "text-mist/40"}>{has ? "✓" : "—"}</span>
-                        <span className={has ? "" : "text-mist/50"}>
-                          {f.label}
-                          {!has && (
-                            <span className="ml-2 inline-block rounded-full bg-warn/15 px-2 py-0.5 align-middle text-[10px] font-bold uppercase text-warn">
-                              {f.requires === "pro" ? "Pro" : "Ent"}
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
+                  {TIER_FEATURES.filter((f) => planIncludes(id, f)).map((f) => (
+                    <li key={f.label} className="flex items-start gap-2.5">
+                      <span className="w-3.5 shrink-0 text-good">✓</span>
+                      <span>{f.label}</span>
+                    </li>
+                  ))}
                 </ul>
                 <Link href={`/signup?plan=${id}`} className={`${p.highlight ? "btn-primary" : "btn-ghost"} mt-8 w-full`}>
                   Choose {p.name}

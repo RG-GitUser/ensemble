@@ -104,6 +104,10 @@ cd /srv/ensemble && git pull && npm ci && npm run build && sudo systemctl restar
   creator custom domain. If the marketing site ever 404s, check this first.
 - The Caddy `ask` endpoint (`/api/domains/check`) refuses certificates for
   unregistered domains — that's what stops randoms pointing DNS at you and
-  burning Let's Encrypt rate limits.
+  burning Let's Encrypt rate limits. Caddy reaches it over localhost, so the
+  Caddyfile returns 403 for it at the edge (it answers 200 vs 404, which would
+  otherwise let anyone enumerate your customers' domains). The block is a
+  snippet imported into every site block — a new block without the import
+  re-exposes it.
 - `ADMIN_PASSWORD` only applies when the database is first created. To change
   it later you currently need to update the user row manually.

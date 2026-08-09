@@ -100,9 +100,9 @@ export function getPlan(id: string | null | undefined): PlanDef {
 }
 
 /**
- * The canonical feature list shown on pricing cards. Every plan's card shows
- * every line — locked ones get a Pro/Ent badge — so `requires` here should
- * mirror the capability flags above.
+ * The canonical feature list shown on pricing cards. A card lists only the
+ * lines its plan includes, so `requires` here should mirror the capability
+ * flags above.
  */
 export interface TierFeature {
   label: string;

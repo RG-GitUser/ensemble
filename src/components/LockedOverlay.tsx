@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TierBadge } from "@/components/TierBadge";
 
 /**
  * Renders the real feature UI dimmed and inert under a plan badge, so lower
@@ -20,7 +21,7 @@ export function LockedOverlay({
         {children}
       </div>
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-2xl bg-ink/40">
-        <span className="rounded-full bg-warn/15 px-3 py-1 text-xs font-bold uppercase text-warn">{plan}</span>
+        <TierBadge plan={plan === "Pro" ? "pro" : "enterprise"} size="md" />
         <Link href="/dashboard/settings" className="btn-primary !py-2 text-sm">
           Upgrade to unlock
         </Link>
