@@ -23,11 +23,11 @@ export function AuthForm({
           <input type="hidden" name="intentPath" value={intentPath ?? ""} />
           <div>
             <label className="label" htmlFor="name">Your name</label>
-            <input className="field" id="name" name="name" placeholder="Riley Gaffney" required />
+            <input className="field" id="name" name="name" placeholder="Jane Doe" required />
           </div>
           <div>
             <label className="label" htmlFor="businessName">Business / creator name</label>
-            <input className="field" id="businessName" name="businessName" placeholder="Riley Makes Things" required />
+            <input className="field" id="businessName" name="businessName" placeholder="Jane Doe Studio" required />
           </div>
         </>
       )}

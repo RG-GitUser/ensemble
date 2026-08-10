@@ -27,8 +27,13 @@ export function WipOverlay() {
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Ensemble</p>
         <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">Work In Progress</h1>
         <p className="mx-auto mt-5 max-w-md text-mist">
-          We&apos;re still building. The site will be open shortly — thanks for your patience.
+          We&apos;re still building. The site will be open shortly, thanks for your patience.
         </p>
+        {/* The overlay covers every route, so this is the owner's way back in.
+            Logging in clears it for the rest of the session. */}
+        <a href="/login" className="mt-8 inline-block text-xs font-semibold text-mist/60 hover:text-brand">
+          Log in
+        </a>
       </div>
     </div>
   );

@@ -12,7 +12,30 @@ import { platformHosts } from "@/lib/domains";
  * platform host missing from the list would be treated as a customer domain.
  */
 export function proxy(req: NextRequest): NextResponse {
+  // Work-in-progress mode: funnel every signed-out visitor to the landing
+  // page, which carries the overlay. Without this the overlay only hides one
+  // route and /signup, /s/… and the rest stay wide open. /login is the way
+  // back in, so it must never be redirected, and anyone holding a session
+  // passes straight through.
+  if (process.env.WIP_MODE === "1" && !req.cookies.get("fs_session")) {
+    const path = req.nextUrl.pathname;
+    if (path !== "/" && !path.startsWith("/login")) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+  }
+
   const host = (req.headers.get("host") ?? "").toLowerCase().split(":")[0];
+
+  // The CNAME target is plumbing, not a destination. It has to stay a platform
+  // host (creators' domains point at it, and a bare visit must not 404 as an
+  // unknown customer domain), but rendering the marketing site here means
+  // anyone poking at the value from the DNS instructions lands on a duplicate
+  // of the homepage. Send them to the real one instead.
+  const cnameTarget = process.env.DOMAIN_CNAME_TARGET?.toLowerCase();
+  if (cnameTarget && host === cnameTarget) {
+    return NextResponse.redirect(process.env.APP_URL || `https://${platformHosts().values().next().value ?? host}`);
+  }
+
   if (!host || platformHosts().has(host)) return NextResponse.next();
 
   const url = req.nextUrl.clone();
