@@ -143,29 +143,18 @@ function Composer({ accounts }: { accounts: SocialAccount[] }) {
       <h3 className="text-sm font-bold">Post everywhere at once</h3>
       <textarea name="body" maxLength={2000} className="field mt-3 min-h-20 text-sm" placeholder="What's happening?" required />
       <input name="mediaUrl" className="field mt-2 font-mono text-xs" placeholder="Image or video link (optional) — https://…" />
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {accounts.map((a) => {
-          const p = getPlatform(a.platform);
-          if (!p) return null;
-          return (
-            <label
-              key={a.platform}
-              className="flex cursor-pointer items-center gap-1.5 rounded-full border border-edge bg-panel2 px-2.5 py-1 text-xs font-medium transition has-[:checked]:border-brand has-[:checked]:bg-brand/10"
-            >
-              <input type="checkbox" name="platforms" value={a.platform} defaultChecked className="h-3 w-3 accent-brand" />
-              <PlatformIcon platform={p} size={13} /> {p.name}
-            </label>
-          );
-        })}
-        {accounts.length === 0 && <p className="text-xs text-warn">Connect a platform above to start posting.</p>}
-      </div>
+      {/* No per-platform picker: posts go everywhere you're connected, and the
+          connect grid above is already the source of truth for what that is. */}
+      {accounts.length === 0 && (
+        <p className="mt-3 text-xs text-warn">Connect a platform above to start posting.</p>
+      )}
       {state.error && (
         <p className="mt-3 rounded-xl border border-brand2/40 bg-brand2/10 px-3 py-2 text-sm text-brand2">{state.error}</p>
       )}
-      {state.ok && <p className="mt-3 text-sm font-semibold text-good">Post queued for all selected platforms.</p>}
+      {state.ok && <p className="mt-3 text-sm font-semibold text-good">Post queued for every connected platform.</p>}
       <div className="mt-3 flex items-center gap-3">
         <button className="btn-primary !py-2 text-sm" disabled={pending || accounts.length === 0}>
-          {pending ? "Posting…" : "Post to selected"}
+          {pending ? "Posting…" : "Post everywhere"}
         </button>
         <p className="text-xs text-mist/70">
           Bluesky, Discord and OAuth-connected Threads publish for real; handle-only platforms queue until their API

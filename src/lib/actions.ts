@@ -224,6 +224,31 @@ export async function moveSectionAction(fd: FormData): Promise<void> {
   revalidateSite(site);
 }
 
+/**
+ * Drag-and-drop reordering. Takes the full new order in one call because
+ * Next dispatches Server Actions sequentially per client — one action per
+ * moved section would queue up behind itself.
+ *
+ * The ids arrive from the browser, so they are only trusted as far as being
+ * a permutation of what this site already owns: same length, same members,
+ * no duplicates. Anything else is a malformed or hostile payload and is
+ * dropped rather than partially applied.
+ */
+export async function reorderSectionsAction(orderedIds: number[]): Promise<void> {
+  const { site } = await requireSite();
+  if (!Array.isArray(orderedIds)) return;
+  const ids = orderedIds.map(Number);
+  if (ids.some((id) => !Number.isInteger(id))) return;
+
+  const current = store.getSections(site.id).map((s) => s.id);
+  if (ids.length !== current.length) return;
+  if (new Set(ids).size !== ids.length) return;
+  if (!ids.every((id) => current.includes(id))) return;
+
+  store.reorderSections(site.id, ids);
+  revalidateSite(site);
+}
+
 export async function deleteSectionAction(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const id = Number(str(fd, "sectionId"));
@@ -683,9 +708,14 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
   const mediaUrl = str(fd, "mediaUrl");
   if (mediaUrl && !/^https?:\/\//.test(mediaUrl)) return { error: "The media link must be a full http(s) URL." };
 
-  const connected = new Set(store.getSocialAccounts(site.id).map((a) => a.platform));
-  const platforms = fd.getAll("platforms").map(String).filter((p) => connected.has(p));
-  if (platforms.length === 0) return { error: "Pick at least one connected platform." };
+  // The composer has no per-platform picker any more — what's connected is the
+  // selection. An explicit `platforms` list is still honoured (and still
+  // filtered against connected accounts, since it arrives from the client),
+  // so anything posting to a subset keeps working.
+  const connected = store.getSocialAccounts(site.id).map((a) => a.platform);
+  const requested = fd.getAll("platforms").map(String).filter((p) => connected.includes(p));
+  const platforms = requested.length > 0 ? requested : connected;
+  if (platforms.length === 0) return { error: "Connect a platform above before posting." };
 
   const postId = store.createSocialPost(site.id, body, mediaUrl, platforms);
   await publishPost(site.id, postId);

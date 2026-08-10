@@ -38,7 +38,7 @@ Open http://localhost:3000.
 
 ## Accounts
 
-- **Admin**: seeded on first run as `j@cub.pw` / `admin1234` (override with `ADMIN_EMAIL` /
+- **Admin**: seeded on first run as `rileyg0035@gmail.com` / `admin1234` (override with `ADMIN_EMAIL` /
   `ADMIN_PASSWORD` env vars before the database is first created). Comes with an Enterprise
   site (`/s/hq`) and the **Admin Inbox** at `/admin` — quote requests and Enterprise support
   tickets (reply + status).

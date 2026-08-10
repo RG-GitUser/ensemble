@@ -14,12 +14,17 @@ export function DomainCard({
   hostname: string;
   lastSeen: string | null;
   allowed: boolean;
-  /** A-record value (server IP) shown in the DNS instructions. */
-  aRecord: string;
-  /** CNAME target shown in the DNS instructions. */
-  cnameTarget: string;
+  /**
+   * A-record value (server IP), or null when the server hasn't been told its
+   * own address. Null must stay null — the previous placeholder string told
+   * people to create an A record pointing at the words "our server IP".
+   */
+  aRecord: string | null;
+  /** CNAME target, same rule as aRecord. */
+  cnameTarget: string | null;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(setCustomDomainAction, {});
+  const dnsReady = !!aRecord && !!cnameTarget;
 
   const card = (
     <div className="card space-y-4">
@@ -29,6 +34,21 @@ export function DomainCard({
           Buy a domain anywhere (Namecheap, GoDaddy, Cloudflare…), point it at Ensemble, and your page lives there —
           your visitors never see an Ensemble URL.
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Explainer q="What's my domain?">
+            It&apos;s the address people type to reach you, like <span className="font-mono">janedoe.com</span>. You buy
+            one from a registrar (Namecheap, GoDaddy, Cloudflare) and it&apos;s yours to point wherever you like. You
+            don&apos;t need one: without it your page lives at our address. A domain just makes it yours.
+          </Explainer>
+          <Explainer q="What's DNS?">
+            DNS is the internet&apos;s phone book. It&apos;s what turns your domain into the actual computer that serves
+            your page. Adding a &ldquo;record&rdquo; below is you updating your entry in that book so it points at us. You
+            do it where you bought the domain, usually under a menu called{" "}
+            <span className="font-semibold text-snow">DNS</span> or{" "}
+            <span className="font-semibold text-snow">Advanced DNS</span>. It can take up to an hour to spread worldwide.
+            That&apos;s normal, and nothing is broken while you wait.
+          </Explainer>
+        </div>
       </div>
 
       {hostname && (
@@ -70,23 +90,60 @@ export function DomainCard({
         <p className="rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-sm text-brand2">{state.error}</p>
       )}
 
-      <div className="space-y-1.5 rounded-xl bg-panel2 px-4 py-3 text-xs text-mist">
-        <p className="font-semibold text-snow">At your domain registrar, add one of these DNS records:</p>
-        <p>
-          Root domain (janedoe.com): an <span className="font-mono text-snow">A</span> record →{" "}
-          <span className="font-mono text-snow">{aRecord}</span>
-        </p>
-        <p>
-          www / subdomain: a <span className="font-mono text-snow">CNAME</span> record →{" "}
-          <span className="font-mono text-snow">{cnameTarget}</span>
-        </p>
-        <p className="pt-1">
-          Whichever matches the address you entered — visitors on the www / non-www twin are covered automatically.
-          HTTPS is issued for you on the first visit, and DNS changes can take up to an hour to spread.
-        </p>
-      </div>
+      {dnsReady ? (
+        <div className="space-y-1.5 rounded-xl bg-panel2 px-4 py-3 text-xs text-mist">
+          <p className="font-semibold text-snow">At your domain registrar, add one of these DNS records:</p>
+          <p>
+            Using your main domain (<span className="font-mono">janedoe.com</span>): add an{" "}
+            <span className="font-mono text-snow">A</span> record pointing to{" "}
+            <span className="font-mono text-snow">{aRecord}</span>
+          </p>
+          <p>
+            Using www or a subdomain (<span className="font-mono">shop.janedoe.com</span>): add a{" "}
+            <span className="font-mono text-snow">CNAME</span> record pointing to{" "}
+            <span className="font-mono text-snow">{cnameTarget}</span>
+          </p>
+          <p className="pt-1">
+            Add whichever one matches the address you typed above — you don&apos;t need both. Most registrars want just
+            the first part in the &ldquo;Host&rdquo; box (<span className="font-mono">shop</span>, not{" "}
+            <span className="font-mono">shop.janedoe.com</span>), or <span className="font-mono">@</span> for your main
+            domain.
+          </p>
+          <p>
+            Visitors on the www / non-www twin are covered automatically, and the padlock (HTTPS) is set up for you the
+            first time someone visits.
+          </p>
+        </div>
+      ) : (
+        // Better to say nothing than to invent DNS values. The old fallback
+        // rendered literally as "point an A record at our server IP".
+        <div className="rounded-xl border border-warn/40 bg-warn/5 px-4 py-3 text-xs">
+          <p className="font-semibold text-warn">Domain setup isn&apos;t available right now</p>
+          <p className="mt-1 text-mist">
+            We can&apos;t show you the DNS details at the moment, so please don&apos;t change anything at your registrar
+            yet — you&apos;d be pointing your domain at the wrong place. Get in touch and we&apos;ll sort it out.
+          </p>
+        </div>
+      )}
     </div>
   );
 
   return allowed ? card : <LockedOverlay plan="Pro">{card}</LockedOverlay>;
+}
+
+/**
+ * A jargon term with a plain-English answer, collapsed until asked for.
+ * Native <details> so it works without JS and stays keyboard-accessible.
+ */
+function Explainer({ q, children }: { q: string; children: React.ReactNode }) {
+  return (
+    <details className="group w-full rounded-xl border border-edge bg-panel2/60 px-3 py-2 open:bg-panel2">
+      {/* list-none covers Chrome/Firefox; Safari needs the webkit marker hidden too. */}
+      <summary className="cursor-pointer list-none text-xs font-semibold text-brand [&::-webkit-details-marker]:hidden">
+        {q}
+        <span className="ml-1.5 inline-block text-mist transition group-open:rotate-90">›</span>
+      </summary>
+      <p className="mt-2 text-xs leading-relaxed text-mist">{children}</p>
+    </details>
+  );
 }

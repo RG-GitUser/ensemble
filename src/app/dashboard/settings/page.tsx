@@ -32,8 +32,10 @@ export default async function SettingsPage() {
           hostname={domain?.hostname ?? ""}
           lastSeen={domain?.lastSeen ?? null}
           allowed={getPlan(site.plan).customDomain}
-          aRecord={process.env.DOMAIN_A_RECORD ?? "our server IP (announced at launch)"}
-          cnameTarget={process.env.DOMAIN_CNAME_TARGET ?? "our platform host (announced at launch)"}
+          // Pass through unset as null. DomainCard hides the DNS table rather
+          // than printing placeholder prose where a hostname should be.
+          aRecord={process.env.DOMAIN_A_RECORD || null}
+          cnameTarget={process.env.DOMAIN_CNAME_TARGET || null}
         />
 
         <div className="card">

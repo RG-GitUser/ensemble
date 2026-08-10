@@ -2,9 +2,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { billingEnabled, billingOk, reconcileBilling } from "@/lib/billing";
-import { countLeads, countSections, getDomainBySite, getQuoteByUser, getSiteByUser } from "@/lib/db";
+import {
+  countLeads,
+  countSections,
+  countSocialPosts,
+  getDomainBySite,
+  getQuoteByUser,
+  getSiteByUser,
+  getSocialAccounts,
+  getSocialPosts,
+} from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { resumeCheckout, togglePublish } from "@/lib/actions";
+import { SocialOverview } from "@/components/SocialOverview";
 
 const QUOTE_STATUS: Record<string, { label: string; tone: string }> = {
   new: { label: "Received — we'll reach out soon", tone: "text-warn" },
@@ -38,6 +48,10 @@ export default async function DashboardPage({
   const sectionsUsed = site ? countSections(site.id) : 0;
   const leads = site && plan?.newsletter ? countLeads(site.id) : 0;
   const needsBilling = !!site && billingEnabled() && !billingOk(site);
+  // Only read social rows for plans that can actually use the feature.
+  const socialAccounts = site && plan?.social ? getSocialAccounts(site.id) : [];
+  const socialPosts = site && plan?.social ? countSocialPosts(site.id) : 0;
+  const lastSocialPost = site && plan?.social ? (getSocialPosts(site.id, 1)[0] ?? null) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -166,6 +180,13 @@ export default async function DashboardPage({
               <p className="text-sm text-mist">{plan.newsletter ? "newsletter signups" : "Enterprise feature"}</p>
             </div>
           </div>
+
+          <SocialOverview
+            accounts={socialAccounts}
+            totalPosts={socialPosts}
+            lastPost={lastSocialPost}
+            canUse={plan.social}
+          />
         </>
       ) : (
         <div className="card mt-6">

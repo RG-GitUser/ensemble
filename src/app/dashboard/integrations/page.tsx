@@ -6,6 +6,7 @@ import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialIntegrations } from "@/components/SocialDashboard";
+import { OAuthNotice } from "@/components/OAuthNotice";
 
 function LockedCard({ title, body, plan }: { title: string; body: string; plan: string }) {
   return (
@@ -20,12 +21,17 @@ function LockedCard({ title, body, plan }: { title: string; body: string; plan: 
   );
 }
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ oauth?: string; platform?: string }>;
+}) {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
   const plan = getPlan(site.plan);
   const leads = plan.newsletter ? getLeads(site.id) : [];
+  const { oauth, platform } = await searchParams;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -33,6 +39,7 @@ export default async function IntegrationsPage() {
       <p className="mt-1 text-sm text-mist">Connect the tools that power your page. Available integrations depend on your plan.</p>
 
       <div className="mt-6 space-y-5">
+        <OAuthNotice code={oauth} platform={platform} />
         {(() => {
           const social = (
             <SocialIntegrations
@@ -127,7 +134,7 @@ export default async function IntegrationsPage() {
             <h2 className="font-bold">Help desk support</h2>
             <p className="mt-1 text-sm text-mist">
               Enterprise includes priority support. Email{" "}
-              <a href="mailto:j@cub.pw" className="text-brand hover:underline">j@cub.pw</a> and you&apos;ll hear back
+              <a href="mailto:rileyg0035@gmail.com" className="text-brand hover:underline">rileyg0035@gmail.com</a> and you&apos;ll hear back
               first.
             </p>
           </div>

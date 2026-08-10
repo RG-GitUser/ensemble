@@ -2,7 +2,7 @@
 
 {
 	# Let's Encrypt account email — expiry warnings go here.
-	email j@cub.pw
+	email rileyg0035@gmail.com
 
 	# Customer-domain certificates are only issued if the app says the
 	# hostname is a registered custom domain (fast SQLite lookup).

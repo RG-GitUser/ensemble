@@ -8,7 +8,7 @@ import type { User } from "./types";
 const COOKIE = "fs_session";
 const SESSION_DAYS = 30;
 
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "j@cub.pw").toLowerCase();
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "rileyg0035@gmail.com").toLowerCase();
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");

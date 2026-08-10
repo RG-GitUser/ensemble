@@ -27,6 +27,15 @@ body {
     radial-gradient(600px 300px at 80% 10%, rgba(236, 72, 153, 0.12), transparent 70%);
 }
 
+/* Confirmation flash: fade up, hold, fade out. One animation rather than a
+   transition, so it plays on mount and the element can unmount when done. */
+@keyframes saved-flash {
+  0% { opacity: 0; transform: translateY(3px); }
+  12% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
 .btn-primary {
   @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand2 px-5 py-2.5 font-semibold text-white shadow-lg shadow-brand/25 transition hover:opacity-90 disabled:opacity-50;
 }

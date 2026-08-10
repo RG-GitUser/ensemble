@@ -334,7 +334,7 @@ function seedDemoChat(d: Database.Database): void {
  * (override with ADMIN_PASSWORD before first run).
  */
 function seedAdmin(d: Database.Database): void {
-  const email = (process.env.ADMIN_EMAIL || "j@cub.pw").toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || "rileyg0035@gmail.com").toLowerCase();
   if (d.prepare("SELECT id FROM users WHERE email = ?").get(email)) return;
 
   const password = process.env.ADMIN_PASSWORD || "admin1234";
@@ -661,6 +661,21 @@ export function moveSection(id: number, dir: "up" | "down"): void {
   const tx = db().transaction(() => {
     swap.run(neighbor.position, s.id);
     swap.run(s.position, neighbor.id);
+  });
+  tx();
+}
+
+/**
+ * Rewrites the whole ordering in one transaction — what drag-and-drop needs,
+ * since a drag can move an item past many neighbours at once and pairwise
+ * swaps would need N round trips. `orderedIds` must be exactly this site's
+ * section ids; the caller checks that, and the `site_id` guard in the UPDATE
+ * is the backstop so a foreign id can never be repositioned.
+ */
+export function reorderSections(siteId: number, orderedIds: number[]): void {
+  const update = db().prepare("UPDATE sections SET position = ? WHERE id = ? AND site_id = ?");
+  const tx = db().transaction(() => {
+    orderedIds.forEach((id, i) => update.run(i + 1, id, siteId));
   });
   tx();
 }
@@ -1171,6 +1186,11 @@ export function getPostForSite(siteId: number, postId: number): { id: number; bo
 
 export function updateTargetStatus(targetId: number, status: string, detail: string): void {
   db().prepare("UPDATE social_post_targets SET status = ?, detail = ? WHERE id = ?").run(status, detail.slice(0, 500), targetId);
+}
+
+export function countSocialPosts(siteId: number): number {
+  const r = db().prepare("SELECT COUNT(*) AS c FROM social_posts WHERE site_id = ?").get(siteId) as { c: number };
+  return r.c;
 }
 
 export function getSocialPosts(siteId: number, limit = 20): SocialPost[] {

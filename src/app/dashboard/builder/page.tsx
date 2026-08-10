@@ -13,6 +13,8 @@ import {
   updateSectionAction,
 } from "@/lib/actions";
 import { ThemeForm } from "@/components/ThemeForm";
+import { DraggableSections } from "@/components/DraggableSections";
+import { SaveButton } from "@/components/SaveButton";
 import type { Section } from "@/lib/types";
 
 /** The classic look when no theme is chosen. */
@@ -92,7 +94,17 @@ function SectionCard({
   return (
     <div className="card">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="font-bold">{tpl.name}</h3>
+        {/* `draggable` + the marker attribute are static markup: DraggableSections
+            catches the bubbled dragstart, so this card needs no client JS. */}
+        <h3
+          draggable
+          data-drag-handle
+          title="Drag to reorder"
+          className="flex cursor-grab select-none items-center gap-2 font-bold active:cursor-grabbing"
+        >
+          <span aria-hidden className="text-mist/50">⠿</span>
+          {tpl.name}
+        </h3>
         <div className="flex items-center gap-1.5">
           <form action={moveSectionAction}>
             <input type="hidden" name="sectionId" value={section.id} />
@@ -133,7 +145,7 @@ function SectionCard({
         {tpl.fields.map((f) => (
           <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
         ))}
-        <button className="btn-ghost !py-2 text-sm">Save section</button>
+        <SaveButton />
       </form>
     </div>
   );
@@ -253,13 +265,22 @@ function BuilderSections({
       </div>
 
       {/* Existing sections */}
-      <div className="mt-8 space-y-5">
-        {sections.length === 0 && (
+      <div className="mt-8">
+        {sections.length === 0 ? (
           <div className="card text-center text-mist">Your page is empty — add a section above to get started.</div>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-mist/70">Drag a section by its title to reorder, or use ↑ ↓.</p>
+            <DraggableSections
+              items={sections.map((s, i) => ({
+                id: s.id,
+                node: (
+                  <SectionCard section={s} index={i} total={sections.length} accent={site.config.themeColor} />
+                ),
+              }))}
+            />
+          </>
         )}
-        {sections.map((s, i) => (
-          <SectionCard key={s.id} section={s} index={i} total={sections.length} accent={site.config.themeColor} />
-        ))}
       </div>
     </>
   );
