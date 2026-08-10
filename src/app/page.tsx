@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@/lib/plans";
+import { WipOverlay, wipEnabled } from "@/components/WipOverlay";
 
 const FEATURES = [
   { title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
@@ -18,6 +19,7 @@ export default async function Home() {
   const user = await getCurrentUser();
   return (
     <div className="flex-1">
+      {wipEnabled() && <WipOverlay />}
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-edge/60 bg-ink/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
