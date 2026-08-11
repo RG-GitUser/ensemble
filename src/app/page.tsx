@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@/lib/plans";
+import { Starfield } from "@/components/Starfield";
 import { WipOverlay, wipEnabled } from "@/components/WipOverlay";
 
 const FEATURES = [
@@ -19,11 +20,12 @@ export default async function Home() {
   const user = await getCurrentUser();
   return (
     <div className="flex-1">
+      <Starfield />
       {wipEnabled() && <WipOverlay />}
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-edge/60 bg-ink/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/" className="text-lg font-bold tracking-tight">
+          <Link href="/" className="text-2xl font-extrabold tracking-tight sm:text-3xl">
             En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-4">
