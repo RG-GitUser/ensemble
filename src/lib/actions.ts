@@ -5,9 +5,8 @@ import { revalidatePath } from "next/cache";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
-import { embedUrl, getTemplate, planAllowsTemplate } from "./sections";
+import { embedUrl, getTemplate, planAllowsTemplate, RECOMMENDED_ORDER } from "./sections";
 import { getThemeDef } from "./themes";
-import { extractContent, fetchSiteHtml, validateSiteUrl } from "./scrape";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
@@ -63,6 +62,9 @@ async function requireSite(): Promise<{ site: Site }> {
 function revalidateSite(site: Site): void {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/builder");
+  // Publish state and domain status surface on these two as well.
+  revalidatePath("/dashboard/connect");
+  revalidatePath("/dashboard/settings");
   revalidatePath(`/s/${site.slug}`);
 }
 
@@ -249,6 +251,26 @@ export async function reorderSectionsAction(orderedIds: number[]): Promise<void>
   revalidateSite(site);
 }
 
+/**
+ * One-click "Organize my page": restack sections into the recommended
+ * content order (see RECOMMENDED_ORDER). The sort is stable, so several
+ * sections of the same type keep their relative order, and unknown types
+ * sink to the bottom without being dropped. Nothing is added or removed —
+ * a drag can always undo it.
+ */
+export async function organizeSectionsAction(): Promise<void> {
+  const { site } = await requireSite();
+  const sections = store.getSections(site.id);
+  if (sections.length < 2) return;
+  const rank = (type: string) => {
+    const i = RECOMMENDED_ORDER.indexOf(type);
+    return i === -1 ? RECOMMENDED_ORDER.length : i;
+  };
+  const ordered = [...sections].sort((a, b) => rank(a.type) - rank(b.type) || a.position - b.position);
+  store.reorderSections(site.id, ordered.map((s) => s.id));
+  revalidateSite(site);
+}
+
 export async function deleteSectionAction(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const id = Number(str(fd, "sectionId"));
@@ -319,6 +341,8 @@ export async function updateSettings(_prev: FormState, fd: FormData): Promise<Fo
   store.updateSite(site.id, { slug, config: { ...site.config, tagline } });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  // The free-address card lives here and shows the slug back to the user.
+  revalidatePath("/dashboard/connect");
   revalidatePath(`/s/${slug}`);
   return {};
 }
@@ -417,6 +441,7 @@ export async function setCustomDomainAction(_prev: FormState, fd: FormData): Pro
   store.setCustomDomain(site.id, hostname);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/connect");
   return { ok: true };
 }
 
@@ -425,6 +450,7 @@ export async function removeCustomDomainAction(): Promise<void> {
   store.deleteCustomDomain(site.id);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/connect");
 }
 
 export async function togglePublish(): Promise<void> {
@@ -597,35 +623,19 @@ export async function regenerateEmbedTokenAction(): Promise<void> {
   revalidatePath("/dashboard/connect");
 }
 
-async function scanIntoInventory(siteId: number, rawUrl: string): Promise<FormState> {
-  const checked = validateSiteUrl(rawUrl);
-  if ("error" in checked) return { error: checked.error };
-  let html: string;
-  try {
-    html = await fetchSiteHtml(checked.url);
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Couldn't reach that website." };
-  }
-  const items = extractContent(html, checked.url);
-  if (items.length === 0) return { error: "Couldn't find any editable content on that page." };
-  store.upsertConnection(siteId, checked.url.href);
-  store.replaceSiteContent(siteId, items);
+/**
+ * Ask the snippet to re-read the page on its next load.
+ *
+ * Discovery is snippet-driven — the server never fetches the creator's site.
+ * That replaced a URL scan which bot-protection firewalls blocked outright
+ * and which saw only an empty shell on JavaScript-rendered platforms.
+ * Existing edits survive: replaceSiteContent re-attaches them by selector.
+ */
+export async function resyncWebsite(): Promise<void> {
+  const { site } = await requireSite();
+  if (!store.getConnection(site.id)) return;
+  store.setConnectionNeedsReport(site.id, true);
   revalidatePath("/dashboard/connect");
-  return { ok: true };
-}
-
-export async function connectWebsite(_prev: FormState, fd: FormData): Promise<FormState> {
-  const { site } = await requireSite();
-  const url = str(fd, "url");
-  if (!url) return { error: "Enter your website's address." };
-  return scanIntoInventory(site.id, url);
-}
-
-export async function rescanWebsite(_prev: FormState, _fd: FormData): Promise<FormState> {
-  const { site } = await requireSite();
-  const connection = store.getConnection(site.id);
-  if (!connection) return { error: "Connect a website first." };
-  return scanIntoInventory(site.id, connection.url);
 }
 
 export async function saveWebsiteContent(fd: FormData): Promise<void> {

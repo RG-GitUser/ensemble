@@ -9,6 +9,7 @@ import {
   addSectionAction,
   deleteSectionAction,
   moveSectionAction,
+  organizeSectionsAction,
   setSectionThemeAction,
   updateSectionAction,
 } from "@/lib/actions";
@@ -270,7 +271,19 @@ function BuilderSections({
           <div className="card text-center text-mist">Your page is empty — add a section above to get started.</div>
         ) : (
           <>
-            <p className="mb-3 text-xs text-mist/70">Drag a section by its title to reorder, or use ↑ ↓.</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-mist/70">Drag a section by its title to reorder, or use ↑ ↓.</p>
+              {sections.length > 1 && (
+                <form action={organizeSectionsAction}>
+                  <button
+                    className="btn-ghost !py-1.5 !px-3 text-xs"
+                    title="Restack your sections into a proven order: hook first, your best content next, merch while attention is high, then story, email capture, community, and links & contact at the bottom. You can still drag anything afterwards."
+                  >
+                    ✨ Organize my page
+                  </button>
+                </form>
+              )}
+            </div>
             <DraggableSections
               items={sections.map((s, i) => ({
                 id: s.id,

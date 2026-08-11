@@ -95,7 +95,10 @@ DigitalOcean droplet snapshots (weekly) cover the rest.
 ## 9. Updating the app
 
 ```sh
-cd /srv/ensemble && git pull && npm ci && npm run build && sudo systemctl restart ensemble
+# as root — the repo is owned by the ensemble user, and building as root
+# leaves root-owned .next/ and node_modules/ the service cannot write to.
+sudo -iu ensemble bash -lc 'cd /srv/ensemble && git pull && npm ci && npm run build'
+systemctl restart ensemble
 ```
 
 ## Notes

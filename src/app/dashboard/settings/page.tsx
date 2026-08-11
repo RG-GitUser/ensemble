@@ -5,7 +5,7 @@ import { getDomainBySite, getSiteByUser } from "@/lib/db";
 import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
 import { changePlan, openBillingPortal } from "@/lib/actions";
 import { SettingsForm } from "@/components/SettingsForm";
-import { DomainCard } from "@/components/DomainCard";
+import Link from "next/link";
 
 const BILLING_LABELS: Record<string, { label: string; tone: string }> = {
   active: { label: "Active", tone: "bg-good/15 text-good" },
@@ -28,15 +28,34 @@ export default async function SettingsPage() {
       <div className="mt-6 space-y-6">
         <SettingsForm slug={site.slug} tagline={site.config.tagline} />
 
-        <DomainCard
-          hostname={domain?.hostname ?? ""}
-          lastSeen={domain?.lastSeen ?? null}
-          allowed={getPlan(site.plan).customDomain}
-          // Pass through unset as null. DomainCard hides the DNS table rather
-          // than printing placeholder prose where a hostname should be.
-          aRecord={process.env.DOMAIN_A_RECORD || null}
-          cnameTarget={process.env.DOMAIN_CNAME_TARGET || null}
-        />
+        {/* The full step-by-step lives on My Website so there's exactly one
+            place to set a domain up — this is just the status + a way in. */}
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-bold">Your own domain</h2>
+              <p className="mt-1 text-sm text-mist">
+                {!getPlan(site.plan).customDomain ? (
+                  "Available on Pro and Enterprise — serve your page on a domain you own."
+                ) : domain ? (
+                  <>
+                    <span className="font-mono text-snow">{domain.hostname}</span>
+                    {domain.lastSeen && site.published
+                      ? " — live"
+                      : domain.lastSeen
+                        ? " — connected, publish your page to go live"
+                        : " — waiting on DNS"}
+                  </>
+                ) : (
+                  "Not set up yet. Four short steps, no jargon."
+                )}
+              </p>
+            </div>
+            <Link href="/dashboard/connect#domain" className="btn-ghost !py-2 text-sm">
+              {domain ? "Manage domain" : "Set up domain"}
+            </Link>
+          </div>
+        </div>
 
         <div className="card">
           <h2 className="font-bold">Your plan</h2>

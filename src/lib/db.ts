@@ -110,7 +110,8 @@ function createDb(): Database.Database {
       enabled INTEGER NOT NULL DEFAULT 1,
       last_scraped TEXT,
       last_seen TEXT,
-      seen_host TEXT NOT NULL DEFAULT ''
+      seen_host TEXT NOT NULL DEFAULT '',
+      needs_report INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS site_content (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,6 +160,10 @@ function createDb(): Database.Database {
   if (!saCols.has("external_id")) db.exec("ALTER TABLE social_accounts ADD COLUMN external_id TEXT NOT NULL DEFAULT ''");
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+  // Snippet-reported content discovery replaced the server-side URL scan.
+  const connCols = new Set((db.prepare("PRAGMA table_info(connections)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!connCols.has("needs_report")) db.exec("ALTER TABLE connections ADD COLUMN needs_report INTEGER NOT NULL DEFAULT 1");
+
   const qCols = new Set((db.prepare("PRAGMA table_info(quote_requests)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!qCols.has("platform")) db.exec("ALTER TABLE quote_requests ADD COLUMN platform TEXT NOT NULL DEFAULT ''");
   if (!qCols.has("access_method")) db.exec("ALTER TABLE quote_requests ADD COLUMN access_method TEXT NOT NULL DEFAULT ''");
@@ -956,6 +961,7 @@ interface ConnectionRow {
   last_scraped: string | null;
   last_seen: string | null;
   seen_host: string;
+  needs_report: number | null;
 }
 
 function toConnection(r: ConnectionRow): Connection {
@@ -966,6 +972,7 @@ function toConnection(r: ConnectionRow): Connection {
     lastScraped: r.last_scraped,
     lastSeen: r.last_seen,
     seenHost: r.seen_host,
+    needsReport: (r.needs_report ?? 1) === 1,
   };
 }
 
@@ -974,13 +981,24 @@ export function getConnection(siteId: number): Connection | null {
   return r ? toConnection(r) : null;
 }
 
+/**
+ * Record a content report from the pasted snippet. Creates the connection on
+ * the first report — there is no separate "connect" step any more, pasting
+ * the snippet and loading the page is what pairs a site.
+ */
 export function upsertConnection(siteId: number, url: string): void {
   db()
     .prepare(
-      `INSERT INTO connections (site_id, url, enabled, last_scraped) VALUES (?, ?, 1, datetime('now'))
-       ON CONFLICT(site_id) DO UPDATE SET url = excluded.url, last_scraped = datetime('now')`
+      `INSERT INTO connections (site_id, url, enabled, last_scraped, needs_report)
+       VALUES (?, ?, 1, datetime('now'), 0)
+       ON CONFLICT(site_id) DO UPDATE SET url = excluded.url, last_scraped = datetime('now'), needs_report = 0`
     )
     .run(siteId, url);
+}
+
+/** Ask the snippet to re-read the page next time it loads. */
+export function setConnectionNeedsReport(siteId: number, needed: boolean): void {
+  db().prepare("UPDATE connections SET needs_report = ? WHERE site_id = ?").run(needed ? 1 : 0, siteId);
 }
 
 export function setConnectionEnabled(siteId: number, enabled: boolean): void {
@@ -1024,6 +1042,11 @@ function toContentItem(r: ContentRow): ContentItem {
     edited: r.edited,
     position: r.position,
   };
+}
+
+export function countSiteContent(siteId: number): number {
+  const r = db().prepare("SELECT COUNT(*) AS c FROM site_content WHERE site_id = ?").get(siteId) as { c: number };
+  return r.c;
 }
 
 export function getSiteContent(siteId: number): ContentItem[] {

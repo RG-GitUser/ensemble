@@ -205,6 +205,27 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   },
 ];
 
+/**
+ * The stacking order "Organize my page" applies: hook first (hero), then the
+ * creator's best content (video, bonus, live), commerce while attention is
+ * high (merch), the personal story, audience capture (newsletter, calendar),
+ * community, and finally the link list and contact where footers belong.
+ * Types not listed keep their relative order after everything ranked.
+ */
+export const RECOMMENDED_ORDER: string[] = [
+  "hero",
+  "video",
+  "bonus",
+  "live",
+  "merch",
+  "about",
+  "newsletter",
+  "calendar",
+  "chatroom",
+  "links",
+  "contact",
+];
+
 export function getTemplate(type: string): SectionTemplate | undefined {
   return SECTION_TEMPLATES.find((t) => t.type === type);
 }

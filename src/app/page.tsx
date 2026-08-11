@@ -83,10 +83,14 @@ export default async function Home() {
         <p className="mx-auto mt-3 max-w-xl text-center text-mist">
           Whether you&apos;re starting fresh or already have a site, your dashboard is the same.
         </p>
+        {/* The route labels straddle the card's top border, so `overflow-hidden`
+            has to go — it would clip the half that sits outside. */}
         <div className="mt-12 grid gap-6 md:grid-cols-2">
-          <div className="card relative overflow-hidden">
-            <span className="absolute right-4 top-4 rounded-full bg-brand/15 px-3 py-1 text-xs font-semibold text-brand">Option 1</span>
-            <h3 className="mt-4 text-xl font-bold">Start From Scratch</h3>
+          <div className="card relative">
+            <span className="absolute -top-3 left-6 rounded-full border border-brand/40 bg-panel px-3 py-1 text-xs font-semibold text-brand">
+              Route 1
+            </span>
+            <h3 className="mt-2 text-xl font-bold">Start From Scratch</h3>
             <p className="mt-2 text-mist">
               We host a brand-new landing page for you — bonus content for your followers, your story, merchandise sales,
               links and more. Sign up, pick a package, paste in your content, publish. Live in minutes.
@@ -101,9 +105,11 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-          <div className="card relative overflow-hidden">
-            <span className="absolute right-4 top-4 rounded-full bg-brand2/15 px-3 py-1 text-xs font-semibold text-brand2">Option 2</span>
-            <h3 className="mt-4 text-xl font-bold">Integrate a Current Website</h3>
+          <div className="card relative">
+            <span className="absolute -top-3 left-6 rounded-full border border-brand2/40 bg-panel px-3 py-1 text-xs font-semibold text-brand2">
+              Route 2
+            </span>
+            <h3 className="mt-2 text-xl font-bold">Integrate a Current Website</h3>
             <p className="mt-2 text-mist">
               Already have a platform? Connect it yourself with our one-line snippet — or have us do it for you: invite
               us to your WordPress/Squarespace, or send your project files, and we handle the rest.

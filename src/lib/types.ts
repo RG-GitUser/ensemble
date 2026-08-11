@@ -128,10 +128,13 @@ export interface Connection {
   siteId: number;
   url: string;
   enabled: boolean;
+  /** Last time the snippet reported its page contents. */
   lastScraped: string | null;
   /** Last time the pasted snippet phoned home, and from which host. */
   lastSeen: string | null;
   seenHost: string;
+  /** True while we want the snippet to re-report the page's contents. */
+  needsReport: boolean;
 }
 
 /** A creator-owned domain serving their hosted page. */
