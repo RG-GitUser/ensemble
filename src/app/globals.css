@@ -15,15 +15,6 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-/* Blurred blob wash (from blurry-gradient-haikei.svg) used as the primary
-   button fill, recoloured onto the brand ramp — violet base with purple and
-   pink blooms — so buttons belong to the same family as the wordmark instead
-   of sitting in their own muddy magenta. The filter region is the SVG
-   default, so it clips the 149px blur exactly as the exported file does. */
-:root {
-  --gradient-btn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 450'%3E%3Cfilter id='b'%3E%3CfeGaussianBlur stdDeviation='149'/%3E%3C/filter%3E%3Crect width='900' height='450' fill='%236d28d9'/%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='768' cy='223' fill='%23ec4899' r='332'/%3E%3Ccircle cx='717' cy='402' fill='%236d28d9' r='332'/%3E%3Ccircle cx='13' cy='442' fill='%23a855f7' r='332'/%3E%3Ccircle cx='619' cy='129' fill='%23a855f7' r='332'/%3E%3Ccircle cx='231' cy='439' fill='%236d28d9' r='332'/%3E%3Ccircle cx='559' cy='290' fill='%23ec4899' r='332'/%3E%3C/g%3E%3C/svg%3E");
-}
-
 body {
   background: var(--color-ink);
   color: var(--color-snow);
@@ -87,58 +78,40 @@ body {
   .ens-star { opacity: 0.2; }
 }
 
-/* Buttons, glass-styled: translucent tinted base with backdrop blur, the
-   blob gradient showing through at partial opacity (::before), and a glossy
-   top sheen over everything (::after). Hover shifts colour, click presses
-   down, and both variants get visible keyboard focus rings. */
+/* Buttons: flat, tight and quick. A hard-edged violet→pink gradient on a
+   smaller radius, with a single hairline of light along the top edge for
+   definition — no blur, no gloss, no bloom. Hover slides the gradient
+   across rather than lighting it up, which reads as crisp instead of soft,
+   and the short transition keeps the whole thing feeling immediate. */
 .btn-primary {
-  @apply relative isolate inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/15 px-5 py-2.5 font-semibold text-white outline-none backdrop-blur-md transition-all duration-200;
-  background: rgba(109, 40, 217, 0.42);
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-5 py-2.5 font-semibold tracking-tight text-white outline-none;
+  background-image: linear-gradient(105deg, #6d28d9 0%, #9333ea 42%, #db2777 100%);
+  /* Oversized so hover can slide it; the resting frame shows the violet end. */
+  background-size: 175% 100%;
+  background-position: 0% 50%;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(168, 85, 247, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 1px rgba(0, 0, 0, 0.4);
+  transition:
+    background-position 220ms ease,
+    box-shadow 140ms ease,
+    transform 90ms ease;
 }
 
-/* Painting order for negative-z pseudos puts ::after above ::before, so the
-   sheen always sits on top of the gradient. */
-.btn-primary::before {
-  content: "";
-  @apply pointer-events-none absolute inset-0 -z-10;
-  background: var(--gradient-btn) center / cover no-repeat;
-  opacity: 0.72;
-}
-
-.btn-primary::after {
-  content: "";
-  @apply pointer-events-none absolute inset-0 -z-10;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.22),
-    rgba(255, 255, 255, 0.05) 48%,
-    rgba(255, 255, 255, 0) 65%
-  );
-}
-
-/* Hover leans the wash further toward pink rather than adding glow —
-   a colour change, same light. Smaller rotation than before, since the
-   gradient already carries pink of its own. */
 .btn-primary:hover {
-  filter: hue-rotate(12deg) saturate(1.15) brightness(1.07);
-  transform: translateY(-1px);
+  background-position: 100% 50%;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(236, 72, 153, 0.2);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 1px 1px rgba(0, 0, 0, 0.4);
 }
 
 .btn-primary:active {
-  filter: brightness(0.98);
-  transform: translateY(0);
-  transition-duration: 75ms;
+  transform: translateY(1px);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.25),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+    inset 0 1px 3px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
 .btn-primary:focus-visible {
@@ -150,24 +123,29 @@ body {
 }
 
 .btn-ghost {
-  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-2.5 font-semibold text-snow outline-none backdrop-blur-md transition-all duration-200;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-edge px-5 py-2.5 font-semibold tracking-tight text-snow outline-none;
+  background-color: transparent;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 90ms ease;
 }
 
 .btn-ghost:hover {
-  @apply border-brand/50;
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-1px);
+  @apply border-brand/70;
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .btn-ghost:active {
-  transform: translateY(0);
-  transition-duration: 75ms;
+  transform: translateY(1px);
 }
 
 .btn-ghost:focus-visible {
   @apply ring-2 ring-brand/60 ring-offset-2 ring-offset-ink;
+}
+
+.btn-ghost:disabled {
+  @apply pointer-events-none opacity-50;
 }
 
 .btn-ghost:disabled {
