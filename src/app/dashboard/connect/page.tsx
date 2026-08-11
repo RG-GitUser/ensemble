@@ -50,7 +50,8 @@ export default async function ConnectPage() {
   // origin — never the host the dashboard happens to be open on. Copying a
   // localhost URL onto a live site fails twice over: visitors can't resolve it,
   // and an http src on an https page is blocked as mixed content.
-  const snippet = `<script src="${appOrigin}/connect.js" data-site="${site.embedToken}" async></script>`;
+  // SnippetInstaller assembles the line itself from origin + token, so it can
+  // highlight the key rather than print one opaque string.
   const snippetIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(appOrigin);
 
   // Step state. Pasting the snippet is the only manual action — everything
@@ -87,7 +88,12 @@ export default async function ConnectPage() {
               : "This is the only setup step. Everything else happens by itself."
           }
         >
-          <SnippetInstaller snippet={snippet} siteUrl={connection?.url} showChecker={!snippetSeen && !snippetIsLocal} />
+          <SnippetInstaller
+            origin={appOrigin}
+            token={site.embedToken}
+            siteUrl={connection?.url}
+            showChecker={!snippetSeen && !snippetIsLocal}
+          />
           <p className="mt-3 text-xs text-mist/70">
             The line carries your private pairing key, which is why it&apos;s more than just a link — only snippets
             with your key receive your edits.

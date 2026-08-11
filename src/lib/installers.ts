@@ -22,6 +22,13 @@ export interface Installer {
   note?: string;
   /** True when the snippet only takes effect after a build/redeploy. */
   needsRebuild?: boolean;
+  /**
+   * Which file to edit, and the near-identical one that silently loses the
+   * change. Build tools regenerate their output directory, so editing the
+   * published file looks right until the next deploy erases it — the single
+   * most common way this install fails.
+   */
+  fileHint?: { right: string; rightWhy: string; wrong: string; wrongWhy: string };
   /** GTM wants the tag pasted without the surrounding advice. */
   gtm?: boolean;
 }
@@ -100,11 +107,18 @@ export const INSTALLERS: Installer[] = [
     blurb: "React, Vue, Vite, Next.js",
     tag: { label: "Needs a deploy", tone: "warn" },
     needsRebuild: true,
+    fileHint: {
+      right: "index.html",
+      rightWhy: "in your project root, next to package.json",
+      wrong: "dist/index.html",
+      wrongWhy: "your next build regenerates this and erases the line",
+    },
     steps: [
-      "Add the line to your project's index.html, just before </body>.",
-      "Commit it, run your build, and deploy as usual.",
+      "Open index.html in your project root — the one next to package.json, not the one in dist/ or build/.",
+      "Paste the line just before </body>.",
+      "Run your build, then deploy as usual.",
     ],
-    note: "Editing the published file isn't enough — your next build overwrites it. If a developer manages your site, send them the line and this instruction; it's a two-minute change for them.",
+    note: "Quick way to tell them apart: if the file already lists files like /assets/index-a1b2c3.js, it's the built copy — wrong one. The source has something like /src/main.tsx instead.",
   },
   {
     id: "other",

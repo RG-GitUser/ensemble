@@ -61,7 +61,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </button>
         </form>
       </aside>
-      <main className="flex-1 px-6 py-8 md:px-10">{children}</main>
+      {/* min-w-0: a flex item defaults to min-width:auto, so one long
+          unbreakable line (a code snippet, a wide table) propagates its
+          min-content width up and scrolls the whole dashboard sideways.
+          This lets those blocks scroll inside their own box instead. */}
+      <main className="min-w-0 flex-1 px-6 py-8 md:px-10">{children}</main>
     </div>
   );
 }
