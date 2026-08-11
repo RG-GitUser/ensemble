@@ -44,25 +44,87 @@ const CONNECT_JS = `(function () {
   var TEXT_SELECTOR = "h1,h2,h3,h4,h5,h6,p,li,blockquote,figcaption";
   var MAX_ITEMS = 300;
 
+  // Idempotent on purpose: it writes only when the value actually differs, so
+  // re-running it from a MutationObserver can't trigger the mutation that
+  // would call it again.
   function apply(items) {
+    var changed = 0;
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       try {
         var el = document.querySelector(it.selector);
         if (!el) continue;
         if (it.kind === "text") {
-          el.textContent = it.value;
+          if (el.textContent !== it.value) { el.textContent = it.value; changed++; }
         } else if (it.kind === "image") {
-          el.removeAttribute("srcset");
-          el.setAttribute("src", it.value);
+          if (el.getAttribute("src") !== it.value) {
+            el.removeAttribute("srcset");
+            el.setAttribute("src", it.value);
+            changed++;
+          }
         } else if (it.kind === "video") {
-          var source = el.querySelector && el.querySelector("source");
-          if (source) source.setAttribute("src", it.value);
-          el.setAttribute("src", it.value);
-          if (el.load) try { el.load(); } catch (e2) {}
+          if (el.getAttribute("src") !== it.value) {
+            var source = el.querySelector && el.querySelector("source");
+            if (source) source.setAttribute("src", it.value);
+            el.setAttribute("src", it.value);
+            if (el.load) try { el.load(); } catch (e2) {}
+            changed++;
+          }
         }
       } catch (e3) {}
     }
+    return changed;
+  }
+
+  /**
+   * Client-rendered sites (React, Vue, any Vite/CRA SPA) have an empty <body>
+   * at DOMContentLoaded — the real page arrives milliseconds to seconds later.
+   * Reading it then finds nothing, so wait until the DOM stops changing.
+   * The hard cap keeps pages with perpetual animation from waiting forever.
+   */
+  function whenSettled(cb) {
+    var fired = false, quiet = null, cap = null, obs = null;
+    function finish() {
+      if (fired) return;
+      fired = true;
+      clearTimeout(quiet); clearTimeout(cap);
+      if (obs) obs.disconnect();
+      cb();
+    }
+    // Crucially, an empty shell must NOT count as settled: a quiet period
+    // that begins before the app has rendered would expire while the page is
+    // still <div id="root"></div>. Only start the countdown once there is
+    // something worth reading; the cap covers pages that never render.
+    function maybeSettle() {
+      clearTimeout(quiet);
+      if (!document.querySelector(TEXT_SELECTOR + ",img,iframe,video")) return;
+      quiet = setTimeout(finish, 500);
+    }
+    if (window.MutationObserver) {
+      obs = new MutationObserver(maybeSettle);
+      try {
+        obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+      } catch (e) { obs = null; }
+    }
+    cap = setTimeout(finish, 10000);
+    maybeSettle();
+  }
+
+  /**
+   * An SPA re-renders on navigation and state changes, throwing away our text.
+   * Re-apply whenever the DOM changes; apply() is a no-op when nothing differs,
+   * so this settles instead of looping.
+   */
+  function keepApplied(items) {
+    if (!items.length || !window.MutationObserver) return;
+    var t = null;
+    var obs = new MutationObserver(function () {
+      clearTimeout(t);
+      t = setTimeout(function () { apply(items); }, 150);
+    });
+    try {
+      obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+    } catch (e) {}
   }
 
   // "body > div:nth-of-type(2) > p:nth-of-type(3)" — same shape the dashboard
@@ -147,7 +209,7 @@ const CONNECT_JS = `(function () {
 
   function send(items) {
     if (!items || !items.length) {
-      console.warn(TAG, "found nothing editable on this page — is the snippet on a page with real content?");
+      console.warn(TAG, "found no headings, paragraphs or images on this page. If your site renders with JavaScript, the snippet may be loading before the content does — tell us at your dashboard and we'll look.");
       return;
     }
     try {
@@ -180,14 +242,20 @@ const CONNECT_JS = `(function () {
     })
     .then(function (data) {
       onReady(function () {
-        // Read the page BEFORE applying edits, so a re-sync records the site's
-        // own text as "original" rather than the previous edit — that key is
-        // what carries existing edits across on the server.
-        var pending = data.report ? collect() : null;
         var edits = data.items || [];
-        apply(edits);
-        if (pending) setTimeout(function () { send(pending); }, 0);
-        else console.log(TAG, "connected — applied " + edits.length + " edit" + (edits.length === 1 ? "" : "s"));
+        // Nothing to read? Apply straight away so there's no flash of old text.
+        // When a read IS pending we must not write first — the "original" we
+        // record is the key that carries existing edits across on the server.
+        if (!data.report) apply(edits);
+
+        whenSettled(function () {
+          if (data.report) send(collect());
+          apply(edits);
+          keepApplied(edits);
+          if (!data.report) {
+            console.log(TAG, "connected — applied " + edits.length + " edit" + (edits.length === 1 ? "" : "s"));
+          }
+        });
       });
     })
     .catch(function (err) { console.warn(TAG, err && err.message ? err.message : err); });

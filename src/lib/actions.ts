@@ -11,6 +11,7 @@ import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChann
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { cleanHostname, platformHosts } from "./domains";
+import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import { ACCENTS, BACKGROUNDS, CONTAINERS, DEFAULT_BG, DEFAULT_CARD, pickSwatch } from "./theme";
 import {
   billingEnabled,
@@ -621,6 +622,47 @@ export async function regenerateEmbedTokenAction(): Promise<void> {
   const { site } = await requireSite();
   store.regenerateEmbedToken(site.id);
   revalidatePath("/dashboard/connect");
+}
+
+export interface CheckState extends FormState {
+  check?: SnippetCheck & { url: string };
+}
+
+/**
+ * "Check my website" — reads the creator's page and says, in one click, why
+ * the snippet isn't working. This exists because the alternative was asking
+ * non-technical users to open devtools and interpret console output.
+ *
+ * Unlike the content scan this replaced, a failed fetch is not fatal: we say
+ * we couldn't look and fall back to the manual steps.
+ */
+export async function checkWebsiteAction(_prev: CheckState, fd: FormData): Promise<CheckState> {
+  const { site } = await requireSite();
+  const raw = str(fd, "url");
+  if (!raw) return { error: "Enter your website's address first." };
+
+  const checked = validateSiteUrl(raw);
+  if ("error" in checked) return { error: checked.error };
+
+  const appOrigin = (process.env.APP_URL || "").replace(/\/$/, "");
+  if (!appOrigin) {
+    return { error: "This Ensemble server has no public address configured yet, so we can't check your site." };
+  }
+
+  let html: string;
+  try {
+    html = await fetchPageHtml(checked.url);
+  } catch (e) {
+    return {
+      check: {
+        status: "unreachable",
+        url: checked.url.href,
+        detail: e instanceof Error ? e.message : "couldn't load the page",
+      },
+    };
+  }
+
+  return { check: { ...inspectSnippet(html, appOrigin, site.embedToken), url: checked.url.href } };
 }
 
 /**

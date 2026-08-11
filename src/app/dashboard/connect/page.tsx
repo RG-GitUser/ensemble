@@ -8,6 +8,7 @@ import { disconnectWebsite, regenerateEmbedTokenAction, resyncWebsite, saveWebsi
 import { CopyButton } from "@/components/CopyButton";
 import { DomainSetup } from "@/components/DomainSetup";
 import { FreeAddressCard } from "@/components/FreeAddressCard";
+import { SnippetChecker } from "@/components/SnippetChecker";
 import { StepCard } from "@/components/StepCard";
 import type { ContentItem } from "@/lib/types";
 
@@ -128,44 +129,7 @@ export default async function ConnectPage() {
             </p>
           )}
 
-          {!snippetSeen && !snippetIsLocal && (
-            <p className="mt-3 rounded-xl border border-warn/40 bg-warn/5 px-4 py-2.5 text-xs text-warn">
-              Waiting to hear from your website. Paste the line, save, then open your site once and refresh this page.
-            </p>
-          )}
-
-          <details className="mt-3 rounded-xl border border-edge bg-panel2/60 px-3 py-2">
-            <summary className="cursor-pointer list-none text-xs font-semibold text-brand [&::-webkit-details-marker]:hidden">
-              Pasted it but nothing happened?
-              <span className="ml-1.5 inline-block text-mist">›</span>
-            </summary>
-            <div className="mt-2 space-y-1.5 text-xs leading-relaxed text-mist">
-              <p>
-                Open your website, press <span className="font-semibold text-snow">F12</span> → Console. The snippet
-                says what&apos;s wrong there — every message starts with{" "}
-                <span className="font-mono text-snow">[ensemble]</span>.
-              </p>
-              <p>
-                <span className="text-snow">No [ensemble] message at all?</span> The line isn&apos;t on the page. View
-                source and search for <span className="font-mono">connect.js</span>. Builders often strip{" "}
-                <span className="font-mono">&lt;script&gt;</span> tags from ordinary text/content blocks — use the
-                dedicated code-injection box listed above.
-              </p>
-              <p>
-                <span className="text-snow">&ldquo;Blocked&rdquo; or &ldquo;Mixed Content&rdquo;?</span> The snippet
-                URL must start with <span className="font-mono">https://</span> when your site does.
-              </p>
-              <p>
-                <span className="text-snow">Caching or optimizer plugins</span> (WP Rocket, Autoptimize, Cloudflare
-                Rocket Loader) can defer or rewrite the tag. Clear the cache, and exclude{" "}
-                <span className="font-mono">connect.js</span> from JS optimization.
-              </p>
-              <p>
-                <span className="text-snow">404 on the snippet?</span> The key was reset here but the old line is still
-                on your site — copy it again.
-              </p>
-            </div>
-          </details>
+          {!snippetSeen && !snippetIsLocal && <SnippetChecker initialUrl={connection?.url} />}
         </StepCard>
 
         <StepCard
