@@ -11,8 +11,11 @@
 export interface Installer {
   id: string;
   name: string;
-  /** One-line hint under the name in the picker. */
+  /** One-line hint under the name in the picker. Keep every tile filled so
+      the grid doesn't look ragged. */
   blurb: string;
+  /** Small badge on the tile — steers people toward the easiest route. */
+  tag?: { label: string; tone: "good" | "warn" };
   /** Ordered click-path the creator follows. */
   steps: string[];
   /** Shown after the steps when there's a common trap. */
@@ -27,7 +30,7 @@ export const INSTALLERS: Installer[] = [
   {
     id: "wordpress",
     name: "WordPress",
-    blurb: "wordpress.org or a self-hosted install",
+    blurb: "Self-hosted or wordpress.org",
     steps: [
       "In your WordPress admin, go to Appearance → Theme File Editor, or install the free plugin “WPCode” (easiest, and survives theme updates).",
       "With WPCode: Code Snippets → Add Snippet → Add Your Custom Code, choose “HTML Snippet”.",
@@ -49,7 +52,7 @@ export const INSTALLERS: Installer[] = [
   {
     id: "wix",
     name: "Wix",
-    blurb: "",
+    blurb: "Any Wix plan",
     steps: [
       "Settings → Custom Code (under Advanced).",
       "Add Code → paste the line.",
@@ -60,7 +63,7 @@ export const INSTALLERS: Installer[] = [
   {
     id: "shopify",
     name: "Shopify",
-    blurb: "",
+    blurb: "Edit your theme's layout file",
     steps: [
       "Online Store → Themes → … → Edit code.",
       "Open Layout → theme.liquid.",
@@ -70,7 +73,7 @@ export const INSTALLERS: Installer[] = [
   {
     id: "webflow",
     name: "Webflow",
-    blurb: "",
+    blurb: "Takes effect on publish",
     steps: [
       "Site Settings → Custom Code.",
       "Paste the line into “Footer Code”.",
@@ -80,7 +83,8 @@ export const INSTALLERS: Installer[] = [
   {
     id: "gtm",
     name: "Google Tag Manager",
-    blurb: "No file access needed — works on almost any site",
+    blurb: "No file access needed",
+    tag: { label: "Easiest", tone: "good" },
     gtm: true,
     steps: [
       "In Tag Manager, choose Tags → New → Tag Configuration → Custom HTML.",
@@ -93,7 +97,8 @@ export const INSTALLERS: Installer[] = [
   {
     id: "custom",
     name: "Custom-built site",
-    blurb: "React, Vue, Vite, Next.js — anything with a build step",
+    blurb: "React, Vue, Vite, Next.js",
+    tag: { label: "Needs a deploy", tone: "warn" },
     needsRebuild: true,
     steps: [
       "Add the line to your project's index.html, just before </body>.",
@@ -103,7 +108,7 @@ export const INSTALLERS: Installer[] = [
   },
   {
     id: "other",
-    name: "Plain HTML / something else",
+    name: "Plain HTML",
     blurb: "cPanel, FTP, a static host",
     steps: [
       "Open the page's .html file (File Manager in cPanel, or your editor).",

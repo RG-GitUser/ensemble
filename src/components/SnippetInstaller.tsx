@@ -40,22 +40,52 @@ export function SnippetInstaller({
           : "First — how do you manage your website? We'll give you the exact steps."}
       </p>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      {/* Equal-height tiles on a fixed grid: the options read as a set to
+          choose from, and a long blurb can't make one tile tower over its
+          neighbours the way a flex-wrap row did. */}
+      <div className="mt-3 grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {INSTALLERS.map((i) => {
           const active = picked?.id === i.id;
           return (
             <button
               key={i.id}
               type="button"
+              aria-pressed={active}
               onClick={() => setPicked(active ? null : i)}
-              className={`cursor-pointer rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+              className={`relative flex cursor-pointer flex-col justify-between gap-2 rounded-xl border p-3 text-left transition ${
                 active
-                  ? "border-brand bg-brand/10 text-snow"
-                  : "border-edge bg-panel2 text-mist hover:border-brand/60 hover:text-snow"
+                  ? "border-brand bg-brand/10 shadow-sm shadow-brand/10"
+                  : "border-edge bg-panel2 hover:border-brand/50 hover:bg-panel2/60"
               }`}
             >
-              {i.name}
-              {i.blurb && <span className="block text-[11px] font-normal text-mist/70">{i.blurb}</span>}
+              <span>
+                <span className={`block text-sm font-semibold ${active ? "text-snow" : "text-snow/90"}`}>
+                  {i.name}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-mist/70">{i.blurb}</span>
+              </span>
+
+              {i.tag ? (
+                <span
+                  className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                    i.tag.tone === "good" ? "bg-good/15 text-good" : "bg-warn/15 text-warn"
+                  }`}
+                >
+                  {i.tag.label}
+                </span>
+              ) : (
+                // Keeps every tile the same height whether or not it has a badge.
+                <span aria-hidden className="h-[18px]" />
+              )}
+
+              {active && (
+                <span
+                  aria-hidden
+                  className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white"
+                >
+                  ✓
+                </span>
+              )}
             </button>
           );
         })}
