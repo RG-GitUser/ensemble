@@ -5,10 +5,9 @@ import { billingOk } from "@/lib/billing";
 import { getConnection, getDomainBySite, getSiteByUser, getSiteContent } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { disconnectWebsite, regenerateEmbedTokenAction, resyncWebsite, saveWebsiteContent, toggleConnection } from "@/lib/actions";
-import { CopyButton } from "@/components/CopyButton";
 import { DomainSetup } from "@/components/DomainSetup";
 import { FreeAddressCard } from "@/components/FreeAddressCard";
-import { SnippetChecker } from "@/components/SnippetChecker";
+import { SnippetInstaller } from "@/components/SnippetInstaller";
 import { StepCard } from "@/components/StepCard";
 import type { ContentItem } from "@/lib/types";
 
@@ -88,37 +87,11 @@ export default async function ConnectPage() {
               : "This is the only setup step. Everything else happens by itself."
           }
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-mist">
-              Copy this and paste it into your site&apos;s HTML, just before the closing{" "}
-              <span className="font-mono text-snow">&lt;/body&gt;</span> tag.
-            </p>
-            <CopyButton text={snippet} label="Copy snippet" />
-          </div>
-          <pre className="mt-3 overflow-x-auto rounded-xl bg-panel2 p-4 font-mono text-xs leading-relaxed text-snow">
-            {snippet}
-          </pre>
-          <div className="mt-3 space-y-1 text-xs text-mist">
-            <p>
-              <span className="font-semibold text-snow">WordPress</span> — Appearance → Customize → Additional CSS
-              won&apos;t do it; use a &ldquo;Custom HTML&rdquo; block in the footer, or a header/footer scripts plugin.
-            </p>
-            <p>
-              <span className="font-semibold text-snow">Squarespace</span> — Settings → Advanced → Code Injection →
-              Footer.
-            </p>
-            <p>
-              <span className="font-semibold text-snow">Wix</span> — Settings → Custom Code → Add Code → Body&nbsp;-&nbsp;end.
-            </p>
-            <p>
-              <span className="font-semibold text-snow">Your own HTML / cPanel</span> — edit the page in File Manager
-              and paste it above <span className="font-mono">&lt;/body&gt;</span>.
-            </p>
-            <p className="pt-1">
-              The line carries your private pairing key, which is why it&apos;s more than just a link — only snippets
-              with your key receive your edits.
-            </p>
-          </div>
+          <SnippetInstaller snippet={snippet} siteUrl={connection?.url} showChecker={!snippetSeen && !snippetIsLocal} />
+          <p className="mt-3 text-xs text-mist/70">
+            The line carries your private pairing key, which is why it&apos;s more than just a link — only snippets
+            with your key receive your edits.
+          </p>
           {snippetIsLocal && (
             <p className="mt-3 rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-xs text-brand2">
               <span className="font-semibold">This snippet only works on this machine.</span> It points at{" "}
@@ -129,7 +102,6 @@ export default async function ConnectPage() {
             </p>
           )}
 
-          {!snippetSeen && !snippetIsLocal && <SnippetChecker initialUrl={connection?.url} />}
         </StepCard>
 
         <StepCard

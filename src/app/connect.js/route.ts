@@ -47,12 +47,30 @@ const CONNECT_JS = `(function () {
   // Idempotent on purpose: it writes only when the value actually differs, so
   // re-running it from a MutationObserver can't trigger the mutation that
   // would call it again.
+  // Last resort when a selector no longer matches: find the element by the
+  // text we recorded for it. Also accepts text we've already replaced, so a
+  // re-render mid-page doesn't create a duplicate match.
+  function findByText(it) {
+    if (it.kind !== "text" || !it.original) return null;
+    var nodes = document.querySelectorAll(TEXT_SELECTOR);
+    var hit = null;
+    for (var i = 0; i < nodes.length; i++) {
+      var t = (nodes[i].textContent || "").replace(/\\s+/g, " ").trim();
+      if (t !== it.original && t !== it.value) continue;
+      if (hit) return null; // ambiguous — refuse rather than edit the wrong one
+      hit = nodes[i];
+    }
+    return hit;
+  }
+
   function apply(items) {
     var changed = 0;
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       try {
-        var el = document.querySelector(it.selector);
+        var el = null;
+        try { el = document.querySelector(it.selector); } catch (eSel) {}
+        if (!el) el = findByText(it);
         if (!el) continue;
         if (it.kind === "text") {
           if (el.textContent !== it.value) { el.textContent = it.value; changed++; }
@@ -127,14 +145,36 @@ const CONNECT_JS = `(function () {
     } catch (e) {}
   }
 
-  // "body > div:nth-of-type(2) > p:nth-of-type(3)" — same shape the dashboard
-  // stores, so a reported selector is always queryable by apply() above.
+  // An id is only worth anchoring to if a human wrote it. Framework-generated
+  // ones change on every render, and an id that isn't unique isn't an anchor.
+  function usableId(el) {
+    var id = el.id;
+    if (!id || !/^[A-Za-z][\\w-]*$/.test(id)) return null;
+    if (/^(radix-|headlessui-|mui-|react-aria|ember|ext-gen)/i.test(id)) return null;
+    if (/\\d{4,}/.test(id)) return null;
+    try { if (document.querySelectorAll("#" + id).length !== 1) return null; } catch (e) { return null; }
+    return id;
+  }
+
+  /**
+   * Shortest durable path to an element.
+   *
+   * A purely positional path ("body > div:nth-of-type(1) > …") breaks the
+   * moment anyone reorders a section, silently orphaning every edit below it.
+   * So we stop at the nearest ancestor carrying a real id and anchor there —
+   * changes outside that subtree then can't reach us.
+   */
   function cssPath(el) {
     var segments = [];
     var node = el;
     while (node && node.tagName) {
       var tag = node.tagName.toLowerCase();
       if (tag === "body" || tag === "html") break;
+      var id = usableId(node);
+      if (id) {
+        segments.unshift("#" + id);
+        return segments.join(" > ");
+      }
       var parent = node.parentNode;
       var nth = 1;
       if (parent && parent.children) {

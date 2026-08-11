@@ -1072,16 +1072,31 @@ export function replaceSiteContent(
   const d = db();
   const tx = d.transaction(() => {
     const previous = d.prepare("SELECT * FROM site_content WHERE site_id = ?").all(siteId) as ContentRow[];
-    const carried = new Map<string, string>();
+
+    // Two ways to recognise a previously-edited item. The exact key is
+    // preferred, but selectors legitimately change — a page redesign, or a
+    // change to how we generate them — and matching on the content alone
+    // rescues those edits instead of silently discarding them. Content keys
+    // that aren't unique are dropped rather than guessed at.
+    const byExact = new Map<string, string>();
+    const byContent = new Map<string, string | null>();
     for (const p of previous) {
-      if (p.edited !== null) carried.set(`${p.selector}\x00${p.kind}\x00${p.original}`, p.edited);
+      if (p.edited === null) continue;
+      byExact.set(`${p.selector}\x00${p.kind}\x00${p.original}`, p.edited);
+      const ck = `${p.kind}\x00${p.original}`;
+      byContent.set(ck, byContent.has(ck) ? null : p.edited);
     }
+
     d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
     const insert = d.prepare(
       "INSERT INTO site_content (site_id, selector, kind, original, edited, position) VALUES (?, ?, ?, ?, ?, ?)"
     );
     for (const it of items) {
-      insert.run(siteId, it.selector, it.kind, it.original, carried.get(`${it.selector}\x00${it.kind}\x00${it.original}`) ?? null, it.position);
+      const edited =
+        byExact.get(`${it.selector}\x00${it.kind}\x00${it.original}`) ??
+        byContent.get(`${it.kind}\x00${it.original}`) ??
+        null;
+      insert.run(siteId, it.selector, it.kind, it.original, edited, it.position);
     }
   });
   tx();

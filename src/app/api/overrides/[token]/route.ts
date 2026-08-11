@@ -34,9 +34,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
 
   // A paused connection keeps reporting (so the editor stays current) but
   // stops serving overrides, which is what "paused" means to the creator.
+  // `original` rides along so the snippet can re-find an element by its own
+  // text when the selector misses — a redesign that moves a heading shouldn't
+  // silently drop the creator's edit.
   const items =
     connection && connection.enabled
-      ? getEditedContent(site.id).map((i) => ({ selector: i.selector, kind: i.kind, value: i.edited }))
+      ? getEditedContent(site.id).map((i) => ({
+          selector: i.selector,
+          kind: i.kind,
+          value: i.edited,
+          original: i.original,
+        }))
       : [];
 
   return Response.json({ items, report }, { headers: CORS });
