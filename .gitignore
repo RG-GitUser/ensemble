@@ -45,3 +45,8 @@ data/
 
 # keep the credential template
 !.env.example
+
+# local editor / tooling config
+/.claude/
+/CLAUDE.md
+/AGENTS.md
