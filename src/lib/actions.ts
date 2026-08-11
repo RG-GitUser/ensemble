@@ -363,7 +363,21 @@ function svgSafe(svg: string): boolean {
   return !/<script|<foreignobject|<iframe|<image|<use|\bon\w+\s*=|javascript:|href\s*=/i.test(svg);
 }
 
-function storeThemeAsset(siteId: number, kind: "bg" | "card", data: Buffer, ext: string): string {
+/**
+ * Tab icons are a narrower case than theme images: browsers only reliably
+ * render a handful of formats at 16px, and the file is tiny by nature — so
+ * the allowlist and the size cap are both tighter.
+ */
+const FAVICON_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/x-icon": "ico",
+  "image/vnd.microsoft.icon": "ico",
+  "image/webp": "webp",
+};
+const FAVICON_MAX_BYTES = 512 * 1024;
+
+function storeThemeAsset(siteId: number, kind: "bg" | "card" | "icon", data: Buffer, ext: string): string {
   const dir = path.join(process.cwd(), "data", "uploads");
   fs.mkdirSync(dir, { recursive: true });
   const name = `theme-${siteId}-${kind}-${Date.now()}.${ext}`;
@@ -383,6 +397,20 @@ async function themeImageFrom(fd: FormData, field: string, siteId: number, kind:
     return { error: "That SVG has features we can't safely serve (scripts or links) — export it as a plain graphic." };
   }
   return storeThemeAsset(siteId, kind, buf, ext);
+}
+
+/** Uploaded tab icon → stored URL, or a form error string. */
+async function faviconFrom(fd: FormData, siteId: number): Promise<string | { error: string } | null> {
+  const file = fd.get("faviconFile");
+  if (!(file instanceof File) || file.size === 0) return null;
+  const ext = FAVICON_TYPES[file.type];
+  if (!ext) return { error: "Tab icons can be PNG, SVG, ICO or WebP." };
+  if (file.size > FAVICON_MAX_BYTES) return { error: "Tab icons are capped at 512KB — they display at 16 pixels." };
+  const buf = Buffer.from(await file.arrayBuffer());
+  if (ext === "svg" && !svgSafe(buf.toString("utf8"))) {
+    return { error: "That SVG has features we can't safely serve (scripts or links) — export it as a plain graphic." };
+  }
+  return storeThemeAsset(siteId, "icon", buf, ext);
 }
 
 /** Saves the Design tab of the page builder. */
@@ -426,9 +454,20 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     delete config.cardImage;
   }
 
+  const iconUpload = await faviconFrom(fd, site.id);
+  if (iconUpload && typeof iconUpload === "object") return iconUpload;
+  if (iconUpload) {
+    config.faviconUrl = iconUpload;
+  } else if (str(fd, "clearFavicon") === "1") {
+    delete config.faviconUrl;
+  }
+
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/builder");
   revalidatePath(`/s/${site.slug}`);
+  // The tab icon is served from the page's metadata, so both public routes
+  // need re-rendering, not just the section content.
+  revalidatePath("/domain", "layout");
   return { ok: true };
 }
 

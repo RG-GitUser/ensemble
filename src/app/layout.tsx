@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "Ensemble — Landing pages & dashboards for creators",
   description:
     "Spin up a landing page for your bonus content, merch and community — or plug your existing website into one powerful creator dashboard.",
+  // Declared here rather than as src/app/favicon.ico: the file-based icon is
+  // injected into every route unconditionally, so a creator page ended up
+  // serving both their tab icon and ours, and browsers picked whichever they
+  // liked. As metadata, a creator page's own `icons` replaces it outright.
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

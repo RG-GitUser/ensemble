@@ -12,6 +12,8 @@ const TYPES: Record<string, string> = {
   webp: "image/webp",
   gif: "image/gif",
   svg: "image/svg+xml",
+  // Tab icons are often .ico; without this they store fine and 404 on serve.
+  ico: "image/x-icon",
 };
 
 export async function GET(_req: Request, ctx: { params: Promise<{ name: string }> }): Promise<Response> {

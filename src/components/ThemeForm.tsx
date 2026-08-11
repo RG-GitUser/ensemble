@@ -82,6 +82,7 @@ export function ThemeForm({
   cardColor,
   bgImage,
   cardImage,
+  faviconUrl,
   gradient: gradientProp,
   themeId: themeIdProp,
 }: {
@@ -90,6 +91,8 @@ export function ThemeForm({
   cardColor: string;
   bgImage: string;
   cardImage: string;
+  /** Current browser tab icon for the public page ("" = Ensemble default). */
+  faviconUrl: string;
   gradient: boolean;
   /** Active preset backdrop id ("" = custom/Midnight). */
   themeId: string;
@@ -105,10 +108,13 @@ export function ThemeForm({
   const [cardImg, setCardImg] = useState<string>(cardImage);
   /** Pending generated SVG markup, submitted for server-side storage. */
   const [bgSvg, setBgSvg] = useState("");
+  const [icon, setIcon] = useState<string>(faviconUrl);
   const [clearBg, setClearBg] = useState(false);
   const [clearCard, setClearCard] = useState(false);
+  const [clearIcon, setClearIcon] = useState(false);
   const bgFileRef = useRef<HTMLInputElement>(null);
   const cardFileRef = useRef<HTMLInputElement>(null);
+  const iconFileRef = useRef<HTMLInputElement>(null);
 
   // After a successful save the generated SVG is stored server-side — drop the
   // pending copy so re-saving doesn't write a duplicate file.
@@ -201,6 +207,7 @@ export function ThemeForm({
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
+      <input type="hidden" name="clearFavicon" value={clearIcon ? "1" : ""} />
 
       {/* Preset backdrops — previewed live, saved with the same button. */}
       <div>
@@ -273,6 +280,58 @@ export function ThemeForm({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Shown with a mock browser tab so the 16px reality is obvious —
+              a detailed logo that looks fine here will be a smudge there. */}
+          <div>
+            <span className="label">Browser tab icon</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              The little icon in the browser tab when someone opens your page. Square works best — simple shapes read
+              better than a full logo at this size.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-t-lg border border-edge border-b-0 bg-panel2 px-3 py-1.5">
+                {icon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={icon} alt="" className="h-4 w-4 rounded-sm object-cover" />
+                ) : (
+                  <span className="h-4 w-4 rounded-sm bg-brand/30" aria-hidden />
+                )}
+                <span className="max-w-32 truncate text-xs text-mist">Your page</span>
+                <span aria-hidden className="text-xs text-mist/50">✕</span>
+              </span>
+              <label className="btn-ghost cursor-pointer !py-2 text-sm">
+                {icon ? "Replace" : "Upload icon"}
+                <input
+                  ref={iconFileRef}
+                  type="file"
+                  name="faviconFile"
+                  accept="image/png,image/svg+xml,image/webp,image/x-icon,.ico,.svg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setIcon(URL.createObjectURL(f));
+                    setClearIcon(false);
+                  }}
+                />
+              </label>
+              {icon && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIcon("");
+                    setClearIcon(true);
+                    if (iconFileRef.current) iconFileRef.current.value = "";
+                  }}
+                  className="btn-ghost !py-2 text-sm !text-brand2"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-mist/60">PNG, SVG, ICO or WebP · up to 512KB</p>
           </div>
 
           <div>

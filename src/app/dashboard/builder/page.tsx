@@ -204,6 +204,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             cardColor={site.config.cardColor ?? "rgba(255,255,255,0.05)"}
             bgImage={site.config.bgImage ?? ""}
             cardImage={site.config.cardImage ?? ""}
+            faviconUrl={site.config.faviconUrl ?? ""}
             gradient={site.config.gradient !== false}
             themeId={site.config.themeId ?? ""}
           />

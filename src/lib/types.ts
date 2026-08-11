@@ -19,6 +19,8 @@ export interface SiteConfig {
   bgImage?: string;
   /** Uploaded container/card background image URL. */
   cardImage?: string;
+  /** Browser tab icon for the public page (/api/uploads/...). */
+  faviconUrl?: string;
   /** Accent glow gradient at the top of the page (default on). */
   gradient?: boolean;
   tagline: string;

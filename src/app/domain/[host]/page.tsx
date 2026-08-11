@@ -27,9 +27,11 @@ export async function generateMetadata({ params }: { params: Promise<{ host: str
   if (!site) return {};
   // The creator's name, not Ensemble's — this is their domain.
   const hero = getSections(site.id).find((s) => s.type === "hero");
+  const icon = site.config.faviconUrl;
   return {
     title: hero?.content.heading || site.slug,
     description: site.config.tagline || hero?.content.subheading || "",
+    ...(icon ? { icons: { icon, shortcut: icon, apple: icon } } : {}),
   };
 }
 
