@@ -15,6 +15,13 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+/* Blurred blob wash (blurry-gradient-haikei.svg) used as the primary button
+   fill. The filter region is the SVG default, so it clips the 149px blur
+   exactly as the exported file does. */
+:root {
+  --gradient-btn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 450'%3E%3Cfilter id='b'%3E%3CfeGaussianBlur stdDeviation='149'/%3E%3C/filter%3E%3Crect width='900' height='450' fill='%236a12ab'/%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='768' cy='223' fill='%23a700cc' r='332'/%3E%3Ccircle cx='717' cy='402' fill='%236a12ab' r='332'/%3E%3Ccircle cx='13' cy='442' fill='%23a700cc' r='332'/%3E%3Ccircle cx='619' cy='129' fill='%23a700cc' r='332'/%3E%3Ccircle cx='231' cy='439' fill='%236a12ab' r='332'/%3E%3Ccircle cx='559' cy='290' fill='%23a700cc' r='332'/%3E%3C/g%3E%3C/svg%3E");
+}
+
 body {
   background: var(--color-ink);
   color: var(--color-snow);
@@ -36,12 +43,139 @@ body {
   100% { opacity: 0; transform: translateY(0); }
 }
 
+/* Loading screen (LoadingScreen.tsx). The wordmark sits still over a field
+   of twinkling stars while an arc sweeps the ring, so the whole thing reads
+   as progress rather than decoration. The transform-origin values assume the
+   component's 200x200 viewBox. */
+@keyframes ens-star {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes ens-sweep {
+  to { transform: rotate(360deg); }
+}
+
+/* The "Loading" label glows smoothly on and off in time with the sweep. */
+@keyframes ens-label {
+  0%, 100% { opacity: 0.45; text-shadow: 0 0 0 rgba(236, 72, 153, 0); }
+  50% { opacity: 1; text-shadow: 0 0 14px rgba(236, 72, 153, 0.45); }
+}
+
+.ens-star {
+  animation: ens-star 6s ease-in-out infinite;
+}
+
+.ens-sweep {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: ens-sweep 3.2s linear infinite;
+}
+
+.ens-label {
+  animation: ens-label 3.2s ease-in-out infinite;
+}
+
+/* Reduced motion still needs to look finished, not broken — freeze the
+   stars at a visible opacity instead of hiding them entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .ens-sweep, .ens-star, .ens-label {
+    animation: none;
+  }
+  .ens-star { opacity: 0.2; }
+}
+
+/* Buttons, glass-styled: translucent tinted base with backdrop blur, the
+   blob gradient showing through at partial opacity (::before), and a glossy
+   top sheen over everything (::after). Hover shifts colour, click presses
+   down, and both variants get visible keyboard focus rings. */
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand2 px-5 py-2.5 font-semibold text-white shadow-lg shadow-brand/25 transition hover:opacity-90 disabled:opacity-50;
+  @apply relative isolate inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/15 px-5 py-2.5 font-semibold text-white outline-none backdrop-blur-md transition-all duration-200;
+  background: rgba(106, 18, 171, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(167, 0, 204, 0.16);
+}
+
+/* Painting order for negative-z pseudos puts ::after above ::before, so the
+   sheen always sits on top of the gradient. */
+.btn-primary::before {
+  content: "";
+  @apply pointer-events-none absolute inset-0 -z-10;
+  background: var(--gradient-btn) center / cover no-repeat;
+  opacity: 0.72;
+}
+
+.btn-primary::after {
+  content: "";
+  @apply pointer-events-none absolute inset-0 -z-10;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.05) 48%,
+    rgba(255, 255, 255, 0) 65%
+  );
+}
+
+/* Hover shifts the gradient's hue toward pink rather than adding glow —
+   a colour change, same light. */
+.btn-primary:hover {
+  filter: hue-rotate(18deg) saturate(1.2) brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(167, 0, 204, 0.16);
+}
+
+.btn-primary:active {
+  filter: brightness(0.98);
+  transform: translateY(0);
+  transition-duration: 75ms;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.btn-primary:focus-visible {
+  @apply ring-2 ring-brand2/70 ring-offset-2 ring-offset-ink;
+}
+
+.btn-primary:disabled {
+  @apply pointer-events-none opacity-50;
 }
 
 .btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-edge bg-panel px-5 py-2.5 font-semibold text-snow transition hover:border-brand/60;
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-2.5 font-semibold text-snow outline-none backdrop-blur-md transition-all duration-200;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.btn-ghost:hover {
+  @apply border-brand/50;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-ghost:active {
+  transform: translateY(0);
+  transition-duration: 75ms;
+}
+
+.btn-ghost:focus-visible {
+  @apply ring-2 ring-brand/60 ring-offset-2 ring-offset-ink;
+}
+
+.btn-ghost:disabled {
+  @apply pointer-events-none opacity-50;
+}
+
+/* Buttons shouldn't jump for users who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary:hover, .btn-ghost:hover, .btn-primary:active, .btn-ghost:active {
+    transform: none;
+  }
 }
 
 .card {
