@@ -68,11 +68,19 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
         help: "One per line: Title | Description | Link",
         placeholder: "Behind the scenes ep. 1 | 20 min unreleased cut | https://...",
       },
+      {
+        key: "ctaLabel",
+        label: "Button label",
+        kind: "text",
+        help: "Shown on each item. Leave empty for a plain arrow.",
+        placeholder: "Open",
+      },
     ],
     defaults: {
       heading: "Bonus content",
       items:
         "Behind the scenes | Unreleased footage from the last shoot | https://example.com\nEarly access | New drops 48 hours before everyone else | https://example.com",
+      ctaLabel: "",
     },
   },
   {
@@ -120,11 +128,21 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
         help: "One per line: Name | Price | Image URL | Buy link (Stripe payment link on Pro+)",
         placeholder: "Logo Tee | $28 | https://.../tee.jpg | https://buy.stripe.com/...",
       },
+      { key: "buyLabel", label: "Buy button label", kind: "text", placeholder: "Buy now" },
+      {
+        key: "soonLabel",
+        label: "Label when there's no buy link",
+        kind: "text",
+        help: "Shown in place of the buy button for products without a link.",
+        placeholder: "Available soon",
+      },
     ],
     defaults: {
       heading: "Merch",
       items:
         "Logo Tee | $28 | | https://example.com\nSigned Poster | $15 | | https://example.com\nHoodie | $48 | | https://example.com",
+      buyLabel: "Buy now",
+      soonLabel: "Available soon",
     },
   },
   {
@@ -167,10 +185,12 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     fields: [
       { key: "heading", label: "Heading", kind: "text" },
       { key: "body", label: "Welcome message", kind: "textarea" },
+      { key: "sendLabel", label: "Send button label", kind: "text", placeholder: "Send" },
     ],
     defaults: {
       heading: "The clubhouse",
       body: "Members hang out here. Be kind, share memes, get first looks.",
+      sendLabel: "Send",
     },
   },
   {
@@ -181,10 +201,18 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     fields: [
       { key: "heading", label: "Heading", kind: "text" },
       { key: "body", label: "Description", kind: "textarea" },
+      {
+        key: "ctaLabel",
+        label: "Instagram button label",
+        kind: "text",
+        help: "The button shown when an Instagram Live account is linked.",
+        placeholder: "Watch my Instagram Live",
+      },
     ],
     defaults: {
       heading: "Watch me live",
       body: "When I go live, it's right here.",
+      ctaLabel: "Watch my Instagram Live",
     },
   },
   {
@@ -196,11 +224,19 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
       { key: "heading", label: "Heading", kind: "text" },
       { key: "email", label: "Contact email", kind: "text", placeholder: "you@brand.com" },
       { key: "body", label: "Note", kind: "textarea" },
+      {
+        key: "buttonLabel",
+        label: "Button label",
+        kind: "text",
+        help: "Leave empty to show your email address on the button.",
+        placeholder: "Email me",
+      },
     ],
     defaults: {
       heading: "Get in touch",
       email: "",
       body: "For business inquiries and collabs, drop me a line.",
+      buttonLabel: "",
     },
   },
 ];

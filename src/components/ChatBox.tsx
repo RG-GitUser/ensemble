@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { postChatMessage, type FormState } from "@/lib/actions";
 
 /** Public chat post form rendered inside a page's Chatroom section. */
-export function ChatBox({ siteId }: { siteId: number }) {
+export function ChatBox({ siteId, sendLabel = "Send" }: { siteId: number; sendLabel?: string }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(postChatMessage, {});
 
   return (
@@ -29,7 +29,7 @@ export function ChatBox({ siteId }: { siteId: number }) {
           style={{ background: "var(--site-accent)" }}
           disabled={pending}
         >
-          {pending ? "…" : "Send"}
+          {pending ? "…" : sendLabel}
         </button>
       </div>
       {state.error && <p className="mt-2 text-sm text-red-300">{state.error}</p>}

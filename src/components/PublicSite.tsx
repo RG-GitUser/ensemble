@@ -75,7 +75,13 @@ function SectionView({
                     <p className="font-semibold">{title}</p>
                     {desc && <p className="mt-1 text-sm text-white/60">{desc}</p>}
                   </div>
-                  <span className="text-white/40">→</span>
+                  {c.ctaLabel ? (
+                    <span className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-sm font-semibold">
+                      {c.ctaLabel}
+                    </span>
+                  ) : (
+                    <span className="text-white/40">→</span>
+                  )}
                 </div>
               </a>
             ))}
@@ -143,11 +149,11 @@ function SectionView({
                       className="mt-3 block rounded-lg py-2 text-center text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ background: "var(--site-accent)" }}
                     >
-                      Buy now
+                      {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
                     <p className="mt-3 rounded-lg border border-white/10 py-2 text-center text-sm text-white/50">
-                      Available soon
+                      {c.soonLabel || "Available soon"}
                     </p>
                   )}
                 </div>
@@ -212,7 +218,7 @@ function SectionView({
                 </div>
               ))}
             </div>
-            <ChatBox siteId={site.id} />
+            <ChatBox siteId={site.id} sendLabel={c.sendLabel || "Send"} />
           </div>
         </section>
       );
@@ -259,7 +265,7 @@ function SectionView({
                   className="inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                   style={{ background: "var(--site-accent)" }}
                 >
-                  Watch my Instagram Live
+                  {c.ctaLabel || "Watch my Instagram Live"}
                 </a>
               </p>
             )}
@@ -277,7 +283,7 @@ function SectionView({
               href={`mailto:${c.email}`}
               className="mt-6 inline-block rounded-xl border border-white/15 px-7 py-3 font-semibold transition hover:border-white/40"
             >
-              {c.email}
+              {c.buttonLabel || c.email}
             </a>
           )}
         </section>
