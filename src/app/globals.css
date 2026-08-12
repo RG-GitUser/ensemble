@@ -217,6 +217,19 @@ body,
   }
 }
 
+/**
+ * Hides Safari's default disclosure triangle on a <summary> that draws its
+ * own chevron. `list-none` covers Chrome and Firefox; this covers WebKit.
+ *
+ * Written as a plain rule rather than Tailwind's [&::-webkit-details-marker]
+ * arbitrary variant: the CSS optimizer mis-parses that escaped selector and
+ * emits a corrupted rule, which both warns at build time and silently fails
+ * to hide the marker.
+ */
+.no-marker::-webkit-details-marker {
+  display: none;
+}
+
 .card {
   @apply rounded-2xl border border-edge bg-panel p-6;
 }

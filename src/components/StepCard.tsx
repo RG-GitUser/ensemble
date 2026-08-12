@@ -25,7 +25,7 @@ export function StepCard({
       open={!done}
       className={`card group !p-0 ${done ? "border-good/25" : ""}`}
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-5 [&::-webkit-details-marker]:hidden">
+      <summary className="no-marker flex cursor-pointer list-none items-center gap-3 p-5">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
             done ? "bg-good/20 text-good" : "border border-edge text-mist"

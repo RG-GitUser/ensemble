@@ -228,7 +228,7 @@ export function DomainSetup({
               </div>
 
               <details className="rounded-xl border border-edge bg-panel2/60 px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-semibold text-brand [&::-webkit-details-marker]:hidden">
+                <summary className="no-marker cursor-pointer list-none text-xs font-semibold text-brand">
                   It&apos;s been over an hour and it still isn&apos;t working
                   <span className="ml-1.5 inline-block text-mist">›</span>
                 </summary>
