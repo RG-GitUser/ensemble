@@ -11,8 +11,49 @@
   --color-brand2: #ec4899;
   --color-good: #34d399;
   --color-warn: #fbbf24;
+  /* Flipped by the light theme so star fields and swatch rings stay visible
+     against whichever background is underneath. */
+  --color-spark: #f4f1fb;
+  --hairline: rgba(255, 255, 255, 0.15);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/**
+ * Light theme.
+ *
+ * Only the neutrals move — the violet/pink brand ramp stays put so the two
+ * modes read as one product, just lit differently. Brand values darken a
+ * step because the same violet that carries on near-black is too pale to
+ * meet contrast on near-white.
+ *
+ * Overriding the @theme variables means every existing utility (bg-panel,
+ * text-mist, border-edge…) re-colours with no markup changes. Creator pages
+ * at /s/[slug] deliberately don't participate: they set their own colours
+ * inline and use fixed white/black, so a visitor's dashboard preference
+ * can't repaint someone else's site.
+ */
+:root[data-theme="light"] {
+  --color-ink: #faf8fd;
+  --color-panel: #ffffff;
+  --color-panel2: #f4effc;
+  --color-edge: #e3daf3;
+  --color-mist: #5f5878;
+  --color-snow: #1a1228;
+  --color-brand: #7c3aed;
+  /* Both of these carry status text ("Connected", errors), so they're pushed
+     a shade darker than their dark-mode counterparts to clear 4.5:1 on a
+     near-white page — the mid-tone versions land around 3.6-4.4. */
+  --color-brand2: #be185d;
+  --color-good: #047857;
+  --color-warn: #b45309;
+  --color-spark: #7c3aed;
+  --hairline: rgba(26, 18, 40, 0.12);
+  color-scheme: light;
+}
+
+:root {
+  color-scheme: dark;
 }
 
 body {
@@ -21,10 +62,26 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Themes swap under the user, so animate the change rather than snapping. */
+body,
+.card,
+.field,
+.btn-ghost {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
 .glow {
   background:
     radial-gradient(600px 300px at 20% 0%, rgba(139, 92, 246, 0.18), transparent 70%),
     radial-gradient(600px 300px at 80% 10%, rgba(236, 72, 153, 0.12), transparent 70%);
+}
+
+/* The same alpha that reads as a soft bloom on near-black turns the top of a
+   light page grey — a lighter touch keeps it a tint. */
+:root[data-theme="light"] .glow {
+  background:
+    radial-gradient(600px 300px at 20% 0%, rgba(124, 58, 237, 0.09), transparent 70%),
+    radial-gradient(600px 300px at 80% 10%, rgba(219, 39, 119, 0.07), transparent 70%);
 }
 
 /* Confirmation flash: fade up, hold, fade out. One animation rather than a
@@ -131,9 +188,10 @@ body {
     transform 90ms ease;
 }
 
+/* A white wash is invisible on a light page, so the hover fill is the brand
+   at low alpha — it reads as a tint against either background. */
 .btn-ghost:hover {
-  @apply border-brand/70;
-  background-color: rgba(255, 255, 255, 0.05);
+  @apply border-brand/70 bg-brand/8;
 }
 
 .btn-ghost:active {

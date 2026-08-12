@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@/lib/plans";
 import { Starfield } from "@/components/Starfield";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { WipOverlay, wipEnabled } from "@/components/WipOverlay";
 
 const FEATURES = [
@@ -31,6 +32,7 @@ export default async function Home() {
           <nav className="flex items-center gap-2 sm:gap-4">
             <a href="#how" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">How it works</a>
             <a href="#pricing" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Pricing</a>
+            <ThemeToggle />
             {user ? (
               <Link href="/dashboard" className="btn-primary !py-2 text-sm">Open dashboard</Link>
             ) : (

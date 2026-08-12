@@ -3,6 +3,7 @@ import { ADMIN_EMAIL, requireUser } from "@/lib/auth";
 import { logout } from "@/lib/actions";
 import { getSiteByUser } from "@/lib/db";
 import { getPlan, type PlanDef } from "@/lib/plans";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?: string }> = [
   { href: "/dashboard", label: "Overview" },
@@ -24,9 +25,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex flex-1 flex-col md:flex-row">
       <aside className="flex w-full shrink-0 flex-col border-b border-edge bg-panel/60 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
-        <Link href="/" className="px-6 pb-2 pt-6 text-lg font-bold tracking-tight">
-          En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
-        </Link>
+        <div className="flex items-center justify-between gap-2 px-6 pb-2 pt-6">
+          <Link href="/" className="text-lg font-bold tracking-tight">
+            En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
+          </Link>
+          <ThemeToggle />
+        </div>
         <p className="truncate px-6 pb-4 text-xs text-mist">{user.businessName}</p>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
           {NAV.map((n) => {

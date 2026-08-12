@@ -54,7 +54,9 @@ export function Starfield() {
             cx={x}
             cy={y}
             r={r}
-            fill="var(--color-snow)"
+            // --color-spark, not --color-snow: white specks vanish on a light
+            // page, so the light theme swaps this for the brand violet.
+            fill="var(--color-spark)"
             style={{ animationDuration: `${dur}s`, animationDelay: `${delay}s` }}
           />
         ))}

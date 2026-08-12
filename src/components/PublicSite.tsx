@@ -300,9 +300,12 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   // (or whose subscription lapsed) stop serving once billing is enabled.
   if ((!site.published || !billingOk(site)) && !(preview && isOwner)) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center">
+      // Fixed colors, not platform tokens: a creator page must look the same
+      // to every visitor regardless of the light/dark preference they happen
+      // to have set on the dashboard.
+      <div className="flex flex-1 flex-col items-center justify-center bg-[#0b0714] px-6 py-24 text-center text-white">
         <h1 className="mt-4 text-2xl font-bold">This page isn&apos;t live yet</h1>
-        <p className="mt-2 text-mist">Check back soon.</p>
+        <p className="mt-2 text-white/60">Check back soon.</p>
       </div>
     );
   }

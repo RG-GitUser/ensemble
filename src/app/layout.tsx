@@ -23,9 +23,27 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.ico" },
 };
 
+/**
+ * Applies the saved theme before the first paint. It has to run inline and
+ * synchronously in <head> — anything deferred to React would let a dark page
+ * flash before repainting light, which is worse than not offering the choice.
+ * Falls back to the OS preference when nothing has been chosen yet.
+ */
+const THEME_BOOT = `(function(){try{var t=localStorage.getItem('ensemble-theme');if(!t)t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}})()`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    // suppressHydrationWarning: the boot script sets data-theme on this
+    // element before React hydrates, so server and client markup differ here
+    // by design.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
