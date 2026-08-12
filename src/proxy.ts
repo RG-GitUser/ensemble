@@ -12,14 +12,20 @@ import { platformHosts } from "@/lib/domains";
  * platform host missing from the list would be treated as a customer domain.
  */
 export function proxy(req: NextRequest): NextResponse {
-  // Work-in-progress mode: funnel every signed-out visitor to the landing
-  // page, which carries the overlay. Without this the overlay only hides one
-  // route and /signup, /s/… and the rest stay wide open. /login is the way
-  // back in, so it must never be redirected, and anyone holding a session
-  // passes straight through.
+  /**
+   * Work-in-progress mode: funnel signed-out visitors to the landing page,
+   * which carries the overlay, so the unfinished funnel stays out of sight.
+   *
+   * Published creator pages are exempt. Those are the product's output, not
+   * its shopfront — a creator who publishes and shares a link needs that
+   * link to work whatever state our marketing site is in. /login is the way
+   * back in, so it is never redirected, and anyone holding a session passes
+   * straight through.
+   */
   if (process.env.WIP_MODE === "1" && !req.cookies.get("fs_session")) {
     const path = req.nextUrl.pathname;
-    if (path !== "/" && !path.startsWith("/login")) {
+    const isPublic = path === "/" || path.startsWith("/login") || path === "/s" || path.startsWith("/s/");
+    if (!isPublic) {
       return NextResponse.redirect(new URL("/", req.url));
     }
   }
