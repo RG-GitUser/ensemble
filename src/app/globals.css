@@ -230,6 +230,49 @@ body,
   display: none;
 }
 
+/**
+ * Creator page containers (PublicSite.tsx).
+ *
+ * Width and border are creator choices, so both come from custom properties
+ * set once on the page root rather than from per-element utilities. Widths
+ * multiply a per-section base so the page keeps its proportions at every
+ * setting; `--site-size` is the creator's multiplier. The fallbacks are the
+ * shipped defaults, which keeps a page that predates these settings looking
+ * exactly as it did.
+ */
+.site-w-sm { max-width: calc(28rem * var(--site-size, 1)); }
+.site-w-md { max-width: calc(42rem * var(--site-size, 1)); }
+.site-w-lg { max-width: calc(48rem * var(--site-size, 1)); }
+.site-w-xl { max-width: calc(56rem * var(--site-size, 1)); }
+.site-band { width: min(100% - 2rem, calc(72rem * var(--site-size, 1))); }
+
+/* Every edge is written as a longhand: the CSS optimizer expands `border`
+   and `border-color` into longhands at build time and drops the value when
+   it's a var(), which silently leaves containers with no border at all. */
+.site-card {
+  border-style: solid;
+  border-top-width: var(--site-border-width, 1px);
+  border-right-width: var(--site-border-width, 1px);
+  border-bottom-width: var(--site-border-width, 1px);
+  border-left-width: var(--site-border-left-width, var(--site-border-width, 1px));
+  border-top-color: var(--site-border-color, rgba(255, 255, 255, 0.12));
+  border-right-color: var(--site-border-color, rgba(255, 255, 255, 0.12));
+  border-bottom-color: var(--site-border-color, rgba(255, 255, 255, 0.12));
+  border-left-color: var(--site-border-left-color, var(--site-border-color, rgba(255, 255, 255, 0.12)));
+  box-shadow: var(--site-shadow, none);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Tappable containers keep their lift on hover, in whichever colour the
+   chosen border style calls for. A style that accents one edge (the side bar)
+   holds that edge steady rather than washing it out with the hover colour. */
+a.site-card:hover {
+  border-top-color: var(--site-border-hover, rgba(255, 255, 255, 0.32));
+  border-right-color: var(--site-border-hover, rgba(255, 255, 255, 0.32));
+  border-bottom-color: var(--site-border-hover, rgba(255, 255, 255, 0.32));
+  border-left-color: var(--site-border-left-color, var(--site-border-hover, rgba(255, 255, 255, 0.32)));
+}
+
 .card {
   @apply rounded-2xl border border-edge bg-panel p-6;
 }

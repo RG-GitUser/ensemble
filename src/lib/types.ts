@@ -15,6 +15,10 @@ export interface SiteConfig {
   bgColor?: string;
   /** Container/card background on the public page (curated palette). */
   cardColor?: string;
+  /** Container width multiplier — a CONTAINER_SIZES value from lib/theme.ts. */
+  containerSize?: string;
+  /** Container border treatment — a BORDER_STYLES id from lib/theme.ts. */
+  borderStyle?: string;
   /** Uploaded or generated background image URL (/api/uploads/...). */
   bgImage?: string;
   /** Uploaded container/card background image URL. */

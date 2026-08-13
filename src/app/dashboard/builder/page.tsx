@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { getSections, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { getTemplate, planAllowsTemplate, SECTION_TEMPLATES, type FieldSpec } from "@/lib/sections";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_SIZE } from "@/lib/theme";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
   addSectionAction,
@@ -176,13 +177,15 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
   const atLimit = sections.length >= plan.maxSections;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    // The Design tab runs a controls column beside a sticky preview, so it gets
+    // more room than the single column of section editors.
+    <div className={`mx-auto ${designTab ? "max-w-6xl" : "max-w-4xl"}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Page Builder</h1>
           <p className="mt-1 text-sm text-mist">
             {designTab
-              ? "Style your page — colors apply the moment you save."
+              ? "Backdrop, containers and accent — every look here is on every plan, and goes live when you save."
               : "Copy & paste your content into sections below — changes go live when you save."}
           </p>
         </div>
@@ -200,8 +203,10 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
         <div className="mt-6">
           <ThemeForm
             themeColor={site.config.themeColor}
-            bgColor={site.config.bgColor ?? "#0a0812"}
-            cardColor={site.config.cardColor ?? "rgba(255,255,255,0.05)"}
+            bgColor={site.config.bgColor ?? DEFAULT_BG}
+            cardColor={site.config.cardColor ?? DEFAULT_CARD}
+            containerSize={site.config.containerSize ?? DEFAULT_SIZE}
+            borderStyle={site.config.borderStyle ?? DEFAULT_BORDER}
             bgImage={site.config.bgImage ?? ""}
             cardImage={site.config.cardImage ?? ""}
             faviconUrl={site.config.faviconUrl ?? ""}

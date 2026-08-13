@@ -12,7 +12,18 @@ import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { cleanHostname, platformHosts } from "./domains";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
-import { ACCENTS, BACKGROUNDS, CONTAINERS, DEFAULT_BG, DEFAULT_CARD, pickSwatch } from "./theme";
+import {
+  ACCENTS,
+  BACKGROUNDS,
+  CONTAINER_SIZES,
+  CONTAINERS,
+  DEFAULT_BG,
+  DEFAULT_BORDER,
+  DEFAULT_CARD,
+  DEFAULT_SIZE,
+  getBorderStyle,
+  pickSwatch,
+} from "./theme";
 import {
   billingEnabled,
   billingOk,
@@ -421,12 +432,17 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   const themeColor = pickSwatch(ACCENTS, str(fd, "themeColor"), site.config.themeColor);
   const bgColor = pickSwatch(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
   const cardColor = pickSwatch(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
+  const containerSize = pickSwatch(CONTAINER_SIZES, str(fd, "containerSize"), site.config.containerSize ?? DEFAULT_SIZE);
+  const borderRaw = str(fd, "borderStyle");
   const themeIdRaw = str(fd, "themeId");
   const config: SiteConfig = {
     ...site.config,
     themeColor,
     bgColor,
     cardColor,
+    containerSize,
+    // Border treatment — only known style ids reach the page's inline CSS.
+    borderStyle: getBorderStyle(borderRaw) ? borderRaw : DEFAULT_BORDER,
     gradient: fd.get("gradient") === "on",
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",

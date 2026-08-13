@@ -4,6 +4,7 @@ import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
+import { borderVars, DEFAULT_SIZE } from "@/lib/theme";
 import { themeCss } from "@/lib/themes";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
@@ -29,7 +30,7 @@ function SectionView({
     case "hero":
       return (
         <section className="px-6 pb-16 pt-24 text-center">
-          <h1 className="mx-auto max-w-3xl text-4xl font-extrabold leading-tight sm:text-6xl">{c.heading}</h1>
+          <h1 className="site-w-lg mx-auto text-4xl font-extrabold leading-tight sm:text-6xl">{c.heading}</h1>
           {c.subheading && <p className="mx-auto mt-5 max-w-xl text-lg text-white/70">{c.subheading}</p>}
           {c.ctaLabel && (
             <a
@@ -44,7 +45,7 @@ function SectionView({
       );
     case "about":
       return (
-        <section className="mx-auto max-w-3xl px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 py-14">
           <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start">
             {c.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -60,14 +61,14 @@ function SectionView({
     case "bonus": {
       const items = parseLines(c.items ?? "");
       return (
-        <section id="content" className="mx-auto max-w-3xl px-6 py-14">
+        <section id="content" className="site-w-lg mx-auto px-6 py-14">
           <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-4">
             {items.map(([title, desc, url], i) => (
               <a
                 key={i}
                 href={url || "#"}
-                className="block rounded-2xl border border-white/10 p-5 transition hover:border-white/30"
+                className="site-card block rounded-2xl p-5"
                 style={{ background: "var(--site-card)" }}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -92,10 +93,10 @@ function SectionView({
     case "video": {
       const src = embedUrl(c.videoUrl ?? "");
       return (
-        <section className="mx-auto max-w-3xl px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 py-14">
           <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
           {src ? (
-            <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
+            <div className="site-card mt-8 overflow-hidden rounded-2xl">
               <iframe src={src} className="aspect-video w-full" allowFullScreen title={c.heading} />
             </div>
           ) : (
@@ -107,14 +108,14 @@ function SectionView({
     case "links": {
       const items = parseLines(c.items ?? "");
       return (
-        <section className="mx-auto max-w-md px-6 py-14">
+        <section className="site-w-sm mx-auto px-6 py-14">
           <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-3">
             {items.map(([label, url], i) => (
               <a
                 key={i}
                 href={url || "#"}
-                className="block rounded-xl border border-white/10 px-5 py-3.5 text-center font-semibold transition hover:border-white/30"
+                className="site-card block rounded-xl px-5 py-3.5 text-center font-semibold"
                 style={{ background: "var(--site-card)" }}
               >
                 {label}
@@ -127,11 +128,11 @@ function SectionView({
     case "merch": {
       const items = parseLines(c.items ?? "");
       return (
-        <section className="mx-auto max-w-4xl px-6 py-14">
+        <section className="site-w-xl mx-auto px-6 py-14">
           <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {items.map(([name, price, img, buyUrl], i) => (
-              <div key={i} className="overflow-hidden rounded-2xl border border-white/10" style={{ background: "var(--site-card)" }}>
+              <div key={i} className="site-card overflow-hidden rounded-2xl" style={{ background: "var(--site-card)" }}>
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={name} className="aspect-square w-full object-cover" />
@@ -167,7 +168,7 @@ function SectionView({
       if (!plan.newsletter || site.config.newsletterEnabled === false) return null;
       return (
         <section className="px-6 py-14">
-          <div className="mx-auto max-w-2xl rounded-3xl border border-white/10 px-6 py-12 text-center" style={{ background: "var(--site-card)" }}>
+          <div className="site-card site-w-md mx-auto rounded-3xl px-6 py-12 text-center" style={{ background: "var(--site-card)" }}>
             <h2 className="text-2xl font-bold">{c.heading}</h2>
             {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
             <NewsletterSignup siteId={site.id} buttonLabel={c.buttonLabel ?? "Subscribe"} />
@@ -179,7 +180,7 @@ function SectionView({
       if (!plan.calendar) return null;
       const url = c.calendarUrl || site.config.calendlyUrl || "";
       return (
-        <section className="mx-auto max-w-3xl px-6 py-14 text-center">
+        <section className="site-w-lg mx-auto px-6 py-14 text-center">
           <h2 className="text-2xl font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
           {url ? (
@@ -201,9 +202,9 @@ function SectionView({
     case "chatroom": {
       if (!plan.chatroom || site.config.chatroomEnabled === false) return null;
       return (
-        <section className="mx-auto max-w-2xl px-6 py-14">
+        <section className="site-w-md mx-auto px-6 py-14">
           <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
-          <div className="mt-8 rounded-3xl border border-white/10 p-6" style={{ background: "var(--site-card)" }}>
+          <div className="site-card mt-8 rounded-3xl p-6" style={{ background: "var(--site-card)" }}>
             <p className="text-center text-sm text-white/60">{c.body}</p>
             <div className="mt-5 max-h-80 space-y-3 overflow-y-auto">
               {chat.length === 0 && (
@@ -228,7 +229,7 @@ function SectionView({
       const { twitchChannel, facebookLiveUrl, instagramLiveUser } = site.config;
       const hasAny = twitchChannel || facebookLiveUrl || instagramLiveUser;
       return (
-        <section className="mx-auto max-w-3xl px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 py-14">
           <h2 className="flex items-center justify-center gap-3 text-center text-2xl font-bold">
             {c.heading}
             {site.config.liveNow && (
@@ -243,7 +244,7 @@ function SectionView({
             {twitchChannel && (
               <iframe
                 src={`https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=${encodeURIComponent(host)}&muted=true`}
-                className="aspect-video w-full rounded-2xl border border-white/10"
+                className="site-card aspect-video w-full rounded-2xl"
                 allowFullScreen
                 title="Twitch stream"
               />
@@ -251,7 +252,7 @@ function SectionView({
             {facebookLiveUrl && (
               <iframe
                 src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookLiveUrl)}&show_text=false`}
-                className="aspect-video w-full rounded-2xl border border-white/10"
+                className="site-card aspect-video w-full rounded-2xl"
                 allowFullScreen
                 title="Facebook Live"
               />
@@ -275,14 +276,11 @@ function SectionView({
     }
     case "contact":
       return (
-        <section className="mx-auto max-w-2xl px-6 py-14 text-center">
+        <section className="site-w-md mx-auto px-6 py-14 text-center">
           <h2 className="text-2xl font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
           {c.email && (
-            <a
-              href={`mailto:${c.email}`}
-              className="mt-6 inline-block rounded-xl border border-white/15 px-7 py-3 font-semibold transition hover:border-white/40"
-            >
+            <a href={`mailto:${c.email}`} className="site-card mt-6 inline-block rounded-xl px-7 py-3 font-semibold">
               {c.buttonLabel || c.email}
             </a>
           )}
@@ -357,6 +355,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         {
           "--site-accent": cfg.themeColor,
           "--site-card": cardBg,
+          // Container width and border style: the .site-w-* / .site-card rules
+          // in globals.css read these, so one declaration here restyles every
+          // section on the page.
+          "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
+          ...borderVars(cfg.borderStyle, cfg.themeColor),
         } as React.CSSProperties
       }
     >
@@ -377,7 +380,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         return containerTheme ? (
           <div
             key={s.id}
-            className="mx-auto my-8 w-[min(100%-2rem,72rem)] overflow-hidden rounded-3xl border border-white/10"
+            className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl"
             style={containerTheme}
           >
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} />

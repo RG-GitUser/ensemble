@@ -2,11 +2,33 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { updateTheme, type FormState } from "@/lib/actions";
-import { ACCENTS, BACKGROUNDS, CONTAINERS, type Swatch } from "@/lib/theme";
+import {
+  ACCENTS,
+  BACKGROUNDS,
+  BORDER_STYLES,
+  borderCss,
+  CONTAINER_SIZES,
+  CONTAINERS,
+  DEFAULT_BORDER,
+  DEFAULT_SIZE,
+  type Swatch,
+} from "@/lib/theme";
 import { THEMES, themeCss } from "@/lib/themes";
+
+/** One titled block of related controls — the Design tab is a stack of these. */
+function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="card !p-5">
+      <h3 className="font-bold">{title}</h3>
+      {hint && <p className="mt-1 text-sm text-mist">{hint}</p>}
+      <div className="mt-4 space-y-5">{children}</div>
+    </section>
+  );
+}
 
 function SwatchRow({
   label,
+  hint,
   swatches,
   value,
   onPick,
@@ -14,6 +36,7 @@ function SwatchRow({
   base,
 }: {
   label: string;
+  hint?: string;
   swatches: Swatch[];
   value: string;
   onPick: (v: string) => void;
@@ -21,7 +44,8 @@ function SwatchRow({
 }) {
   return (
     <div>
-      <span className="label">{label}</span>
+      <span className="label !mb-0">{label}</span>
+      {hint && <p className="mt-0.5 text-xs text-mist/70">{hint}</p>}
       <div className="mt-2 flex flex-wrap gap-2.5">
         {swatches.map((s) => {
           const selected = value === s.value;
@@ -54,6 +78,94 @@ function SwatchRow({
   );
 }
 
+/** Width picker — each tile draws its option to scale, widest option full. */
+function SizeRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
+  const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
+  return (
+    <div>
+      <span className="label !mb-0">Container width</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        How wide your sections run. Every section scales together, so a links list stays narrower than a merch grid.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {CONTAINER_SIZES.map((s) => {
+          const selected = value === s.value;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(s.value)}
+              className={`w-[4.5rem] rounded-xl border px-2 py-2 transition ${
+                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              <span className="flex h-7 items-center justify-center">
+                <span
+                  className="block h-full rounded-md bg-mist/25 shadow-[inset_0_0_0_1px_var(--hairline)]"
+                  style={{ width: `${(Number(s.value) / widest) * 100}%` }}
+                />
+              </span>
+              <span className="mt-1.5 block text-center text-[10px] font-medium">{s.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Border picker — each tile is a miniature container wearing the style. */
+function BorderRow({
+  value,
+  onPick,
+  accent,
+  card,
+  base,
+}: {
+  value: string;
+  onPick: (v: string) => void;
+  accent: string;
+  card: string;
+  /** Page background, composited under translucent container tints. */
+  base: string;
+}) {
+  return (
+    <div>
+      <span className="label !mb-0">Border accent</span>
+      <p className="mt-0.5 text-xs text-mist/70">The edge treatment on every container, drawn in your accent color.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {BORDER_STYLES.map((b) => {
+          const selected = value === b.id;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(b.id)}
+              className={`w-[5.5rem] rounded-xl border p-2 transition ${
+                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              <span
+                className="flex h-9 items-center justify-center rounded-lg"
+                style={{
+                  backgroundImage: `linear-gradient(${card}, ${card})`,
+                  backgroundColor: base,
+                  ...borderCss(b.id, accent),
+                }}
+              >
+                <span className="block h-1.5 w-8 rounded-full bg-white/45" />
+              </span>
+              <span className="mt-1.5 block truncate text-center text-[10px] font-medium">{b.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** A genuinely random abstract blob background in the given colors. */
 function generateSvg(colors: string[]): string {
   const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -75,11 +187,20 @@ function randomOf<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-/** The page builder's Design tab — presets, colors, images, gradient and randomizers. */
+/**
+ * The page builder's Design tab.
+ *
+ * Grouped the way the page is built up: the backdrop behind everything, then
+ * the containers sitting on it, then the accent that ties them together, then
+ * branding. The preview and the save button ride along in a sticky column, so
+ * whichever group you're editing you can see the result and commit it.
+ */
 export function ThemeForm({
   themeColor,
   bgColor,
   cardColor,
+  containerSize,
+  borderStyle,
   bgImage,
   cardImage,
   faviconUrl,
@@ -89,6 +210,10 @@ export function ThemeForm({
   themeColor: string;
   bgColor: string;
   cardColor: string;
+  /** Container width multiplier (CONTAINER_SIZES value). */
+  containerSize: string;
+  /** Container border treatment (BORDER_STYLES id). */
+  borderStyle: string;
   bgImage: string;
   cardImage: string;
   /** Current browser tab icon for the public page ("" = Ensemble default). */
@@ -101,6 +226,8 @@ export function ThemeForm({
   const [accent, setAccent] = useState(themeColor);
   const [bg, setBg] = useState(bgColor);
   const [card, setCard] = useState(cardColor);
+  const [size, setSize] = useState(containerSize);
+  const [border, setBorder] = useState(borderStyle);
   const [gradient, setGradient] = useState(gradientProp);
   const [themeId, setThemeId] = useState(themeIdProp);
   /** What the preview shows: saved URL, object URL of a picked file, or a generated data URI. */
@@ -147,12 +274,14 @@ export function ThemeForm({
     if (bgFileRef.current) bgFileRef.current.value = "";
   }
 
-  /** Roll everything: colors AND a fresh random SVG background. */
+  /** Roll everything: colors, container styling AND a fresh random SVG background. */
   function rollAll() {
     const newAccent = randomOf(ACCENTS).value;
     setAccent(newAccent);
     setBg(randomOf(BACKGROUNDS).value);
     setCard(randomOf(CONTAINERS).value);
+    setSize(randomOf(CONTAINER_SIZES).value);
+    setBorder(randomOf(BORDER_STYLES).id);
     rollSvg(newAccent);
   }
 
@@ -178,83 +307,77 @@ export function ThemeForm({
   const previewCard = `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${card}`;
   // An active preset owns the backdrop — in the preview and on the page.
   const previewStyle = themeCss(themeId, accent) ?? { background: previewBg };
-  /** Thumbnail for the "Midnight (custom)" tile — reflects the current custom picks. */
+  /** Thumbnail for the "Custom" preset tile — reflects the current custom picks. */
   const customTileStyle = {
     backgroundImage: `${gradient ? `radial-gradient(60px 30px at 50% -10%, ${accent}66, transparent 70%), ` : ""}${
       bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
     }`,
     backgroundColor: bg,
   };
+  /** The preview card apes the chosen width against the widest option. */
+  const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
+  const previewCardWidth = `${(Number(size) / widest) * 100}%`;
+  /** Presets own the backdrop, so the custom backdrop controls go quiet. */
+  const backdropOff = themeId ? "pointer-events-none select-none opacity-40" : "";
 
   return (
-    <form action={formAction} className="card space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-bold">Page theme</h2>
-          <p className="mt-1 text-sm text-mist">
-            Colors, images and effects — the preview shows your combo instantly. Available on every plan.
-          </p>
-        </div>
-        <button type="button" onClick={rollAll} className="btn-ghost !py-2 text-sm">
-          🎲 Randomize everything
-        </button>
-      </div>
-
+    <form action={formAction} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
       <input type="hidden" name="themeColor" value={accent} />
       <input type="hidden" name="bgColor" value={bg} />
       <input type="hidden" name="cardColor" value={card} />
+      <input type="hidden" name="containerSize" value={size} />
+      <input type="hidden" name="borderStyle" value={border} />
       <input type="hidden" name="themeId" value={themeId} />
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
       <input type="hidden" name="clearFavicon" value={clearIcon ? "1" : ""} />
 
-      {/* Preset backdrops — previewed live, saved with the same button. */}
-      <div>
-        <span className="label">Theme preset</span>
-        <p className="mt-0.5 text-xs text-mist/70">
-          A complete backdrop look. Pick <span className="text-snow">Custom</span> to design your own with the controls
-          below.
-        </p>
-        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-          {[{ id: "", name: "Custom" }, ...THEMES].map((t) => {
-            const selected = themeId === t.id;
-            return (
-              <button
-                key={t.id || "custom"}
-                type="button"
-                title={t.name}
-                aria-pressed={selected}
-                onClick={() => setThemeId(t.id)}
-                className={`overflow-hidden rounded-xl border text-left transition ${
-                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
-                }`}
-              >
-                <div className="h-12 w-full" style={themeCss(t.id, accent) ?? customTileStyle} />
-                <p className="truncate px-2 py-1 text-[10px] font-medium">{t.name}</p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <div className="space-y-5">
+        {/* 1 — What sits behind everything. */}
+        <Group title="Backdrop" hint="The canvas your whole page sits on. Start from a preset or build your own.">
+          <div>
+            <span className="label !mb-0">Preset</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              A complete backdrop look. Pick <span className="text-snow">Custom</span> to design your own with the
+              controls below.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+              {[{ id: "", name: "Custom" }, ...THEMES].map((t) => {
+                const selected = themeId === t.id;
+                return (
+                  <button
+                    key={t.id || "custom"}
+                    type="button"
+                    title={t.name}
+                    aria-pressed={selected}
+                    onClick={() => setThemeId(t.id)}
+                    className={`overflow-hidden rounded-xl border text-left transition ${
+                      selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                    }`}
+                  >
+                    <div className="h-12 w-full" style={themeCss(t.id, accent) ?? customTileStyle} />
+                    <p className="truncate px-2 py-1 text-[10px] font-medium">{t.name}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      <div className="grid gap-6 sm:grid-cols-[1fr_16rem]">
-        <div className="space-y-5">
-          {themeId && (
+          {themeId ? (
             <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
               The <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span> preset
-              controls your backdrop — the background color, image and glow below are ignored until you switch back to
-              Custom. Accent and container choices still apply.
+              controls your backdrop — the background color, image and glow are ignored until you switch back to Custom.
+              Container and accent choices still apply.
             </p>
-          )}
-          <div className={themeId ? "pointer-events-none select-none opacity-40" : ""}>
-            <SwatchRow label="Background" swatches={BACKGROUNDS} value={bg} onPick={setBg} />
-          </div>
-          <SwatchRow label="Containers" swatches={CONTAINERS} value={card} onPick={setCard} base={bg} />
-          <SwatchRow label="Accent" swatches={ACCENTS} value={accent} onPick={setAccent} />
+          ) : null}
 
-          <div className={themeId ? "pointer-events-none select-none opacity-40" : ""}>
-            <span className="label">Background image</span>
+          <div className={backdropOff}>
+            <SwatchRow label="Background color" swatches={BACKGROUNDS} value={bg} onPick={setBg} />
+          </div>
+
+          <div className={backdropOff}>
+            <span className="label !mb-0">Background image</span>
             <p className="mt-0.5 text-xs text-mist/70">
               Optional — sits on top of your background color. Upload your own SVG or image, or roll a random abstract
               SVG in your colors.
@@ -282,13 +405,73 @@ export function ThemeForm({
             </div>
           </div>
 
-          {/* Shown with a mock browser tab so the 16px reality is obvious —
-              a detailed logo that looks fine here will be a smudge there. */}
+          <label
+            className={`flex w-fit cursor-pointer items-center gap-2.5 text-sm ${backdropOff}`}
+          >
+            <input
+              type="checkbox"
+              name="gradient"
+              checked={gradient}
+              onChange={(e) => setGradient(e.target.checked)}
+              className="h-4 w-4 accent-[var(--color-brand)]"
+            />
+            Accent glow at the top of the page
+          </label>
+        </Group>
+
+        {/* 2 — The boxes your content lives in. */}
+        <Group title="Containers" hint="The cards and panels each section sits in — their tint, width and edges.">
+          <SwatchRow
+            label="Container color"
+            hint="Shown over your backdrop, so the translucent tints pick up whatever is behind them."
+            swatches={CONTAINERS}
+            value={card}
+            onPick={setCard}
+            base={bg}
+          />
+          <SizeRow value={size} onPick={setSize} />
+          <BorderRow value={border} onPick={setBorder} accent={accent} card={card} base={bg} />
+
           <div>
-            <span className="label">Browser tab icon</span>
-            <p className="mt-0.5 text-xs text-mist/70">
-              The little icon in the browser tab when someone opens your page. Square works best — simple shapes read
-              better than a full logo at this size.
+            <span className="label !mb-0">Container image</span>
+            <p className="mt-0.5 text-xs text-mist/70">Optional texture behind your cards&apos; tint.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label className="btn-ghost cursor-pointer !py-2 text-sm">
+                Upload image
+                <input
+                  ref={cardFileRef}
+                  type="file"
+                  name="cardImageFile"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg"
+                  className="hidden"
+                  onChange={(e) => onPickFile(e, "card")}
+                />
+              </label>
+              {cardImg && (
+                <button
+                  type="button"
+                  onClick={() => removeImage("card")}
+                  className="btn-ghost !py-2 text-sm !text-brand2"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </Group>
+
+        {/* 3 — The one color that touches everything. */}
+        <Group title="Accent" hint="Buttons, links, highlights and the accent border styles above.">
+          <SwatchRow label="Accent color" swatches={ACCENTS} value={accent} onPick={setAccent} />
+        </Group>
+
+        {/* 4 — Branding that lives outside the page itself.
+            Shown with a mock browser tab so the 16px reality is obvious — a
+            detailed logo that looks fine here will be a smudge there. */}
+        <Group title="Browser tab icon" hint="The little icon in the browser tab when someone opens your page.">
+          <div>
+            <p className="text-xs text-mist/70">
+              Square works best — simple shapes read better than a full logo at this size.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-t-lg border border-edge border-b-0 bg-panel2 px-3 py-1.5">
@@ -333,75 +516,79 @@ export function ThemeForm({
             </div>
             <p className="mt-1.5 text-xs text-mist/60">PNG, SVG, ICO or WebP · up to 512KB</p>
           </div>
+        </Group>
+      </div>
 
-          <div>
-            <span className="label">Container image</span>
-            <p className="mt-0.5 text-xs text-mist/70">Optional texture behind your cards&apos; tint.</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <label className="btn-ghost cursor-pointer !py-2 text-sm">
-                Upload image
-                <input
-                  ref={cardFileRef}
-                  type="file"
-                  name="cardImageFile"
-                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg"
-                  className="hidden"
-                  onChange={(e) => onPickFile(e, "card")}
-                />
-              </label>
-              {cardImg && (
-                <button type="button" onClick={() => removeImage("card")} className="btn-ghost !py-2 text-sm !text-brand2">
-                  Remove
-                </button>
-              )}
-            </div>
+      {/* Preview and the save button follow you down the page. */}
+      <aside className="lg:sticky lg:top-6">
+        <div className="card !p-4">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-sm font-bold">Live preview</h3>
+            <button type="button" onClick={rollAll} className="text-xs font-semibold text-mist hover:text-snow">
+              🎲 Randomize
+            </button>
           </div>
-
-          <label
-            className={`flex w-fit cursor-pointer items-center gap-2.5 text-sm ${
-              themeId ? "pointer-events-none select-none opacity-40" : ""
-            }`}
-          >
-            <input
-              type="checkbox"
-              name="gradient"
-              checked={gradient}
-              onChange={(e) => setGradient(e.target.checked)}
-              className="h-4 w-4 accent-[var(--color-brand)]"
-            />
-            Accent glow at the top of the page
-          </label>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-edge">
-          <div className="flex h-full flex-col justify-center p-5" style={previewStyle}>
-            <p className="text-center text-base font-extrabold text-white">Your name here</p>
-            <p className="mt-0.5 text-center text-[10px] text-white/60">This is how your page will feel</p>
-            <div className="mt-4 rounded-lg border border-white/10 p-3" style={{ background: previewCard }}>
-              <p className="text-xs font-semibold text-white">A content card</p>
-              <p className="text-[10px] text-white/60">Bonus drops, merch, links…</p>
-            </div>
-            <div className="mt-4 text-center">
-              <span
-                className="inline-block rounded-lg px-4 py-1.5 text-xs font-semibold text-white"
-                style={{ background: accent }}
+          <div className="mt-3 overflow-hidden rounded-xl border border-edge">
+            <div className="flex min-h-80 flex-col justify-center p-6" style={previewStyle}>
+              <p className="text-center text-xl font-extrabold text-white">Your name here</p>
+              <p className="mt-1 text-center text-xs text-white/60">This is how your page will feel</p>
+              <div
+                className="mt-6 rounded-xl p-4"
+                style={{
+                  background: previewCard,
+                  width: previewCardWidth,
+                  marginInline: "auto",
+                  ...borderCss(border, accent),
+                }}
               >
-                Your button
-              </span>
+                <p className="text-sm font-semibold text-white">A content card</p>
+                <p className="mt-0.5 text-xs text-white/60">Bonus drops, merch, links…</p>
+              </div>
+              <div className="mt-6 text-center">
+                <span
+                  className="inline-block rounded-lg px-5 py-2 text-sm font-semibold text-white"
+                  style={{ background: accent }}
+                >
+                  Your button
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+          {(size !== DEFAULT_SIZE || border !== DEFAULT_BORDER) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSize(DEFAULT_SIZE);
+                setBorder(DEFAULT_BORDER);
+              }}
+              className="mt-3 text-xs text-mist/70 underline underline-offset-2 hover:text-snow"
+            >
+              Reset container width &amp; border
+            </button>
+          )}
 
-      {state.error && (
-        <p className="rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-sm text-brand2">{state.error}</p>
-      )}
-      <div className="flex items-center gap-3">
-        <button className="btn-primary !py-2 text-sm" disabled={pending}>
-          {pending ? "Saving…" : "Save theme"}
-        </button>
-        {state.ok && <span className="text-sm font-semibold text-good">Theme saved — it&apos;s live on your page.</span>}
-      </div>
+          {/* Save sits under the preview it commits — the button is the last
+              thing in the column, so "what you see" and "make it live" read as
+              one action. */}
+          <div className="mt-4 border-t border-edge pt-4">
+            {state.error && (
+              <p className="mb-3 rounded-xl border border-brand2/40 bg-brand2/10 px-3 py-2 text-xs text-brand2">
+                {state.error}
+              </p>
+            )}
+            <button className="btn-primary w-full" disabled={pending}>
+              {pending ? "Saving…" : "Save theme"}
+            </button>
+            <p className="mt-2 text-center text-xs text-mist/70">
+              {state.ok ? (
+                <span className="font-semibold text-good">Saved — it&apos;s live on your page.</span>
+              ) : (
+                "Publishes to your live page."
+              )}
+            </p>
+          </div>
+        </div>
+      </aside>
     </form>
   );
 }
