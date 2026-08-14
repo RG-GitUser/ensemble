@@ -4,6 +4,7 @@ import { useState } from "react";
 import { INSTALLERS, type Installer } from "@/lib/installers";
 import { SnippetChecker } from "@/components/SnippetChecker";
 import { SnippetCode } from "@/components/SnippetCode";
+import { CheckIcon, CloseIcon } from "@/components/icons";
 
 /**
  * Guided install: pick how you manage your site, get that platform's exact
@@ -81,7 +82,7 @@ export function SnippetInstaller({
                   aria-hidden
                   className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white"
                 >
-                  ✓
+                  <CheckIcon />
                 </span>
               )}
             </button>
@@ -140,14 +141,14 @@ function FileHint({ hint }: { hint: NonNullable<Installer["fileHint"]> }) {
     <div className="grid gap-2 sm:grid-cols-2">
       <div className="rounded-xl border border-good/40 bg-good/5 px-4 py-3">
         <p className="flex items-center gap-2 font-mono text-sm font-semibold text-good">
-          <span aria-hidden>✓</span>
+          <CheckIcon />
           {hint.right}
         </p>
         <p className="mt-1 text-xs text-mist">{hint.rightWhy}</p>
       </div>
       <div className="rounded-xl border border-brand2/40 bg-brand2/5 px-4 py-3">
         <p className="flex items-center gap-2 font-mono text-sm font-semibold text-brand2">
-          <span aria-hidden>✕</span>
+          <CloseIcon />
           {hint.wrong}
         </p>
         <p className="mt-1 text-xs text-mist">{hint.wrongWhy}</p>
@@ -183,7 +184,13 @@ Thanks!`;
             setTimeout(() => setCopied(false), 2000);
           }}
         >
-          {copied ? "✓ Copied" : "Copy a message for them"}
+          {copied ? (
+            <span className="inline-flex items-center gap-1.5">
+              <CheckIcon /> Copied
+            </span>
+          ) : (
+            "Copy a message for them"
+          )}
         </button>
       </div>
       <p className="mt-1 text-xs text-mist/70">

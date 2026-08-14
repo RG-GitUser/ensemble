@@ -16,6 +16,25 @@ export function platformHosts(): Set<string> {
   );
 }
 
+/**
+ * How far along the four-step "your own URL" checklist a site is. The
+ * checklist itself lives in DomainSetup; this is the same arithmetic, shared
+ * so the summaries on Overview and Settings can't drift from the real thing.
+ *
+ * Buying the domain (step 1) is counted the moment we know its name — the
+ * only evidence we could have that it was bought.
+ */
+export function domainProgress(o: {
+  hostname: string;
+  /** True once a request for the hostname has actually reached us. */
+  dnsSeen: boolean;
+  published: boolean;
+}): { done: number; total: number; live: boolean } {
+  const named = !!o.hostname;
+  const steps = [named, named, o.dnsSeen, o.dnsSeen && o.published];
+  return { done: steps.filter(Boolean).length, total: steps.length, live: steps.every(Boolean) };
+}
+
 const HOSTNAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/;
 
 /**

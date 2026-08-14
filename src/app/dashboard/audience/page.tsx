@@ -4,6 +4,7 @@ import { getLeads, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { deleteLeadAction } from "@/lib/actions";
 import { UpgradeGate } from "@/components/UpgradeGate";
+import { CloseIcon } from "@/components/icons";
 
 export default async function AudiencePage() {
   const user = await requireUser();
@@ -53,8 +54,12 @@ export default async function AudiencePage() {
                   <span className="text-mist">{l.createdAt.slice(0, 10)}</span>
                   <form action={deleteLeadAction}>
                     <input type="hidden" name="leadId" value={l.id} />
-                    <button className="text-mist transition hover:text-brand2" title="Remove subscriber">
-                      ✕
+                    <button
+                      className="text-mist transition hover:text-brand2"
+                      title="Remove subscriber"
+                      aria-label="Remove subscriber"
+                    >
+                      <CloseIcon />
                     </button>
                   </form>
                 </span>

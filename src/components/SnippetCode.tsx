@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CheckIcon } from "@/components/icons";
 
 /**
  * The line, shown as code rather than as a wall of grey text.
@@ -26,7 +27,13 @@ export function SnippetCode({ origin, token }: { origin: string; token: string }
           }}
           className="btn-primary !py-1.5 !px-3 text-xs"
         >
-          {copied ? "✓ Copied" : "Copy"}
+          {copied ? (
+            <span className="inline-flex items-center gap-1.5">
+              <CheckIcon /> Copied
+            </span>
+          ) : (
+            "Copy"
+          )}
         </button>
       </div>
 

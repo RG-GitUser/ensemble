@@ -1,3 +1,5 @@
+import { CheckIcon } from "@/components/icons";
+
 /**
  * A numbered step in a setup flow. Completed steps collapse to their summary
  * line so a finished checklist stays short, while the step you're on — and
@@ -32,7 +34,7 @@ export function StepCard({
           }`}
           aria-hidden
         >
-          {done ? "✓" : n}
+          {done ? <CheckIcon /> : n}
         </span>
         <span className="min-w-0 flex-1">
           <span className={`block font-bold ${done ? "text-mist" : "text-snow"}`}>{title}</span>

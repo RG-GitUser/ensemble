@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ADMIN_EMAIL, requireUser } from "@/lib/auth";
 import { logout } from "@/lib/actions";
-import { getSiteByUser } from "@/lib/db";
+import { getSiteByUser, getUserPrefs } from "@/lib/db";
 import { getPlan, type PlanDef } from "@/lib/plans";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TourGuide } from "@/components/TourGuide";
 
 const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?: string }> = [
   { href: "/dashboard", label: "Overview" },
@@ -21,6 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   const plan = site ? getPlan(site.plan) : null;
+  const prefs = getUserPrefs(user.id);
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">
@@ -70,6 +72,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           min-content width up and scrolls the whole dashboard sideways.
           This lets those blocks scroll inside their own box instead. */}
       <main className="min-w-0 flex-1 px-6 py-8 md:px-10">{children}</main>
+      {/* Mounted once for the whole dashboard: it picks the tour matching the
+          current route, and shows nothing at all once they've been seen or
+          switched off in Settings. */}
+      <TourGuide seen={prefs.toursSeen} enabled={prefs.tutorialsEnabled} />
     </div>
   );
 }

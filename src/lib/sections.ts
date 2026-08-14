@@ -216,6 +216,58 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     },
   },
   {
+    type: "footer",
+    name: "Footer",
+    description: "Your tagline, privacy policy and terms at the bottom of the page.",
+    requires: null,
+    fields: [
+      {
+        key: "tagline",
+        label: "Tagline",
+        kind: "text",
+        help: "The line under everything. Leave empty to use the tagline from Settings.",
+        placeholder: "Making things on the internet since 2019",
+      },
+      {
+        key: "privacyUrl",
+        label: "Privacy policy link",
+        kind: "url",
+        help: "Already have one hosted? Link it. Otherwise write it below and we'll show it on your page.",
+        placeholder: "https://...",
+      },
+      {
+        key: "privacyText",
+        label: "Privacy policy text",
+        kind: "textarea",
+        help: "Used only when there's no link above. Opens where your visitor is, without leaving your page.",
+      },
+      { key: "termsUrl", label: "Terms & conditions link", kind: "url", placeholder: "https://..." },
+      {
+        key: "termsText",
+        label: "Terms & conditions text",
+        kind: "textarea",
+        help: "Used only when there's no link above.",
+      },
+      {
+        key: "copyright",
+        label: "Copyright line",
+        kind: "text",
+        help: "Leave empty to skip it.",
+        placeholder: "© 2026 Your Name",
+      },
+    ],
+    defaults: {
+      tagline: "",
+      privacyUrl: "",
+      privacyText:
+        "We collect only what we need to run this page: the email address you give us when you subscribe, and anonymous counts of how many people visit. We don't sell your data or pass it to anyone else. Email us and we'll delete anything we hold about you.",
+      termsUrl: "",
+      termsText:
+        "Everything on this page is provided as-is. Products and bonus content are sold and delivered by us, and anything you buy is subject to the terms shown at checkout. We may change what's on this page at any time.",
+      copyright: "",
+    },
+  },
+  {
     type: "contact",
     name: "Contact",
     description: "A simple way for fans and brands to reach you.",
@@ -260,6 +312,7 @@ export const RECOMMENDED_ORDER: string[] = [
   "chatroom",
   "links",
   "contact",
+  "footer",
 ];
 
 export function getTemplate(type: string): SectionTemplate | undefined {

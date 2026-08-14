@@ -13,6 +13,7 @@ import {
 import { fetchStripeFinance, formatMoney, sampleFinance, type FinanceSummary } from "@/lib/finance";
 import { getPlan } from "@/lib/plans";
 import { LockedOverlay } from "@/components/LockedOverlay";
+import { CardIcon, LedgerIcon } from "@/components/icons";
 import { disconnectFinanceStripe } from "@/lib/actions";
 import { FinanceConnectForm } from "@/components/FinanceConnectForm";
 import type { Site } from "@/lib/types";
@@ -70,7 +71,9 @@ async function FinanceTab({ site }: { site: Site }) {
       <div className="card mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-bold">💳 Stripe — your money</h2>
+            <h2 className="flex items-center gap-2 font-bold">
+              <CardIcon className="text-mist" /> Stripe — your money
+            </h2>
             <p className="mt-1 text-sm text-mist">
               {key && !financeError
                 ? "Live data from your connected Stripe account."
@@ -134,7 +137,9 @@ async function FinanceTab({ site }: { site: Site }) {
       <div className="card mt-6 border-dashed">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-bold">📗 QuickBooks</h2>
+            <h2 className="flex items-center gap-2 font-bold">
+              <LedgerIcon className="text-mist" /> QuickBooks
+            </h2>
             <p className="mt-1 text-sm text-mist">
               Pull profit &amp; loss, expenses and invoices next to your Stripe revenue.
             </p>
