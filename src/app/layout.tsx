@@ -20,7 +20,18 @@ export const metadata: Metadata = {
   // injected into every route unconditionally, so a creator page ended up
   // serving both their tab icon and ours, and browsers picked whichever they
   // liked. As metadata, a creator page's own `icons` replaces it outright.
-  icons: { icon: "/favicon.ico" },
+  //
+  // The SVG is listed first and wins in every browser that supports one; the
+  // .ico is the fallback for those that don't, and carries the 16/32/48 sizes
+  // Windows shortcuts and older browsers ask for.
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 };
 
 /**

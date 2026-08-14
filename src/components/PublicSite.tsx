@@ -4,7 +4,8 @@ import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
-import { borderVars, DEFAULT_SIZE } from "@/lib/theme";
+import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
+import { borderVars, DEFAULT_SIZE, FULL_WIDTH_TYPES, getLayout } from "@/lib/theme";
 import { themeCss } from "@/lib/themes";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
@@ -17,6 +18,7 @@ function SectionView({
   plan,
   chat,
   host,
+  appUrl,
 }: {
   section: Section;
   site: Site;
@@ -24,14 +26,16 @@ function SectionView({
   chat: ChatMessage[];
   /** Hostname serving this page — required by Twitch's embed player. */
   host: string;
+  /** Platform origin, for links back to us from a custom domain. */
+  appUrl: string;
 }) {
   const c = section.content;
   switch (section.type) {
     case "hero":
       return (
         <section className="px-6 pb-16 pt-24 text-center">
-          <h1 className="site-w-lg mx-auto text-4xl font-extrabold leading-tight sm:text-6xl">{c.heading}</h1>
-          {c.subheading && <p className="mx-auto mt-5 max-w-xl text-lg text-white/70">{c.subheading}</p>}
+          <h1 className="site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
+          {c.subheading && <p className="mx-auto mt-5 max-w-xl text-[1.125em] site-ink-soft">{c.subheading}</p>}
           {c.ctaLabel && (
             <a
               href={c.ctaUrl || "#"}
@@ -52,8 +56,8 @@ function SectionView({
               <img src={c.imageUrl} alt={c.heading} className="h-36 w-36 shrink-0 rounded-2xl object-cover" />
             )}
             <div className="text-center sm:text-left">
-              <h2 className="text-2xl font-bold">{c.heading}</h2>
-              <p className="mt-3 whitespace-pre-line text-white/70">{c.body}</p>
+              <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
+              <p className="mt-3 whitespace-pre-line site-ink-soft">{c.body}</p>
             </div>
           </div>
         </section>
@@ -62,7 +66,7 @@ function SectionView({
       const items = parseLines(c.items ?? "");
       return (
         <section id="content" className="site-w-lg mx-auto px-6 py-14">
-          <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
+          <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-4">
             {items.map(([title, desc, url], i) => (
               <a
@@ -74,14 +78,14 @@ function SectionView({
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-semibold">{title}</p>
-                    {desc && <p className="mt-1 text-sm text-white/60">{desc}</p>}
+                    {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
                   </div>
                   {c.ctaLabel ? (
-                    <span className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-sm font-semibold">
+                    <span className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-[0.875em] font-semibold">
                       {c.ctaLabel}
                     </span>
                   ) : (
-                    <span className="text-white/40">→</span>
+                    <span className="site-ink-faint">→</span>
                   )}
                 </div>
               </a>
@@ -94,13 +98,13 @@ function SectionView({
       const src = embedUrl(c.videoUrl ?? "");
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
+          <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           {src ? (
             <div className="site-card mt-8 overflow-hidden rounded-2xl">
               <iframe src={src} className="aspect-video w-full" allowFullScreen title={c.heading} />
             </div>
           ) : (
-            <p className="mt-6 text-center text-white/50">Video coming soon.</p>
+            <p className="mt-6 text-center site-ink-faint">Video coming soon.</p>
           )}
         </section>
       );
@@ -109,7 +113,7 @@ function SectionView({
       const items = parseLines(c.items ?? "");
       return (
         <section className="site-w-sm mx-auto px-6 py-14">
-          <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
+          <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-3">
             {items.map(([label, url], i) => (
               <a
@@ -129,31 +133,33 @@ function SectionView({
       const items = parseLines(c.items ?? "");
       return (
         <section className="site-w-xl mx-auto px-6 py-14">
-          <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
+          {/* site-grid: lets the container queries in globals.css narrow the
+              columns when this section is running in half a page. */}
+          <div className="site-grid mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {items.map(([name, price, img, buyUrl], i) => (
               <div key={i} className="site-card overflow-hidden rounded-2xl" style={{ background: "var(--site-card)" }}>
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={name} className="aspect-square w-full object-cover" />
                 ) : (
-                  <div className="flex aspect-[5/2] w-full items-center justify-center bg-white/5 text-sm text-white/40 sm:aspect-square">{name}</div>
+                  <div className="flex aspect-[5/2] w-full items-center justify-center bg-white/5 text-[0.875em] site-ink-faint sm:aspect-square">{name}</div>
                 )}
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold">{name}</p>
-                    <p className="text-white/70">{price}</p>
+                    <p className="site-ink-soft">{price}</p>
                   </div>
                   {plan.payments && buyUrl ? (
                     <a
                       href={buyUrl}
-                      className="mt-3 block rounded-lg py-2 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                      className="mt-3 block rounded-lg py-2 text-center text-[0.875em] font-semibold text-white transition hover:opacity-90"
                       style={{ background: "var(--site-accent)" }}
                     >
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="mt-3 rounded-lg border border-white/10 py-2 text-center text-sm text-white/50">
+                    <p className="mt-3 rounded-lg border border-white/10 py-2 text-center text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -169,8 +175,8 @@ function SectionView({
       return (
         <section className="px-6 py-14">
           <div className="site-card site-w-md mx-auto rounded-3xl px-6 py-12 text-center" style={{ background: "var(--site-card)" }}>
-            <h2 className="text-2xl font-bold">{c.heading}</h2>
-            {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
+            <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
+            {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
             <NewsletterSignup siteId={site.id} buttonLabel={c.buttonLabel ?? "Subscribe"} />
           </div>
         </section>
@@ -181,8 +187,8 @@ function SectionView({
       const url = c.calendarUrl || site.config.calendlyUrl || "";
       return (
         <section className="site-w-lg mx-auto px-6 py-14 text-center">
-          <h2 className="text-2xl font-bold">{c.heading}</h2>
-          {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
+          <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
+          {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {url ? (
             <a
               href={url}
@@ -194,7 +200,7 @@ function SectionView({
               Open calendar
             </a>
           ) : (
-            <p className="mt-6 text-white/50">Calendar link coming soon.</p>
+            <p className="mt-6 site-ink-faint">Calendar link coming soon.</p>
           )}
         </section>
       );
@@ -203,15 +209,15 @@ function SectionView({
       if (!plan.chatroom || site.config.chatroomEnabled === false) return null;
       return (
         <section className="site-w-md mx-auto px-6 py-14">
-          <h2 className="text-center text-2xl font-bold">{c.heading}</h2>
+          <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           <div className="site-card mt-8 rounded-3xl p-6" style={{ background: "var(--site-card)" }}>
-            <p className="text-center text-sm text-white/60">{c.body}</p>
+            <p className="text-center text-[0.875em] site-ink-soft">{c.body}</p>
             <div className="mt-5 max-h-80 space-y-3 overflow-y-auto">
               {chat.length === 0 && (
-                <p className="text-center text-sm text-white/40">No messages yet — say hi.</p>
+                <p className="text-center text-[0.875em] site-ink-faint">No messages yet — say hi.</p>
               )}
               {chat.map((m) => (
-                <div key={m.id} className="w-fit max-w-[80%] rounded-2xl rounded-bl-sm bg-white/10 px-4 py-2 text-sm">
+                <div key={m.id} className="w-fit max-w-[80%] rounded-2xl rounded-bl-sm bg-white/10 px-4 py-2 text-[0.875em]">
                   <span className="mr-2 font-semibold" style={{ color: "var(--site-accent)" }}>
                     {m.author}
                   </span>
@@ -230,16 +236,16 @@ function SectionView({
       const hasAny = twitchChannel || facebookLiveUrl || instagramLiveUser;
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <h2 className="flex items-center justify-center gap-3 text-center text-2xl font-bold">
+          <h2 className="flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
             {c.heading}
             {site.config.liveNow && (
-              <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1 text-xs font-bold uppercase text-red-400">
+              <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1 text-[0.75em] font-bold uppercase text-red-400">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" /> Live
               </span>
             )}
           </h2>
-          {c.body && <p className="mx-auto mt-3 max-w-md text-center text-white/70">{c.body}</p>}
-          {!hasAny && <p className="mt-6 text-center text-white/50">No live streams linked yet.</p>}
+          {c.body && <p className="mx-auto mt-3 max-w-md text-center site-ink-soft">{c.body}</p>}
+          {!hasAny && <p className="mt-6 text-center site-ink-faint">No live streams linked yet.</p>}
           <div className="mt-8 space-y-6">
             {twitchChannel && (
               <iframe
@@ -277,8 +283,8 @@ function SectionView({
     case "contact":
       return (
         <section className="site-w-md mx-auto px-6 py-14 text-center">
-          <h2 className="text-2xl font-bold">{c.heading}</h2>
-          {c.body && <p className="mx-auto mt-3 max-w-md text-white/70">{c.body}</p>}
+          <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
+          {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {c.email && (
             <a href={`mailto:${c.email}`} className="site-card mt-6 inline-block rounded-xl px-7 py-3 font-semibold">
               {c.buttonLabel || c.email}
@@ -286,6 +292,57 @@ function SectionView({
           )}
         </section>
       );
+    case "footer": {
+      // Policies are shown one of two ways: a link when the creator has one
+      // hosted, otherwise a <details> that opens the text in place. Native
+      // <details> so it needs no JavaScript and stays keyboard-usable — and
+      // so a visitor reading the privacy policy never leaves the page.
+      const tagline = c.tagline || site.config.tagline || "";
+      const policies: Array<{ label: string; url: string; text: string }> = [
+        { label: "Privacy policy", url: c.privacyUrl ?? "", text: c.privacyText ?? "" },
+        { label: "Terms & conditions", url: c.termsUrl ?? "", text: c.termsText ?? "" },
+      ].filter((p) => p.url || p.text);
+      return (
+        <footer className="site-w-lg mx-auto px-6 py-12 text-center">
+          <div className="border-t pt-8" style={{ borderColor: "var(--site-border-color, rgba(255,255,255,0.12))" }}>
+            {tagline && <p className="text-[0.95em] site-ink-soft">{tagline}</p>}
+            {policies.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-start justify-center gap-x-6 gap-y-3 text-[0.8em]">
+                {policies.map((p) =>
+                  p.url ? (
+                    <a
+                      key={p.label}
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="site-ink-soft underline underline-offset-4 hover:opacity-100"
+                    >
+                      {p.label}
+                    </a>
+                  ) : (
+                    <details key={p.label} className="max-w-md text-left">
+                      <summary className="cursor-pointer list-none text-center site-ink-soft underline underline-offset-4">
+                        {p.label}
+                      </summary>
+                      <p className="mt-3 whitespace-pre-line text-[0.95em] leading-relaxed site-ink-faint">{p.text}</p>
+                    </details>
+                  )
+                )}
+              </div>
+            )}
+            {c.copyright && <p className="mt-4 text-[0.75em] site-ink-faint">{c.copyright}</p>}
+            {!plan.whiteLabel && (
+              <p className="mt-4 text-[0.75em] site-ink-faint">
+                Powered by{" "}
+                <a href={appUrl || "/"} className="font-semibold site-ink-soft">
+                  Ensemble
+                </a>
+              </p>
+            )}
+          </div>
+        </footer>
+      );
+    }
     default:
       return null;
   }
@@ -308,8 +365,8 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       // to every visitor regardless of the light/dark preference they happen
       // to have set on the dashboard.
       <div className="flex flex-1 flex-col items-center justify-center bg-[#0b0714] px-6 py-24 text-center text-white">
-        <h1 className="mt-4 text-2xl font-bold">This page isn&apos;t live yet</h1>
-        <p className="mt-2 text-white/60">Check back soon.</p>
+        <h1 className="mt-4 text-[1.5em] font-bold">This page isn&apos;t live yet</h1>
+        <p className="mt-2 site-ink-soft">Check back soon.</p>
       </div>
     );
   }
@@ -348,9 +405,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   const underlay: React.CSSProperties = preset ?? { background: bgLayers.join(", ") };
   const cardBg = `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${cfg.cardColor ?? "rgba(255,255,255,0.05)"}`;
 
+  const layout = getLayout(cfg.layout);
+
   return (
     <div
-      className="relative isolate flex-1 text-white"
+      className="site-ink relative isolate flex-1"
       style={
         {
           "--site-accent": cfg.themeColor,
@@ -359,13 +418,21 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           // in globals.css read these, so one declaration here restyles every
           // section on the page.
           "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
+          // Type: one family, one ink, and a base size every text size on the
+          // page is expressed as a multiple of (see the em values above), so
+          // the scale moves the headline and the fine print together.
+          "--site-ink": cfg.textColor || DEFAULT_TEXT_COLOR,
+          fontFamily: getFont(cfg.fontId).family,
+          fontSize: `calc(1rem * ${cfg.fontScale || DEFAULT_TEXT_SIZE})`,
           ...borderVars(cfg.borderStyle, cfg.themeColor),
         } as React.CSSProperties
       }
     >
       <div aria-hidden className="fixed inset-0 -z-10" style={underlay} />
+      {/* Platform chrome, not the creator's page — fixed size and colour so it
+          doesn't ride the creator's type scale. */}
       {isOwner && (
-        <div className="sticky top-0 z-50 flex items-center justify-center gap-3 border-b border-white/10 bg-black/60 px-4 py-2 text-xs backdrop-blur">
+        <div className="sticky top-0 z-50 flex items-center justify-center gap-3 border-b border-white/10 bg-black/60 px-4 py-2 text-xs text-white backdrop-blur">
           <span className={site.published ? "text-emerald-400" : "text-amber-400"}>
             {site.published ? "● Live" : "● Draft preview — only you can see this"}
           </span>
@@ -374,28 +441,46 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           </a>
         </div>
       )}
-      {sections.map((s) => {
-        // A per-section theme renders the section inside a themed band.
-        const containerTheme = themeCss(s.theme, cfg.themeColor);
-        return containerTheme ? (
-          <div
-            key={s.id}
-            className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl"
-            style={containerTheme}
-          >
-            <SectionView section={s} site={site} plan={plan} chat={chat} host={host} />
-          </div>
-        ) : (
-          <SectionView key={s.id} section={s} site={site} plan={plan} chat={chat} host={host} />
-        );
-      })}
-      {(site.config.tagline || !plan.whiteLabel) && (
-        <footer className="border-t border-white/10 px-6 py-10 text-center text-sm text-white/40">
-          {site.config.tagline && <p className="mb-2 text-white/60">{site.config.tagline}</p>}
+      {/* Every section is wrapped the same way in every layout — the
+          arrangement is the wrapper's class, never a different rendering of
+          the section, so switching layouts can't disturb the content. */}
+      <div className={layout ? `site-layout-${layout.id}` : undefined}>
+        {sections.map((s, i) => {
+          // A per-section theme renders the section inside a themed band.
+          const containerTheme = themeCss(s.theme, cfg.themeColor);
+          const full = FULL_WIDTH_TYPES.has(s.type);
+          // Staggered sides alternate across the sections that take part,
+          // ignoring the full-width ones — counted here rather than in CSS,
+          // where a hero mid-page would flip every section beneath it.
+          const side =
+            layout?.id === "stagger" && !full
+              ? sections.slice(0, i).filter((p) => !FULL_WIDTH_TYPES.has(p.type)).length % 2 === 0
+                ? "site-left"
+                : "site-right"
+              : "";
+          return (
+            <div key={s.id} className={`${full ? "site-full" : ""} ${side}`.trim() || undefined}>
+              {containerTheme ? (
+                <div className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl" style={containerTheme}>
+                  <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+                </div>
+              ) : (
+                <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* The automatic footer stands down when the creator has added a Footer
+          section — that section carries the tagline, the policies and the
+          Powered by line, so keeping both would print the footer twice. */}
+      {!sections.some((s) => s.type === "footer") && (site.config.tagline || !plan.whiteLabel) && (
+        <footer className="border-t border-white/10 px-6 py-10 text-center text-[0.875em] site-ink-faint">
+          {site.config.tagline && <p className="mb-2 site-ink-soft">{site.config.tagline}</p>}
           {!plan.whiteLabel && (
             <p>
               Powered by{" "}
-              <a href={appUrl || "/"} className="font-semibold text-white/60 hover:text-white">
+              <a href={appUrl || "/"} className="font-semibold site-ink-soft hover:text-white">
                 Ensemble
               </a>
             </p>

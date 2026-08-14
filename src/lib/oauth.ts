@@ -99,7 +99,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         need: "A Business or Creator account — Instagram blocks scheduled posting on personal accounts",
         steps: [
           "Open Instagram → your profile",
-          "Tap the ☰ menu → Settings and privacy",
+          "Tap the menu button (three lines, top right) → Settings and privacy",
           "Tap Account type and tools → Switch to professional account",
           "Pick Creator (or Business) and finish the prompts",
         ],

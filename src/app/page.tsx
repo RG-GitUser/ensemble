@@ -4,6 +4,7 @@ import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@
 import { Starfield } from "@/components/Starfield";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { WipOverlay, wipEnabled } from "@/components/WipOverlay";
+import { CheckIcon } from "@/components/icons";
 
 const FEATURES = [
   { title: "Copy & paste setup", body: "Pick a section, paste your content, hit save. Your page updates instantly — no code, no drag-and-drop maze." },
@@ -187,12 +188,12 @@ export default async function Home() {
                 <p className="mt-2 text-sm text-mist">{p.blurb}</p>
                 <ul className="mt-6 flex-1 space-y-2.5 text-sm">
                   <li className="flex items-start gap-2.5">
-                    <span className="w-3.5 shrink-0 text-good">✓</span>
+                    <CheckIcon className="mt-0.5 w-3.5 shrink-0 text-good" />
                     <span>{sectionsLabel(p)}</span>
                   </li>
                   {TIER_FEATURES.filter((f) => planIncludes(id, f)).map((f) => (
                     <li key={f.label} className="flex items-start gap-2.5">
-                      <span className="w-3.5 shrink-0 text-good">✓</span>
+                      <CheckIcon className="mt-0.5 w-3.5 shrink-0 text-good" />
                       <span>{f.label}</span>
                     </li>
                   ))}

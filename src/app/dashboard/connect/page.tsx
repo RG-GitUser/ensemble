@@ -78,6 +78,7 @@ export default async function ConnectPage() {
       </div>
 
       <div className="mt-4 space-y-4">
+        <div data-tour="snippet">
         <StepCard
           n={1}
           done={snippetSeen}
@@ -109,6 +110,7 @@ export default async function ConnectPage() {
           )}
 
         </StepCard>
+        </div>
 
         <StepCard
           n={2}
@@ -278,6 +280,7 @@ export default async function ConnectPage() {
           <span className="h-px flex-1 bg-edge" />
         </div>
 
+        <div data-tour="domain">
         <DomainSetup
           hostname={domain?.hostname ?? ""}
           lastSeen={domain?.lastSeen ?? null}
@@ -287,6 +290,7 @@ export default async function ConnectPage() {
           aRecord={process.env.DOMAIN_A_RECORD || null}
           cnameTarget={process.env.DOMAIN_CNAME_TARGET || null}
         />
+        </div>
       </div>
     </div>
   );

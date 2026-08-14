@@ -30,6 +30,14 @@ export interface SiteConfig {
   tagline: string;
   /** Site-wide visual theme id from lib/themes.ts ("" = classic midnight). */
   themeId?: string;
+  /** Typeface id from lib/fonts.ts ("" = Geist). */
+  fontId?: string;
+  /** Text size multiplier — a TEXT_SIZES value from lib/fonts.ts. */
+  fontScale?: string;
+  /** Page text color (palette or a custom hex; defaults to white). */
+  textColor?: string;
+  /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
+  layout?: string;
   stripeKey?: string;
   /** Creator's own Stripe key for the Finance tab (restricted key advised). */
   financeStripeKey?: string;

@@ -59,6 +59,54 @@ export const CONTAINER_SIZES: Swatch[] = [
 ];
 
 /**
+ * How the containers are arranged down the page.
+ *
+ * "scroll" is the original single column and stays the default, so a page
+ * built before this existed is untouched. The other two only rearrange
+ * sections that suit it: a hero is the page's headline and a merch grid is
+ * already a grid, so both stay full width in every mode (FULL_WIDTH_TYPES).
+ */
+export interface LayoutDef {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const LAYOUTS: LayoutDef[] = [
+  {
+    id: "scroll",
+    label: "Landscape scroll",
+    description: "One section after another, full width. The classic.",
+  },
+  {
+    id: "side",
+    label: "Side by side",
+    description: "Sections pair up into two columns on wide screens, and stack on phones.",
+  },
+  {
+    id: "stagger",
+    label: "Staggered",
+    description: "Sections alternate left and right down the page, like an editorial spread.",
+  },
+];
+
+export const DEFAULT_LAYOUT = LAYOUTS[0].id;
+
+/**
+ * Section types that always span the full width, whatever the layout — the
+ * page's headline and the line it closes on. Everything else takes part in
+ * the arrangement, including the grids: a merch or video section narrows its
+ * own columns to fit (see the container queries in globals.css) rather than
+ * opting out of the layout the creator chose.
+ */
+export const FULL_WIDTH_TYPES = new Set(["hero", "footer"]);
+
+export function getLayout(id: string | undefined | null): LayoutDef | null {
+  if (!id) return null;
+  return LAYOUTS.find((l) => l.id === id) ?? null;
+}
+
+/**
  * Border treatments for those containers. "ACCENT" (optionally followed by a
  * two-digit alpha, as in "ACCENT88") is replaced with the site's accent color,
  * the same convention lib/themes.ts uses.
@@ -122,6 +170,48 @@ export const DEFAULT_BORDER = BORDER_STYLES[0].id;
 /** The candidate if it's in the palette, otherwise the fallback. */
 export function pickSwatch(list: Swatch[], value: string, fallback: string): string {
   return list.some((s) => s.value === value) ? value : fallback;
+}
+
+/**
+ * A creator-typed color, normalized to #rrggbb — "" when it isn't one.
+ *
+ * Hex only, deliberately: these values are interpolated straight into inline
+ * styles and custom properties on the public page, so the grammar has to be
+ * one we can verify completely rather than "whatever a browser might parse".
+ */
+export function normalizeHex(input: string): string {
+  const v = input.trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(v)) {
+    return `#${v[0]}${v[0]}${v[1]}${v[1]}${v[2]}${v[2]}`.toLowerCase();
+  }
+  if (/^[0-9a-f]{6}$/i.test(v)) return `#${v.toLowerCase()}`;
+  return "";
+}
+
+/**
+ * Palette value, else a valid custom hex, else the fallback. The palette-only
+ * `pickSwatch` still guards the fields where a free color would break
+ * something (the accent is concatenated with alpha suffixes; sizes and border
+ * ids aren't colors at all).
+ */
+export function pickColor(list: Swatch[], value: string, fallback: string): string {
+  if (list.some((s) => s.value === value)) return value;
+  return normalizeHex(value) || fallback;
+}
+
+/**
+ * True when white text on this color falls under 4.5:1 — creator pages draw
+ * their copy in fixed white, so a light custom color is a legibility problem
+ * rather than a taste one. Non-hex (the translucent palette tints) is never
+ * flagged: those composite over the backdrop, which is checked on its own.
+ */
+export function isLight(color: string): boolean {
+  const hex = normalizeHex(color);
+  if (!hex) return false;
+  const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  // White (L = 1) clears 4.5:1 against everything up to L ≈ 0.183.
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.183;
 }
 
 export function getBorderStyle(id: string | undefined | null): BorderStyleDef | null {

@@ -7,7 +7,9 @@ import {
   togglePublish,
   type FormState,
 } from "@/lib/actions";
+import { domainProgress } from "@/lib/domains";
 import { LockedOverlay } from "@/components/LockedOverlay";
+import { CheckIcon } from "@/components/icons";
 
 /**
  * The custom-domain journey as a numbered checklist. Every step shows its
@@ -41,9 +43,8 @@ export function DomainSetup({
 
   const hasDomain = !!hostname;
   const dnsSeen = !!lastSeen;
-  const live = hasDomain && dnsSeen && published;
   const dnsReady = !!aRecord && !!cnameTarget;
-  const doneCount = [hasDomain, hasDomain, dnsSeen, dnsSeen && published].filter(Boolean).length;
+  const { done: doneCount, total, live } = domainProgress({ hostname, dnsSeen, published });
 
   // An apex domain (janedoe.com) needs an A record; anything with a
   // subdomain (www., shop.) needs a CNAME. Showing only the record that
@@ -64,7 +65,7 @@ export function DomainSetup({
             live ? "bg-good/15 text-good" : "bg-warn/15 text-warn"
           }`}
         >
-          {live ? `● Live at ${hostname}` : `● Not live yet — ${doneCount} of 4 steps done`}
+          {live ? `● Live at ${hostname}` : `● Not live yet — ${doneCount} of ${total} steps done`}
         </span>
       </div>
 
@@ -267,7 +268,7 @@ export function DomainSetup({
                 <a href={`https://${hostname}`} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                   {hostname} ↗
                 </a>
-                . 🎉
+                .
               </>
             ) : (
               <>Your page is published — it appears on your domain the moment step 3 connects.</>
@@ -315,7 +316,7 @@ function Step({
         }`}
         aria-hidden
       >
-        {done ? "✓" : n}
+        {done ? <CheckIcon /> : n}
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-semibold">

@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { billingEnabled, billingOk } from "@/lib/billing";
-import { getDomainBySite, getSiteByUser } from "@/lib/db";
+import { getDomainBySite, getSiteByUser, getUserPrefs } from "@/lib/db";
+import { domainProgress } from "@/lib/domains";
 import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
-import { changePlan, openBillingPortal } from "@/lib/actions";
+import { changePlan, openBillingPortal, toggleTutorials } from "@/lib/actions";
 import { SettingsForm } from "@/components/SettingsForm";
 import Link from "next/link";
 
@@ -19,6 +20,12 @@ export default async function SettingsPage() {
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
   const domain = getDomainBySite(site.id);
+  const prefs = getUserPrefs(user.id);
+  const domainState = domainProgress({
+    hostname: domain?.hostname ?? "",
+    dnsSeen: !!domain?.lastSeen,
+    published: site.published,
+  });
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -40,16 +47,21 @@ export default async function SettingsPage() {
                 ) : domain ? (
                   <>
                     <span className="font-mono text-snow">{domain.hostname}</span>
-                    {domain.lastSeen && site.published
+                    {domainState.live
                       ? " — live"
                       : domain.lastSeen
                         ? " — connected, publish your page to go live"
                         : " — waiting on DNS"}
                   </>
                 ) : (
-                  "Not set up yet. Four short steps, no jargon."
+                  `Not set up yet. ${domainState.total} short steps, no jargon.`
                 )}
               </p>
+              {getPlan(site.plan).customDomain && !domainState.live && (
+                <p className="mt-1 text-xs text-mist/70">
+                  {domainState.done} of {domainState.total} steps done
+                </p>
+              )}
             </div>
             <Link href="/dashboard/connect#domain" className="btn-ghost !py-2 text-sm">
               {domain ? "Manage domain" : "Set up domain"}
@@ -57,7 +69,27 @@ export default async function SettingsPage() {
           </div>
         </div>
 
-        <div className="card">
+        {/* Tutorials. Switching them on replays every tour from the start —
+            that's what people mean when they turn tips back on. */}
+        <div className="card" data-tour="tutorials">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-bold">Tutorials</h2>
+              <p className="mt-1 text-sm text-mist">
+                {prefs.tutorialsEnabled
+                  ? "Tips appear the first time you open each part of the dashboard. Dismiss one at a time, or switch them off here."
+                  : "Tutorial tips are off. Turn them back on to see them again from the beginning."}
+              </p>
+            </div>
+            <form action={toggleTutorials}>
+              <button className={prefs.tutorialsEnabled ? "btn-ghost !py-2 text-sm" : "btn-primary !py-2 text-sm"}>
+                {prefs.tutorialsEnabled ? "Turn tutorials off" : "Tutorials on"}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div className="card" data-tour="plan">
           <h2 className="font-bold">Your plan</h2>
           <p className="mt-1 text-sm text-mist">
             Switch plans any time. Your page keeps its content — sections above a lower plan&apos;s limit just unpublish

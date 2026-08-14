@@ -142,6 +142,13 @@ function createDb(): Database.Database {
       media_url TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS user_prefs (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      tutorials_enabled INTEGER NOT NULL DEFAULT 1,
+      -- Comma-separated ids of tours already seen. A list rather than a row
+      -- per tour: it is only ever read and written whole.
+      tours_seen TEXT NOT NULL DEFAULT ''
+    );
     CREATE TABLE IF NOT EXISTS social_post_targets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
@@ -340,14 +347,26 @@ function seedDemoChat(d: Database.Database): void {
  */
 function seedAdmin(d: Database.Database): void {
   const email = (process.env.ADMIN_EMAIL || "rileyg0035@gmail.com").toLowerCase();
-  if (d.prepare("SELECT id FROM users WHERE email = ?").get(email)) return;
+  const existing = d.prepare("SELECT id FROM users WHERE email = ?").get(email) as { id: number } | undefined;
+  if (existing) {
+    // The admin account seeded as "Ensemble HQ", which then shows in the
+    // dashboard sidebar and on the seeded page. The brand is just Ensemble —
+    // rename in place, matched exactly so nothing a person chose is touched.
+    d.prepare("UPDATE users SET business_name = 'Ensemble' WHERE id = ? AND business_name = 'Ensemble HQ'").run(
+      existing.id
+    );
+    d.prepare(
+      "UPDATE sections SET content = replace(content, 'Ensemble HQ', 'Ensemble') WHERE site_id IN (SELECT id FROM sites WHERE user_id = ?) AND content LIKE '%Ensemble HQ%'"
+    ).run(existing.id);
+    return;
+  }
 
   const password = process.env.ADMIN_PASSWORD || "admin1234";
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   const info = d
     .prepare("INSERT INTO users (email, password_hash, name, business_name) VALUES (?, ?, ?, ?)")
-    .run(email, `${salt}:${hash}`, "Site Admin", "Ensemble HQ");
+    .run(email, `${salt}:${hash}`, "Site Admin", "Ensemble");
   const userId = Number(info.lastInsertRowid);
 
   const config = JSON.stringify({ themeColor: "#8b5cf6", tagline: "" });
@@ -360,7 +379,7 @@ function seedAdmin(d: Database.Database): void {
   d.prepare("INSERT INTO sections (site_id, type, position, content) VALUES (?, 'hero', 1, ?)").run(
     siteId,
     JSON.stringify({
-      heading: "Ensemble HQ",
+      heading: "Ensemble",
       subheading: "Admin test page.",
       ctaLabel: "",
       ctaUrl: "",
@@ -610,6 +629,47 @@ export function getSiteByStripeCustomer(customerId: string): Site | null {
   if (!customerId) return null;
   const r = db().prepare("SELECT * FROM sites WHERE stripe_customer_id = ?").get(customerId) as SiteRow | undefined;
   return r ? toSite(r) : null;
+}
+
+/* ---------- per-person preferences ---------- */
+
+export interface UserPrefs {
+  tutorialsEnabled: boolean;
+  /** Tour ids this person has already been shown. */
+  toursSeen: string[];
+}
+
+/** Preferences for a user, with the shipped defaults when they have none. */
+export function getUserPrefs(userId: number): UserPrefs {
+  const r = db().prepare("SELECT * FROM user_prefs WHERE user_id = ?").get(userId) as
+    | { tutorials_enabled: number; tours_seen: string }
+    | undefined;
+  if (!r) return { tutorialsEnabled: true, toursSeen: [] };
+  return {
+    tutorialsEnabled: r.tutorials_enabled === 1,
+    toursSeen: r.tours_seen ? r.tours_seen.split(",").filter(Boolean) : [],
+  };
+}
+
+function writePrefs(userId: number, p: UserPrefs): void {
+  db()
+    .prepare(
+      `INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen) VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET tutorials_enabled = excluded.tutorials_enabled, tours_seen = excluded.tours_seen`
+    )
+    .run(userId, p.tutorialsEnabled ? 1 : 0, p.toursSeen.join(","));
+}
+
+/** Switching tutorials back on replays them, so the seen list is cleared. */
+export function setTutorialsEnabled(userId: number, enabled: boolean): void {
+  const p = getUserPrefs(userId);
+  writePrefs(userId, { tutorialsEnabled: enabled, toursSeen: enabled ? [] : p.toursSeen });
+}
+
+export function markTourSeen(userId: number, tourId: string): void {
+  const p = getUserPrefs(userId);
+  if (p.toursSeen.includes(tourId)) return;
+  writePrefs(userId, { ...p, toursSeen: [...p.toursSeen, tourId] });
 }
 
 /* ---------- sections ---------- */

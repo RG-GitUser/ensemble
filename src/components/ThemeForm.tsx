@@ -11,9 +11,14 @@ import {
   CONTAINERS,
   DEFAULT_BORDER,
   DEFAULT_SIZE,
+  isLight,
+  LAYOUTS,
+  normalizeHex,
   type Swatch,
 } from "@/lib/theme";
-import { THEMES, themeCss } from "@/lib/themes";
+import { BRIGHT_GROUP, getThemeDef, THEME_GROUPS, THEMES, themeCss } from "@/lib/themes";
+import { FONTS, getFont, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
+import { CloseIcon, ShuffleIcon } from "@/components/icons";
 
 /** One titled block of related controls — the Design tab is a stack of these. */
 function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -26,6 +31,88 @@ function Group({ title, hint, children }: { title: string; hint?: string; childr
   );
 }
 
+/**
+ * Type any hex, alongside the curated swatches.
+ *
+ * Just the text box: the color it produces shows up in the swatch row above,
+ * in the same shape as every other option, and that swatch is itself the
+ * native picker — so there's one place to look for "the color I chose"
+ * instead of a second, differently-shaped preview inside the field.
+ *
+ * Only a complete, valid hex is committed, so half-typed input never repaints
+ * the preview and the field isn't wiped while someone is still typing.
+ */
+function HexPicker({
+  label,
+  value,
+  onPick,
+  /** Overrides the default "too light for white text" caution. */
+  warning,
+}: {
+  label: string;
+  value: string;
+  /** Receives the typed/picked color — see SwatchRow's `onPickCustom`. */
+  onPick: (v: string) => void;
+  warning?: string;
+}) {
+  const hex = normalizeHex(value);
+  const [text, setText] = useState(hex);
+  const caution =
+    warning ?? (hex && isLight(hex) ? "Light color — your page text is white, so this may be hard to read." : "");
+  // Swatch clicks and Randomize change the value from outside — follow along.
+  useEffect(() => setText(normalizeHex(value)), [value]);
+
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-2 rounded-xl border border-edge bg-panel2 px-3 py-1.5">
+        <span className="text-xs font-medium text-mist">Or paste a hex</span>
+        <input
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            const normalized = normalizeHex(e.target.value);
+            if (normalized) onPick(normalized);
+          }}
+          placeholder="#8b5cf6"
+          spellCheck={false}
+          maxLength={7}
+          aria-label={`${label}: custom hex`}
+          className="w-24 bg-transparent font-mono text-sm text-snow outline-none placeholder:text-mist/50"
+        />
+      </label>
+      {caution && <p className="text-xs text-warn">{caution}</p>}
+    </div>
+  );
+}
+
+/** One backdrop preset, drawn at thumbnail size with its name underneath. */
+function PresetTile({
+  name,
+  selected,
+  onPick,
+  style,
+}: {
+  name: string;
+  selected: boolean;
+  onPick: () => void;
+  style: React.CSSProperties;
+}) {
+  return (
+    <button
+      type="button"
+      title={name}
+      aria-pressed={selected}
+      onClick={onPick}
+      className={`overflow-hidden rounded-xl border text-left transition ${
+        selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+      }`}
+    >
+      <div className="h-12 w-full" style={style} />
+      <p className="truncate px-2 py-1 text-[10px] font-medium">{name}</p>
+    </button>
+  );
+}
+
 function SwatchRow({
   label,
   hint,
@@ -34,6 +121,15 @@ function SwatchRow({
   onPick,
   /** Dark base composited under translucent swatches so they stay visible. */
   base,
+  /** Adds the hex box — colors that end up as a plain background accept one. */
+  custom,
+  /**
+   * Used instead of onPick for a typed or picked color. The backdrop needs
+   * this: choosing your own color should give you that color and nothing
+   * else, which means switching off the layers we add by default.
+   */
+  onPickCustom,
+  warn,
 }: {
   label: string;
   hint?: string;
@@ -41,7 +137,13 @@ function SwatchRow({
   value: string;
   onPick: (v: string) => void;
   base?: string;
+  custom?: boolean;
+  onPickCustom?: (v: string) => void;
+  /** Passed through to the hex box, replacing its default caution. */
+  warn?: string;
 }) {
+  const customValue = !swatches.some((s) => s.value === value);
+  const pickCustom = onPickCustom ?? onPick;
   return (
     <div>
       <span className="label !mb-0">{label}</span>
@@ -73,7 +175,210 @@ function SwatchRow({
             </button>
           );
         })}
+        {/* A typed color is off-palette, so nothing above would read as
+            selected — this swatch is where the current choice lives instead,
+            and clicking it opens the OS color picker. `swatch-input` (in
+            globals.css) strips the native chrome so the color fills the
+            shape rather than sitting in a box inside it. */}
+        {custom && customValue && (
+          <input
+            type="color"
+            value={normalizeHex(value) || "#ffffff"}
+            onChange={(e) => pickCustom(e.target.value)}
+            title={`${value} — click to pick another`}
+            aria-label={`${label}: custom color`}
+            className={`swatch-input h-9 cursor-pointer ring-2 ring-brand ring-offset-2 ring-offset-panel ${
+              base ? "w-14 rounded-xl" : "w-9 rounded-full"
+            }`}
+            style={{ backgroundColor: value }}
+          />
+        )}
       </div>
+      {custom && <HexPicker label={label} value={value} onPick={pickCustom} warning={warn} />}
+    </div>
+  );
+}
+
+/** Typeface picker — every tile is set in the face it offers. */
+function FontRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
+  return (
+    <div>
+      <span className="label !mb-0">Font</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        Sets the whole page — headings and body. Each name below is shown in its own face.
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {FONTS.map((f) => {
+          const selected = value === f.id;
+          return (
+            <button
+              key={f.id || "default"}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(f.id)}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              <span className="block truncate text-base" style={{ fontFamily: f.family }}>
+                {f.label}
+              </span>
+              <span className="mt-0.5 block truncate text-[10px] text-mist">{f.note}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Text size — each tile sets its own label at the size it would produce. */
+function TextSizeRow({ value, onPick, family }: { value: string; onPick: (v: string) => void; family: string }) {
+  return (
+    <div>
+      <span className="label !mb-0">Text size</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        Scales every piece of text on the page together, so the proportions you picked stay put.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {TEXT_SIZES.map((s) => {
+          const selected = value === s.value;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(s.value)}
+              className={`w-[5.5rem] rounded-xl border px-2 py-2 transition ${
+                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              <span className="flex h-7 items-center justify-center">
+                <span style={{ fontFamily: family, fontSize: `calc(1.1rem * ${s.value})` }}>Aa</span>
+              </span>
+              <span className="mt-1 block text-center text-[10px] font-medium">{s.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Layout picker — each tile is a small drawing of the arrangement it makes. */
+function LayoutRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
+  const bar = "rounded-[3px] bg-mist/35";
+  return (
+    <div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {LAYOUTS.map((l) => {
+          const selected = value === l.id;
+          return (
+            <button
+              key={l.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(l.id)}
+              className={`rounded-xl border p-3 text-left transition ${
+                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              {/* The diagram carries the idea faster than the sentence does. */}
+              <span className="flex h-14 flex-col justify-center gap-1.5 rounded-lg bg-panel2 p-2">
+                {l.id === "scroll" && (
+                  <>
+                    <span className={`${bar} h-2.5 w-full`} />
+                    <span className={`${bar} h-2.5 w-full`} />
+                    <span className={`${bar} h-2.5 w-full`} />
+                  </>
+                )}
+                {l.id === "side" && (
+                  <>
+                    <span className={`${bar} h-2.5 w-full`} />
+                    <span className="flex gap-1.5">
+                      <span className={`${bar} h-5 w-1/2`} />
+                      <span className={`${bar} h-5 w-1/2`} />
+                    </span>
+                  </>
+                )}
+                {l.id === "stagger" && (
+                  <>
+                    <span className={`${bar} h-2.5 w-3/4`} />
+                    <span className={`${bar} ml-auto h-2.5 w-3/4`} />
+                    <span className={`${bar} h-2.5 w-3/4`} />
+                  </>
+                )}
+              </span>
+              <span className="mt-2 block text-xs font-semibold">{l.label}</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-mist">{l.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The body of the live preview: mock sections drawn in the chosen
+ * arrangement.
+ *
+ * These are drawn rather than sharing the page's own `.site-layout-*` rules
+ * on purpose — those rules key off the viewport, so inside a 24rem column
+ * side-by-side and staggered would both collapse to a single column and the
+ * preview would show nothing at all. Same shapes, scaled to fit.
+ */
+function PreviewSections({
+  layout,
+  cardStyle,
+  width,
+}: {
+  layout: string;
+  cardStyle: React.CSSProperties;
+  /** Container width setting, as a percentage of the widest option. */
+  width: string;
+}) {
+  const Card = ({ title, sub, style }: { title: string; sub: string; style?: React.CSSProperties }) => (
+    <div className="rounded-xl p-3" style={{ ...cardStyle, ...style }}>
+      <p className="text-[0.85em] font-semibold leading-snug">{title}</p>
+      <p className="mt-0.5 text-[0.72em] leading-snug opacity-70">{sub}</p>
+    </div>
+  );
+
+  if (layout === "side") {
+    return (
+      <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
+        <div className="grid grid-cols-2 gap-3">
+          <Card title="Featured video" sub="Your latest" />
+          <Card title="About me" sub="Your story" />
+          <Card title="Bonus content" sub="Early access" />
+          <Card title="Merch" sub="Columns narrow to fit" />
+          <Card title="Links" sub="Everywhere else" />
+          <Card title="Contact" sub="For brands" />
+        </div>
+        <Card title="Footer" sub="Full width — it closes the page" />
+      </div>
+    );
+  }
+
+  if (layout === "stagger") {
+    return (
+      <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
+        <Card title="Featured video" sub="Your latest" style={{ width: "80%" }} />
+        <Card title="About me" sub="Your story" style={{ width: "80%", marginLeft: "20%" }} />
+        <Card title="Bonus content" sub="Early access" style={{ width: "80%" }} />
+        <Card title="Links" sub="Everywhere else" style={{ width: "80%", marginLeft: "20%" }} />
+        <Card title="Footer" sub="Full width — it closes the page" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
+      <Card title="Featured video" sub="Your latest" />
+      <Card title="Bonus content" sub="Drops, behind the scenes, early access" />
+      <Card title="Merch" sub="Sell straight from the page" />
+      <Card title="Links" sub="Find me everywhere" />
     </div>
   );
 }
@@ -206,6 +511,10 @@ export function ThemeForm({
   faviconUrl,
   gradient: gradientProp,
   themeId: themeIdProp,
+  fontId: fontIdProp,
+  fontScale: fontScaleProp,
+  textColor: textColorProp,
+  layout: layoutProp,
 }: {
   themeColor: string;
   bgColor: string;
@@ -221,6 +530,14 @@ export function ThemeForm({
   gradient: boolean;
   /** Active preset backdrop id ("" = custom/Midnight). */
   themeId: string;
+  /** Typeface id from lib/fonts.ts ("" = Geist). */
+  fontId: string;
+  /** Text size multiplier (TEXT_SIZES value). */
+  fontScale: string;
+  /** Page text color. */
+  textColor: string;
+  /** Section arrangement (LAYOUTS id). */
+  layout: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateTheme, {});
   const [accent, setAccent] = useState(themeColor);
@@ -230,6 +547,10 @@ export function ThemeForm({
   const [border, setBorder] = useState(borderStyle);
   const [gradient, setGradient] = useState(gradientProp);
   const [themeId, setThemeId] = useState(themeIdProp);
+  const [fontId, setFontId] = useState(fontIdProp);
+  const [scale, setScale] = useState(fontScaleProp);
+  const [ink, setInk] = useState(textColorProp);
+  const [layout, setLayout] = useState(layoutProp);
   /** What the preview shows: saved URL, object URL of a picked file, or a generated data URI. */
   const [bgImg, setBgImg] = useState<string>(bgImage);
   const [cardImg, setCardImg] = useState<string>(cardImage);
@@ -285,6 +606,27 @@ export function ThemeForm({
     rollSvg(newAccent);
   }
 
+  /**
+   * A typed background color is a statement: that color, on its own. So it
+   * also clears the two layers that would otherwise sit on top of it — the
+   * accent overlay and any background image — rather than quietly painting
+   * over the color the creator just chose. Both are one click to restore,
+   * and nothing is written until Save.
+   */
+  function useOwnColor(color: string) {
+    setBg(color);
+    setGradient(false);
+    setBgImg("");
+    setBgSvg("");
+    setClearBg(true);
+    // Leaving any preset is part of it. A preset owns the whole backdrop, so
+    // typing a color while one is running would otherwise change nothing at
+    // all — the clearest possible reading of "use this color" is that the
+    // preset is no longer wanted.
+    setThemeId("");
+    if (bgFileRef.current) bgFileRef.current.value = "";
+  }
+
   function removeImage(which: "bg" | "card") {
     if (which === "bg") {
       setBgImg("");
@@ -301,15 +643,19 @@ export function ThemeForm({
   // url() values MUST be quoted: data URIs keep raw parentheses (e.g. the
   // SVG's filter="url(#b)"), which would otherwise cut the whole background
   // declaration short and silently kill every layer, glow included.
+  // Sized in percentages, not pixels: the page's glow is 800x400 on a ~1280
+  // viewport, so a fixed 280x150 in a 24rem preview column was both the wrong
+  // proportion and mostly clipped above the box — switching the overlay on
+  // and off changed almost nothing you could see.
   const previewBg =
-    `${gradient ? `radial-gradient(280px 150px at 50% -10%, ${accent}44, transparent 70%), ` : ""}` +
+    `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}33, transparent 70%), ` : ""}` +
     `${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`;
   const previewCard = `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${card}`;
   // An active preset owns the backdrop — in the preview and on the page.
   const previewStyle = themeCss(themeId, accent) ?? { background: previewBg };
   /** Thumbnail for the "Custom" preset tile — reflects the current custom picks. */
   const customTileStyle = {
-    backgroundImage: `${gradient ? `radial-gradient(60px 30px at 50% -10%, ${accent}66, transparent 70%), ` : ""}${
+    backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}55, transparent 70%), ` : ""}${
       bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
     }`,
     backgroundColor: bg,
@@ -319,6 +665,8 @@ export function ThemeForm({
   const previewCardWidth = `${(Number(size) / widest) * 100}%`;
   /** Presets own the backdrop, so the custom backdrop controls go quiet. */
   const backdropOff = themeId ? "pointer-events-none select-none opacity-40" : "";
+  /** What the text actually sits on, so the ink can be checked against it. */
+  const backdropBase = (themeId ? getThemeDef(themeId)?.color : bg) || bg;
 
   return (
     <form action={formAction} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
@@ -328,6 +676,10 @@ export function ThemeForm({
       <input type="hidden" name="containerSize" value={size} />
       <input type="hidden" name="borderStyle" value={border} />
       <input type="hidden" name="themeId" value={themeId} />
+      <input type="hidden" name="fontId" value={fontId} />
+      <input type="hidden" name="fontScale" value={scale} />
+      <input type="hidden" name="textColor" value={ink} />
+      <input type="hidden" name="layout" value={layout} />
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
@@ -339,52 +691,94 @@ export function ThemeForm({
           <div>
             <span className="label !mb-0">Preset</span>
             <p className="mt-0.5 text-xs text-mist/70">
-              A complete backdrop look. Pick <span className="text-snow">Custom</span> to design your own with the
-              controls below.
+              A complete backdrop look — {THEMES.length} of them. Pick <span className="text-snow">Custom</span> to
+              design your own with the controls below.
             </p>
+            {/* Grouped by what the look is made of, so twenty tiles stay
+                scannable: light and color, then textures, then patterns. */}
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-              {[{ id: "", name: "Custom" }, ...THEMES].map((t) => {
-                const selected = themeId === t.id;
-                return (
-                  <button
-                    key={t.id || "custom"}
-                    type="button"
-                    title={t.name}
-                    aria-pressed={selected}
-                    onClick={() => setThemeId(t.id)}
-                    className={`overflow-hidden rounded-xl border text-left transition ${
-                      selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
-                    }`}
-                  >
-                    <div className="h-12 w-full" style={themeCss(t.id, accent) ?? customTileStyle} />
-                    <p className="truncate px-2 py-1 text-[10px] font-medium">{t.name}</p>
-                  </button>
-                );
-              })}
+              {/* Named for what it does, not for what it isn't: this is the
+                  tile that hands the backdrop back to the controls below. */}
+              <PresetTile
+                name="My colors"
+                selected={themeId === ""}
+                onPick={() => setThemeId("")}
+                style={customTileStyle}
+              />
             </div>
+            {THEME_GROUPS.map((g) => (
+              <div key={g} className="mt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-mist/60">
+                  {g}
+                  {g === BRIGHT_GROUP && (
+                    <span className="ml-2 font-medium normal-case tracking-normal text-mist/50">
+                      set a dark text color under Type
+                    </span>
+                  )}
+                </p>
+                <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                  {THEMES.filter((t) => t.group === g).map((t) => (
+                    <PresetTile
+                      key={t.id}
+                      name={t.name}
+                      selected={themeId === t.id}
+                      onPick={() => setThemeId(t.id)}
+                      style={themeCss(t.id, accent)!}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
+          {/* The single easiest thing to get wrong here: picking a background
+              colour while a preset is running, and seeing nothing change on
+              the live page. Say so in warning colours, with the fix attached. */}
           {themeId ? (
-            <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
-              The <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span> preset
-              controls your backdrop — the background color, image and glow are ignored until you switch back to Custom.
-              Container and accent choices still apply.
-            </p>
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3">
+              <span
+                aria-hidden
+                className="h-9 w-14 shrink-0 rounded-lg border border-white/15"
+                style={themeCss(themeId, accent) ?? undefined}
+              />
+              <p className="min-w-0 flex-1 text-xs text-mist">
+                The <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span> preset
+                is painting your whole backdrop, including any glow of its own. The background color, image and overlay
+                below do <span className="font-semibold text-snow">nothing</span> while it&apos;s on — your container,
+                accent and type choices still apply.
+              </p>
+              <button type="button" onClick={() => setThemeId("")} className="btn-ghost shrink-0 !px-3 !py-1.5 text-xs">
+                Turn the preset off
+              </button>
+            </div>
           ) : null}
 
           <div className={backdropOff}>
-            <SwatchRow label="Background color" swatches={BACKGROUNDS} value={bg} onPick={setBg} />
+            <SwatchRow
+              label="Background color"
+              hint={
+                themeId
+                  ? "Off while a preset is painting the backdrop."
+                  : "Paste a hex and your page is exactly that color — no overlay, no image. Add either back below."
+              }
+              swatches={BACKGROUNDS}
+              value={bg}
+              onPick={setBg}
+              custom
+              onPickCustom={useOwnColor}
+            />
           </div>
 
           <div className={backdropOff}>
             <span className="label !mb-0">Background image</span>
             <p className="mt-0.5 text-xs text-mist/70">
-              Optional — sits on top of your background color. Upload your own SVG or image, or roll a random abstract
-              SVG in your colors.
+              {themeId
+                ? "Off while a preset is painting the backdrop."
+                : "Optional — sits on top of your background color. Upload your own SVG or image, or roll a random abstract SVG in your colors."}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="btn-ghost cursor-pointer !py-2 text-sm">
-                Upload image
+                {bgImg ? "Replace" : "Upload image"}
                 <input
                   ref={bgFileRef}
                   type="file"
@@ -394,8 +788,12 @@ export function ThemeForm({
                   onChange={(e) => onPickFile(e, "bg")}
                 />
               </label>
-              <button type="button" onClick={() => rollSvg()} className="btn-ghost !py-2 text-sm">
-                🎲 Random SVG
+              <button
+                type="button"
+                onClick={() => rollSvg()}
+                className="btn-ghost inline-flex items-center gap-1.5 !py-2 text-sm"
+              >
+                <ShuffleIcon /> Random SVG
               </button>
               {bgImg && (
                 <button type="button" onClick={() => removeImage("bg")} className="btn-ghost !py-2 text-sm !text-brand2">
@@ -403,31 +801,94 @@ export function ThemeForm({
                 </button>
               )}
             </div>
+            {/* Until now an applied image was invisible in these controls —
+                the only clue was the preview, where a rolled SVG reads as a
+                glow rather than as "an image I added". Show the thing. */}
+            {bgImg && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-edge bg-panel2/60 p-2">
+                <span
+                  className="block h-10 w-16 shrink-0 rounded-lg border border-edge"
+                  style={{ background: `url("${bgImg}") center / cover no-repeat, ${bg}` }}
+                />
+                <p className="min-w-0 flex-1 text-xs text-mist">
+                  An image is sitting on top of your background color. Remove it to see the color on its own.
+                </p>
+              </div>
+            )}
           </div>
 
-          <label
-            className={`flex w-fit cursor-pointer items-center gap-2.5 text-sm ${backdropOff}`}
-          >
-            <input
-              type="checkbox"
-              name="gradient"
-              checked={gradient}
-              onChange={(e) => setGradient(e.target.checked)}
-              className="h-4 w-4 accent-[var(--color-brand)]"
-            />
-            Accent glow at the top of the page
-          </label>
+          {/* The glow is a layer we add on top, so it's stated as one: a
+              choice between the flat color and the color with a wash over it.
+              Typing your own color turns it off, because "my color" means
+              that color — this row is how you put it back. */}
+          <div className={backdropOff}>
+            <span className="label !mb-0">Overlay</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              An optional wash of your accent color over the top of your background.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { on: false, label: "None", sub: bgImg ? "Color and image only" : "Just your color" },
+                { on: true, label: "Accent glow", sub: "Tinted at the top" },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  aria-pressed={gradient === o.on}
+                  onClick={() => setGradient(o.on)}
+                  className={`w-[8.5rem] overflow-hidden rounded-xl border text-left transition ${
+                    gradient === o.on ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                  }`}
+                >
+                  {/* Both tiles carry every layer the page will actually draw —
+                      image included — so the only difference between them is
+                      the one thing they're choosing between. Drawing "None" as
+                      a flat colour promised a page nobody was going to get. */}
+                  <span
+                    className="block h-10 w-full"
+                    style={{
+                      background: `${
+                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}88, transparent 70%), ` : ""
+                      }${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`,
+                    }}
+                  />
+                  <span className="block px-2 py-1.5">
+                    <span className="block text-[11px] font-semibold">{o.label}</span>
+                    <span className="block text-[10px] text-mist">{o.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {/* The image is set further down the page, but this is where people
+                look when the backdrop isn't the flat colour they chose. */}
+            {bgImg && (
+              <p className="mt-2 text-xs text-mist">
+                A background image is also covering your color.{" "}
+                <button
+                  type="button"
+                  onClick={() => removeImage("bg")}
+                  className="font-semibold text-brand2 underline underline-offset-2"
+                >
+                  Remove the image
+                </button>{" "}
+                to see <span className="font-mono text-snow">{normalizeHex(bg) || bg}</span> on its own.
+              </p>
+            )}
+          </div>
+          {/* The form still submits the same field the action reads. */}
+          <input type="hidden" name="gradient" value={gradient ? "on" : ""} />
         </Group>
 
         {/* 2 — The boxes your content lives in. */}
         <Group title="Containers" hint="The cards and panels each section sits in — their tint, width and edges.">
           <SwatchRow
             label="Container color"
-            hint="Shown over your backdrop, so the translucent tints pick up whatever is behind them."
+            hint="Shown over your backdrop, so the translucent tints pick up whatever is behind them. A pasted hex is solid — it covers the backdrop rather than tinting it."
             swatches={CONTAINERS}
             value={card}
             onPick={setCard}
             base={bg}
+            custom
           />
           <SizeRow value={size} onPick={setSize} />
           <BorderRow value={border} onPick={setBorder} accent={accent} card={card} base={bg} />
@@ -437,7 +898,7 @@ export function ThemeForm({
             <p className="mt-0.5 text-xs text-mist/70">Optional texture behind your cards&apos; tint.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="btn-ghost cursor-pointer !py-2 text-sm">
-                Upload image
+                {cardImg ? "Replace" : "Upload image"}
                 <input
                   ref={cardFileRef}
                   type="file"
@@ -457,15 +918,59 @@ export function ThemeForm({
                 </button>
               )}
             </div>
+            {cardImg && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-edge bg-panel2/60 p-2">
+                <span
+                  className="block h-10 w-16 shrink-0 rounded-lg border border-edge"
+                  style={{ background: `url("${cardImg}") center / cover no-repeat, ${card}` }}
+                />
+                <p className="min-w-0 flex-1 text-xs text-mist">
+                  A texture is sitting behind your container tint.
+                </p>
+              </div>
+            )}
           </div>
         </Group>
 
-        {/* 3 — The one color that touches everything. */}
+        {/* 3 — The one color that touches everything. Directly under the
+            containers it draws the borders on, so the pair is chosen together. */}
         <Group title="Accent" hint="Buttons, links, highlights and the accent border styles above.">
-          <SwatchRow label="Accent color" swatches={ACCENTS} value={accent} onPick={setAccent} />
+          <SwatchRow label="Accent color" swatches={ACCENTS} value={accent} onPick={setAccent} custom />
         </Group>
 
-        {/* 4 — Branding that lives outside the page itself.
+        {/* 4 — How the containers are arranged on the page. */}
+        <Group
+          title="Change container layout"
+          hint="Where your sections sit. Your content doesn't move — only the arrangement does, so you can switch back any time."
+        >
+          <LayoutRow value={layout} onPick={setLayout} />
+          {layout !== "scroll" && (
+            <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
+              Your hero, merch grid and video always run full width — they don&apos;t read well in half a column. On
+              phones every layout stacks into one column.
+            </p>
+          )}
+        </Group>
+
+        {/* 5 — The words themselves. */}
+        <Group title="Type" hint="The typeface, size and color of every word on your page.">
+          <FontRow value={fontId} onPick={setFontId} />
+          <TextSizeRow value={scale} onPick={setScale} family={getFont(fontId).family} />
+          <SwatchRow
+            label="Text color"
+            swatches={TEXT_COLORS}
+            value={ink}
+            onPick={setInk}
+            custom
+            warn={
+              isLight(ink) === isLight(backdropBase)
+                ? "This is about as bright as your backdrop — your words will be hard to read on it."
+                : ""
+            }
+          />
+        </Group>
+
+        {/* 6 — Branding that lives outside the page itself.
             Shown with a mock browser tab so the 16px reality is obvious — a
             detailed logo that looks fine here will be a smudge there. */}
         <Group title="Browser tab icon" hint="The little icon in the browser tab when someone opens your page.">
@@ -482,7 +987,7 @@ export function ThemeForm({
                   <span className="h-4 w-4 rounded-sm bg-brand/30" aria-hidden />
                 )}
                 <span className="max-w-32 truncate text-xs text-mist">Your page</span>
-                <span aria-hidden className="text-xs text-mist/50">✕</span>
+                <CloseIcon className="text-xs text-mist/50" />
               </span>
               <label className="btn-ghost cursor-pointer !py-2 text-sm">
                 {icon ? "Replace" : "Upload icon"}
@@ -524,34 +1029,53 @@ export function ThemeForm({
         <div className="card !p-4">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="text-sm font-bold">Live preview</h3>
-            <button type="button" onClick={rollAll} className="text-xs font-semibold text-mist hover:text-snow">
-              🎲 Randomize
+            <button
+              type="button"
+              onClick={rollAll}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-mist hover:text-snow"
+            >
+              <ShuffleIcon /> Randomize
             </button>
           </div>
+          {/* The preview carries the creator's type as well as their colors —
+              font, scale and ink all apply here exactly as they do on the
+              page, so the sizes are read rather than imagined. */}
+          {/* Tall enough to be a page rather than a swatch: hero, several
+              sections in the chosen arrangement, a button and the footer. It
+              scrolls, so a big text size shows as a longer page — which is
+              exactly what it does in real life. */}
           <div className="mt-3 overflow-hidden rounded-xl border border-edge">
-            <div className="flex min-h-80 flex-col justify-center p-6" style={previewStyle}>
-              <p className="text-center text-xl font-extrabold text-white">Your name here</p>
-              <p className="mt-1 text-center text-xs text-white/60">This is how your page will feel</p>
-              <div
-                className="mt-6 rounded-xl p-4"
-                style={{
-                  background: previewCard,
-                  width: previewCardWidth,
-                  marginInline: "auto",
-                  ...borderCss(border, accent),
-                }}
-              >
-                <p className="text-sm font-semibold text-white">A content card</p>
-                <p className="mt-0.5 text-xs text-white/60">Bonus drops, merch, links…</p>
-              </div>
-              <div className="mt-6 text-center">
+            <div
+              className="max-h-[34rem] min-h-[30rem] overflow-y-auto p-6"
+              style={{
+                ...previewStyle,
+                fontFamily: getFont(fontId).family,
+                fontSize: `calc(0.85rem * ${scale})`,
+                color: ink,
+              }}
+            >
+              <p className="text-center text-[1.6em] font-extrabold leading-tight">Your name here</p>
+              <p className="mx-auto mt-1.5 max-w-[22em] text-center text-[0.8em] opacity-70">
+                This is how your page will feel — your type, your colors, your layout.
+              </p>
+              <div className="mt-4 text-center">
                 <span
-                  className="inline-block rounded-lg px-5 py-2 text-sm font-semibold text-white"
+                  className="inline-block rounded-lg px-4 py-1.5 text-[0.85em] font-semibold text-white"
                   style={{ background: accent }}
                 >
                   Your button
                 </span>
               </div>
+
+              <PreviewSections
+                layout={layout}
+                cardStyle={{ background: previewCard, ...borderCss(border, accent) }}
+                width={previewCardWidth}
+              />
+
+              <p className="mt-6 border-t pt-3 text-center text-[0.7em] opacity-50" style={{ borderColor: "currentColor" }}>
+                Your tagline goes here
+              </p>
             </div>
           </div>
           {(size !== DEFAULT_SIZE || border !== DEFAULT_BORDER) && (

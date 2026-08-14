@@ -21,9 +21,20 @@ import {
   DEFAULT_BORDER,
   DEFAULT_CARD,
   DEFAULT_SIZE,
+  DEFAULT_LAYOUT,
   getBorderStyle,
+  getLayout,
+  pickColor,
   pickSwatch,
 } from "./theme";
+import {
+  DEFAULT_FONT,
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_TEXT_SIZE,
+  FONTS,
+  TEXT_COLORS,
+  TEXT_SIZES,
+} from "./fonts";
 import {
   billingEnabled,
   billingOk,
@@ -211,6 +222,10 @@ export async function addSectionAction(fd: FormData): Promise<void> {
   const plan = getPlan(site.plan);
   if (!planAllowsTemplate(site.plan, tpl)) return;
   if (store.countSections(site.id) >= plan.maxSections) return;
+  // One of each kind per page. Two Hero sections or two Link Lists is nearly
+  // always a misclick, and the page it produces reads as a mistake — the
+  // gallery disables an added type, and this is the same rule server-side.
+  if (store.getSections(site.id).some((s) => s.type === type)) return;
   store.addSection(site.id, type, { ...tpl.defaults });
   revalidateSite(site);
 }
@@ -290,6 +305,43 @@ export async function deleteSectionAction(fd: FormData): Promise<void> {
   if (!section || section.siteId !== site.id) return;
   store.deleteSection(id);
   revalidateSite(site);
+}
+
+/**
+ * Empties the page — every section and everything typed into it. The
+ * confirmation lives in the UI (DangerButton); this only refuses to act on a
+ * page that's already empty.
+ */
+export async function deleteAllSectionsAction(): Promise<void> {
+  const { site } = await requireSite();
+  for (const s of store.getSections(site.id)) store.deleteSection(s.id);
+  revalidateSite(site);
+}
+
+/* ---------------- tutorials ---------------- */
+
+/** Records that this person has been through a tour, so it doesn't reappear. */
+export async function dismissTourAction(tourId: string): Promise<void> {
+  const user = await requireUser();
+  store.markTourSeen(user.id, tourId);
+}
+
+/**
+ * The Tutorials switch. Turning them back on also clears the seen list, so
+ * "on" means what people expect it to mean — show me the tips again.
+ */
+export async function setTutorialsAction(enabled: boolean): Promise<void> {
+  const user = await requireUser();
+  store.setTutorialsEnabled(user.id, enabled);
+  revalidatePath("/dashboard", "layout");
+}
+
+/** The Settings switch — flips whichever way it currently isn't. */
+export async function toggleTutorials(): Promise<void> {
+  const user = await requireUser();
+  const prefs = store.getUserPrefs(user.id);
+  store.setTutorialsEnabled(user.id, !prefs.tutorialsEnabled);
+  revalidatePath("/dashboard", "layout");
 }
 
 /* ---------------- finance connections ---------------- */
@@ -429,12 +481,20 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   const { site } = await requireSite();
   // Theme values go into inline styles on the public page — only accept
   // curated palette values, keeping whatever the site already had otherwise.
-  const themeColor = pickSwatch(ACCENTS, str(fd, "themeColor"), site.config.themeColor);
-  const bgColor = pickSwatch(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
-  const cardColor = pickSwatch(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
+  // The accent is concatenated with alpha suffixes ("ACCENT55") by the theme
+  // and border code, so a custom one has to be a full six-digit hex —
+  // pickColor normalizes to exactly that, and rejects everything else.
+  const themeColor = pickColor(ACCENTS, str(fd, "themeColor"), site.config.themeColor);
+  // Backdrop and container tints also accept a typed hex — pickColor takes a
+  // palette value as-is and otherwise normalizes the hex, so anything that
+  // isn't one of those two things still can't reach the page.
+  const bgColor = pickColor(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
+  const cardColor = pickColor(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
   const containerSize = pickSwatch(CONTAINER_SIZES, str(fd, "containerSize"), site.config.containerSize ?? DEFAULT_SIZE);
   const borderRaw = str(fd, "borderStyle");
   const themeIdRaw = str(fd, "themeId");
+  const fontIdRaw = str(fd, "fontId");
+  const layoutRaw = str(fd, "layout");
   const config: SiteConfig = {
     ...site.config,
     themeColor,
@@ -446,6 +506,13 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     gradient: fd.get("gradient") === "on",
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
+    // Type. Family and size are ids from a fixed list; the ink is a color, so
+    // it takes a hex the same way the backdrop does.
+    fontId: FONTS.some((f) => f.id === fontIdRaw) ? fontIdRaw : DEFAULT_FONT,
+    fontScale: pickSwatch(TEXT_SIZES, str(fd, "fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
+    textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
+    // Section arrangement — only known layout ids reach the page.
+    layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
   };
 
   // Background image: an upload wins, then a client-generated random SVG,

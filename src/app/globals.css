@@ -231,6 +231,30 @@ body,
 }
 
 /**
+ * A color input wearing a swatch's shape. Browsers draw the chosen color as
+ * an inset box with its own border and padding; stripping all three lets the
+ * color fill the circle (or card) it sits in, so a custom color reads as one
+ * more swatch in the row rather than a form control parked beside them.
+ */
+.swatch-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  border: 1px solid var(--hairline);
+}
+.swatch-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.swatch-input::-webkit-color-swatch {
+  border: none;
+  border-radius: inherit;
+}
+.swatch-input::-moz-color-swatch {
+  border: none;
+  border-radius: inherit;
+}
+
+/**
  * Creator page containers (PublicSite.tsx).
  *
  * Width and border are creator choices, so both come from custom properties
@@ -261,6 +285,61 @@ body,
   border-left-color: var(--site-border-left-color, var(--site-border-color, rgba(255, 255, 255, 0.12)));
   box-shadow: var(--site-shadow, none);
   transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/**
+ * Page text color. The creator picks one ink; the softer tones every page
+ * uses for secondary copy are mixed from it, so a light-on-dark page and a
+ * dark-on-light one both keep the same hierarchy without a second setting.
+ */
+.site-ink { color: var(--site-ink, #fff); }
+.site-ink-soft { color: color-mix(in srgb, var(--site-ink, #fff) 70%, transparent); }
+.site-ink-faint { color: color-mix(in srgb, var(--site-ink, #fff) 45%, transparent); }
+
+/**
+ * Section arrangement (LAYOUTS in lib/theme.ts). Both alternatives are pure
+ * CSS on the page root: the sections themselves are rendered identically in
+ * every mode, which is what keeps a creator's content untouched when they
+ * change their mind about the shape of the page.
+ */
+.site-layout-side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+/* The hero and the footer span both columns; on a phone everything does. */
+.site-layout-side > .site-full { grid-column: 1 / -1; }
+@media (max-width: 767px) {
+  .site-layout-side { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Which side each section sits on is decided in PublicSite and written onto
+   the wrapper. CSS can't do it: nth-child would count the full-width
+   sections too, so one hero in the middle of a page would flip the whole
+   alternation below it. */
+.site-layout-stagger > :not(.site-full) {
+  width: min(100%, calc(42rem * var(--site-size, 1)));
+}
+@media (min-width: 768px) {
+  .site-layout-stagger > .site-left { margin-right: auto; margin-left: 0; }
+  .site-layout-stagger > .site-right { margin-left: auto; margin-right: 0; }
+}
+
+/**
+ * A section in a half-width column is a container, not a viewport. Its own
+ * grids (merch, and anything else that lays out in columns) are sized against
+ * the space they actually have — without this a three-column merch grid keeps
+ * three columns inside half a page and every product turns into a sliver.
+ */
+.site-layout-side > :not(.site-full),
+.site-layout-stagger > :not(.site-full) {
+  container-type: inline-size;
+}
+@container (max-width: 44rem) {
+  .site-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 26rem) {
+  .site-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Tappable containers keep their lift on hover, in whichever colour the

@@ -12,9 +12,81 @@ import {
   getSocialAccounts,
   getSocialPosts,
 } from "@/lib/db";
+import { domainProgress } from "@/lib/domains";
 import { getPlan } from "@/lib/plans";
 import { resumeCheckout, togglePublish } from "@/lib/actions";
 import { SocialOverview } from "@/components/SocialOverview";
+import { SetupChecklist, type Checkpoint } from "@/components/SetupChecklist";
+
+/**
+ * The checkpoints, in the order they're worth doing. Publishing is last on
+ * purpose: it's the one that puts the page in front of people, so it reads as
+ * the finish line rather than something to get out of the way.
+ */
+function setupSteps(
+  site: NonNullable<ReturnType<typeof getSiteByUser>>,
+  plan: ReturnType<typeof getPlan>,
+  sectionsUsed: number,
+  hasDomain: boolean
+): Checkpoint[] {
+  const cfg = site.config;
+  const styled = !!cfg.themeId || !!cfg.bgImage || cfg.bgColor !== undefined || cfg.fontId !== undefined;
+  const steps: Checkpoint[] = [
+    {
+      id: "sections",
+      label: "Add your first section",
+      hint: "Start with a hero — your name, what you make, and a button.",
+      done: sectionsUsed > 0,
+      href: "/dashboard/builder",
+      cta: "Add a section",
+    },
+    {
+      id: "content",
+      label: "Fill in your content",
+      hint: "Put your own words in — every section is copy, paste, save.",
+      done: sectionsUsed >= 3,
+      href: "/dashboard/builder",
+      cta: "Edit your page",
+    },
+    {
+      id: "design",
+      label: "Pick your look",
+      hint: "Choose a backdrop, a layout and your type — all of it is on every plan.",
+      done: styled,
+      href: "/dashboard/builder?tab=design",
+      cta: "Open Design",
+    },
+    {
+      id: "icon",
+      label: "Add your tab icon",
+      hint: "The little icon in the browser tab. It's the difference between a page and a brand.",
+      done: !!cfg.faviconUrl,
+      href: "/dashboard/builder?tab=design",
+      cta: "Upload an icon",
+    },
+  ];
+  // Only offered where the plan includes it, so the list never shows a
+  // checkpoint that can't be ticked.
+  if (plan.customDomain) {
+    steps.push({
+      id: "domain",
+      label: "Connect your own domain",
+      hint: "Your plan includes serving this page on a domain you own.",
+      done: hasDomain,
+      href: "/dashboard/connect#domain",
+      cta: "Set up my domain",
+    });
+  }
+  steps.push({
+    id: "publish",
+    label: "Publish your page",
+    hint: "When it's ready, publish — your page goes live at your address.",
+    done: site.published,
+    href: "/dashboard",
+    cta: "Publish",
+  });
+  return steps;
+}
 
 const QUOTE_STATUS: Record<string, { label: string; tone: string }> = {
   new: { label: "Received — we'll reach out soon", tone: "text-warn" },
@@ -51,6 +123,11 @@ export default async function DashboardPage({
   // Only read social rows for plans that can actually use the feature.
   const socialAccounts = site && plan?.social ? getSocialAccounts(site.id) : [];
   const socialPosts = site && plan?.social ? countSocialPosts(site.id) : 0;
+  const domainState = domainProgress({
+    hostname: domain?.hostname ?? "",
+    dnsSeen: !!domain?.lastSeen,
+    published: !!site?.published,
+  });
   const lastSocialPost = site && plan?.social ? (getSocialPosts(site.id, 1)[0] ?? null) : null;
 
   return (
@@ -117,7 +194,9 @@ export default async function DashboardPage({
 
       {site && plan ? (
         <>
-          <div className="card mt-6">
+          <SetupChecklist steps={setupSteps(site, plan, sectionsUsed, !!domain)} />
+
+          <div className="card mt-6" data-tour="address">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="font-bold">Your page</h2>
@@ -130,6 +209,41 @@ export default async function DashboardPage({
                     </>
                   )}
                 </p>
+                {/* The way to a creator's own URL, from the page they land on
+                    first — the full checklist stays on My Website, but until
+                    now nothing on the dashboard said it existed. */}
+                <p className="mt-1.5 text-xs text-mist/80">
+                  {!plan.customDomain ? (
+                    <>
+                      Want your own URL?{" "}
+                      <Link href="/dashboard/settings" className="text-brand hover:underline">
+                        Pro and Enterprise
+                      </Link>{" "}
+                      serve this page on a domain you own.
+                    </>
+                  ) : domainState.live ? (
+                    <>
+                      Running on your own domain.{" "}
+                      <Link href="/dashboard/connect#domain" className="text-brand hover:underline">
+                        Manage it
+                      </Link>
+                    </>
+                  ) : domain ? (
+                    <>
+                      Your domain is {domainState.done} of {domainState.total} steps from live.{" "}
+                      <Link href="/dashboard/connect#domain" className="text-brand hover:underline">
+                        Finish setup
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      Your plan includes your own URL.{" "}
+                      <Link href="/dashboard/connect#domain" className="text-brand hover:underline">
+                        Set it up in {domainState.total} short steps
+                      </Link>
+                    </>
+                  )}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <span
@@ -139,7 +253,7 @@ export default async function DashboardPage({
                 >
                   {site.published ? "● Live" : "● Draft"}
                 </span>
-                <form action={togglePublish}>
+                <form action={togglePublish} data-tour="publish">
                   <button
                     disabled={!site.published && needsBilling}
                     title={!site.published && needsBilling ? "Complete checkout to publish" : undefined}

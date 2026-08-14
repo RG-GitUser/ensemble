@@ -5,6 +5,7 @@ import { getChatMessages, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { deleteChatMessageAction, toggleChatroom } from "@/lib/actions";
 import { UpgradeGate } from "@/components/UpgradeGate";
+import { CloseIcon } from "@/components/icons";
 
 export default async function ChatroomPage() {
   const user = await requireUser();
@@ -65,8 +66,12 @@ export default async function ChatroomPage() {
                 </div>
                 <form action={deleteChatMessageAction}>
                   <input type="hidden" name="messageId" value={m.id} />
-                  <button className="text-mist transition hover:text-brand2" title="Delete message">
-                    ✕
+                  <button
+                    className="text-mist transition hover:text-brand2"
+                    title="Delete message"
+                    aria-label="Delete message"
+                  >
+                    <CloseIcon />
                   </button>
                 </form>
               </li>
