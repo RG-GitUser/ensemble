@@ -4,7 +4,7 @@ A platform for content creators to run their web presence from one dashboard.
 Creators sign up with their name and business name, then pick one of two paths:
 
 1. **Start From Scratch** — Ensemble hosts a landing page for bonus content, creator info,
-   and merch sales. Built with a copy & paste section editor, published at `/s/<their-slug>`.
+   and merch sales. Built with a copy & paste section editor, published at `/<their-slug>`.
 2. **Use their existing website** — two integration options, both driven from the dashboard:
    - **Website pairing** (primary, Dashboard → My Website): the creator enters their site's
      URL, Ensemble scans the page and pulls every headline, paragraph, image and video into
@@ -40,9 +40,9 @@ Open http://localhost:3000.
 
 - **Admin**: seeded on first run as `rileyg0035@gmail.com` / `admin1234` (override with `ADMIN_EMAIL` /
   `ADMIN_PASSWORD` env vars before the database is first created). Comes with an Enterprise
-  site (`/s/hq`) and the **Admin Inbox** at `/admin` — quote requests and Enterprise support
+  site (`/hq`) and the **Admin Inbox** at `/admin` — quote requests and Enterprise support
   tickets (reply + status).
-- **Demo**: a public example creator page at `/s/demo` (locked account), plus a read-only
+- **Demo**: a public example creator page at `/demo` (locked account), plus a read-only
   demo dashboard at `/demo/dashboard`.
 
 ## The dashboard

@@ -3,7 +3,7 @@
 // must not pull the database (or anything Node-heavy) into its bundle.
 
 /**
- * Hosts that serve the platform itself (marketing site, dashboard, /s/ pages).
+ * Hosts that serve the platform itself (marketing site, dashboard, creator pages).
  * Any other Host header is treated as a creator's custom domain.
  * In production set PLATFORM_HOSTS, e.g. "ensemble.app,www.ensemble.app".
  */

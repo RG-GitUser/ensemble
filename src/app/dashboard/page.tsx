@@ -205,7 +205,7 @@ export default async function DashboardPage({
                     <span className="font-mono text-snow">{domain.hostname}</span>
                   ) : (
                     <>
-                      ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
+                      ensemble / <span className="font-mono text-snow">{site.slug}</span>
                     </>
                   )}
                 </p>
@@ -266,7 +266,7 @@ export default async function DashboardPage({
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link href="/dashboard/builder" className="btn-primary !py-2 text-sm">Edit page</Link>
-              <Link href={`/s/${site.slug}?preview=1`} className="btn-ghost !py-2 text-sm" target="_blank">
+              <Link href={`/${site.slug}?preview=1`} className="btn-ghost !py-2 text-sm" target="_blank">
                 Preview ↗
               </Link>
             </div>

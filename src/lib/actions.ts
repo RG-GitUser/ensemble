@@ -11,6 +11,7 @@ import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChann
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { cleanHostname, platformHosts } from "./domains";
+import { isReservedSlug } from "./slugs";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import {
   ACCENTS,
@@ -22,16 +23,24 @@ import {
   DEFAULT_CARD,
   DEFAULT_SIZE,
   DEFAULT_LAYOUT,
+  DEFAULT_LIGHT_BG,
+  DEFAULT_LIGHT_CARD,
   getBorderStyle,
+  getColorMode,
   getLayout,
+  LIGHT_BACKGROUNDS,
+  LIGHT_CONTAINERS,
+  MAX_LOOKS,
   pickColor,
   pickSwatch,
 } from "./theme";
 import {
   DEFAULT_FONT,
+  DEFAULT_LIGHT_TEXT_COLOR,
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_SIZE,
   FONTS,
+  LIGHT_TEXT_COLORS,
   TEXT_COLORS,
   TEXT_SIZES,
 } from "./fonts";
@@ -45,7 +54,8 @@ import {
 } from "./billing";
 import fs from "fs";
 import path from "path";
-import type { Plan, Site, SiteConfig } from "./types";
+import { randomUUID } from "crypto";
+import type { DesignConfig, Plan, Site, SiteConfig } from "./types";
 
 export interface FormState {
   error?: string;
@@ -71,7 +81,9 @@ function slugify(input: string): string {
 function uniqueSlug(base: string): string {
   let slug = slugify(base);
   let n = 1;
-  while (store.slugTaken(slug)) slug = `${slugify(base)}-${++n}`;
+  // Reserved names are unavailable for the same reason taken ones are: the
+  // resulting page would never be reachable at the root.
+  while (store.slugTaken(slug) || isReservedSlug(slug)) slug = `${slugify(base)}-${++n}`;
   return slug;
 }
 
@@ -88,7 +100,7 @@ function revalidateSite(site: Site): void {
   // Publish state and domain status surface on these two as well.
   revalidatePath("/dashboard/connect");
   revalidatePath("/dashboard/settings");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- auth ---------------- */
@@ -402,13 +414,33 @@ export async function updateSettings(_prev: FormState, fd: FormData): Promise<Fo
   // pre-existing slug can still save their other settings.
   if (slug.length < 3 && slug !== site.slug) return { error: "Your page URL must be at least 3 characters." };
   if (store.slugTaken(slug, site.id)) return { error: "That page URL is taken — try another." };
+  // Only checked when it actually changes, so a site that predates the
+  // reserved list can still save its other settings.
+  if (slug !== site.slug && isReservedSlug(slug)) {
+    return { error: "That page URL is reserved by Ensemble — try another." };
+  }
   store.updateSite(site.id, { slug, config: { ...site.config, tagline } });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   // The free-address card lives here and shows the slug back to the user.
   revalidatePath("/dashboard/connect");
-  revalidatePath(`/s/${slug}`);
+  revalidatePath(`/${slug}`);
   return {};
+}
+
+/** Profile tab — the creator's own name and business name. */
+export async function updateProfile(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const name = str(fd, "name").slice(0, 80);
+  const businessName = str(fd, "businessName").slice(0, 80);
+  if (!name) return { error: "Your name can't be empty." };
+  if (!businessName) return { error: "Your business name can't be empty — it labels your dashboard and page." };
+  store.updateUser(user.id, { name, businessName });
+  // The business name is printed in the sidebar and on the public page.
+  revalidatePath("/dashboard", "layout");
+  const site = store.getSiteByUser(user.id);
+  if (site) revalidatePath(`/${site.slug}`);
+  return { ok: true };
 }
 
 const THEME_IMAGE_TYPES: Record<string, string> = {
@@ -476,6 +508,85 @@ async function faviconFrom(fd: FormData, siteId: number): Promise<string | { err
   return storeThemeAsset(siteId, "icon", buf, ext);
 }
 
+/**
+ * Run an untrusted design blob through exactly the gates updateTheme uses.
+ *
+ * Saved looks are round-tripped through the browser, so nothing in one may be
+ * trusted on the way back in — every colour is re-normalized and every id is
+ * re-checked against its list. Image URLs are the exception worth noting: they
+ * are only ever accepted if the site already references them, so a look can
+ * never point the page at someone else's upload.
+ */
+function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const text = (k: string) => (typeof r[k] === "string" ? (r[k] as string) : "");
+  const knownImages = [site.config.bgImage, site.config.cardImage].filter(Boolean) as string[];
+  const image = (k: string) => (knownImages.includes(text(k)) ? text(k) : undefined);
+
+  return {
+    themeColor: pickColor(ACCENTS, text("themeColor"), site.config.themeColor),
+    bgColor: pickColor(BACKGROUNDS, text("bgColor"), site.config.bgColor ?? DEFAULT_BG),
+    cardColor: pickColor(CONTAINERS, text("cardColor"), site.config.cardColor ?? DEFAULT_CARD),
+    containerSize: pickSwatch(CONTAINER_SIZES, text("containerSize"), site.config.containerSize ?? DEFAULT_SIZE),
+    borderStyle: getBorderStyle(text("borderStyle")) ? text("borderStyle") : DEFAULT_BORDER,
+    bgImage: image("bgImage"),
+    cardImage: image("cardImage"),
+    gradient: r.gradient !== false,
+    themeId: getThemeDef(text("themeId")) ? text("themeId") : "",
+    fontId: FONTS.some((f) => f.id === text("fontId")) ? text("fontId") : DEFAULT_FONT,
+    fontScale: pickSwatch(TEXT_SIZES, text("fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
+    textColor: pickColor(TEXT_COLORS, text("textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
+    layout: getLayout(text("layout")) ? text("layout") : DEFAULT_LAYOUT,
+    colorMode: getColorMode(text("colorMode")),
+    lightThemeId: getThemeDef(text("lightThemeId")) ? text("lightThemeId") : "",
+    lightBgColor: pickColor(LIGHT_BACKGROUNDS, text("lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
+    lightCardColor: pickColor(LIGHT_CONTAINERS, text("lightCardColor"), site.config.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    lightTextColor: pickColor(
+      LIGHT_TEXT_COLORS,
+      text("lightTextColor"),
+      site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR
+    ),
+  };
+}
+
+/** Stores the design currently in the builder under a name. */
+export async function saveLookAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const name = str(fd, "lookName").trim().slice(0, 40);
+  if (!name) return { error: "Give this look a name first." };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(str(fd, "lookDesign") || "{}");
+  } catch {
+    return { error: "That look couldn't be read — reload the page and try again." };
+  }
+  const design = sanitizeDesign(parsed, site);
+
+  const looks = [...(site.config.looks ?? [])];
+  const existing = looks.findIndex((l) => l.name.toLowerCase() === name.toLowerCase());
+  if (existing >= 0) {
+    // Same name means "update this one" — otherwise saving twice quietly
+    // fills the list with near-identical entries.
+    looks[existing] = { ...looks[existing], design };
+  } else {
+    if (looks.length >= MAX_LOOKS) return { error: `You can keep ${MAX_LOOKS} looks — delete one first.` };
+    looks.push({ id: randomUUID(), name, design });
+  }
+
+  store.updateSite(site.id, { config: { ...site.config, looks } });
+  revalidatePath("/dashboard/builder");
+  return { ok: true };
+}
+
+export async function deleteLookAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = str(fd, "lookId");
+  const looks = (site.config.looks ?? []).filter((l) => l.id !== id);
+  store.updateSite(site.id, { config: { ...site.config, looks } });
+  revalidatePath("/dashboard/builder");
+}
+
 /** Saves the Design tab of the page builder. */
 export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
@@ -513,6 +624,18 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     // Section arrangement — only known layout ids reach the page.
     layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
+    // Light/dark. The mode is one of three known ids; the light palette goes
+    // through the same pickColor gate as the dark one, against the light
+    // swatch lists.
+    colorMode: getColorMode(str(fd, "colorMode")),
+    lightThemeId: getThemeDef(str(fd, "lightThemeId")) ? str(fd, "lightThemeId") : "",
+    lightBgColor: pickColor(LIGHT_BACKGROUNDS, str(fd, "lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
+    lightCardColor: pickColor(LIGHT_CONTAINERS, str(fd, "lightCardColor"), site.config.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    lightTextColor: pickColor(
+      LIGHT_TEXT_COLORS,
+      str(fd, "lightTextColor"),
+      site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR
+    ),
   };
 
   // Background image: an upload wins, then a client-generated random SVG,
@@ -547,7 +670,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
 
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/builder");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   // The tab icon is served from the page's metadata, so both public routes
   // need re-rendering, not just the section content.
   revalidatePath("/domain", "layout");
@@ -628,7 +751,7 @@ export async function changePlan(fd: FormData): Promise<void> {
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/integrations");
   revalidatePath("/dashboard/builder");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /** Restart checkout for a site whose subscription never started or lapsed. */
@@ -677,7 +800,7 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   if (plan.newsletter) config.newsletterEnabled = fd.get("newsletterEnabled") === "on";
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return {};
 }
 
@@ -700,7 +823,7 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   if (!body) return { error: "Write a message first." };
 
   store.addChatMessage(siteId, author, body);
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   revalidatePath("/dashboard/chatroom");
   return { ok: true };
 }
@@ -712,7 +835,7 @@ export async function deleteChatMessageAction(fd: FormData): Promise<void> {
   if (!message || message.siteId !== site.id) return;
   store.deleteChatMessage(id);
   revalidatePath("/dashboard/chatroom");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 export async function toggleChatroom(): Promise<void> {
@@ -723,7 +846,7 @@ export async function toggleChatroom(): Promise<void> {
   });
   revalidatePath("/dashboard/chatroom");
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- audience ---------------- */
@@ -932,7 +1055,7 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
     },
   });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return { ok: true };
 }
 
@@ -959,7 +1082,7 @@ export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState
   }
 
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return { ok: true };
 }
 
@@ -967,7 +1090,7 @@ export async function endLive(): Promise<void> {
   const { site } = await requireSite();
   store.updateSite(site.id, { config: { ...site.config, liveNow: false } });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- support ---------------- */

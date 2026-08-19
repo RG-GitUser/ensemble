@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getLeads, getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
+import { getLeads, getSiteByUser, getSocialAccounts } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
 import { LockedOverlay } from "@/components/LockedOverlay";
@@ -44,7 +44,6 @@ export default async function IntegrationsPage({
           const social = (
             <SocialIntegrations
               accounts={getSocialAccounts(site.id)}
-              posts={getSocialPosts(site.id)}
               twitchChannel={site.config.twitchChannel ?? ""}
               facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
               instagramLiveUser={site.config.instagramLiveUser ?? ""}

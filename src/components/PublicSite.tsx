@@ -4,9 +4,10 @@ import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
-import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, DEFAULT_SIZE, FULL_WIDTH_TYPES, getLayout } from "@/lib/theme";
-import { themeCss } from "@/lib/themes";
+import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
+import { borderVars, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout } from "@/lib/theme";
+import { backdropCss, themeCss } from "@/lib/themes";
+import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import type { PlanDef } from "@/lib/plans";
@@ -349,7 +350,7 @@ function SectionView({
 }
 
 /**
- * Full public rendering of a creator page — shared by /s/[slug] and custom
+ * Full public rendering of a creator page — shared by /[slug] and custom
  * domains (/domain/[host]). Owner links and the "Powered by" link use APP_URL
  * so they point back at the platform even when served on a customer domain.
  */
@@ -389,45 +390,128 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : refHost);
   }
 
-  // Backdrop precedence: a chosen theme preset (config.themeId) styles the
-  // whole page; otherwise the custom layers apply — accent glow (unless
-  // switched off) → uploaded/generated image → base color. Either way it's
-  // rendered on a fixed, viewport-sized underlay: `cover` on the page element
-  // itself would scale images to the FULL page height, magnifying them into
-  // an invisible wash on long pages.
+  // One composed stack — accent glow, the creator's image, the preset's own
+  // layers, their base colour — so a preset is a starting point rather than a
+  // mode that switches the other controls off. Rendered on a fixed,
+  // viewport-sized underlay: `cover` on the page element itself would scale
+  // images to the FULL page height, magnifying them into an invisible wash on
+  // long pages.
   const cfg = site.config;
-  const preset = themeCss(cfg.themeId, cfg.themeColor);
-  const bgLayers = [
-    ...(cfg.gradient !== false ? [`radial-gradient(800px 400px at 50% -10%, ${cfg.themeColor}33, transparent 70%)`] : []),
-    ...(cfg.bgImage ? [`url("${cfg.bgImage}") center / cover no-repeat`] : []),
-    cfg.bgColor ?? "#0a0812",
-  ];
-  const underlay: React.CSSProperties = preset ?? { background: bgLayers.join(", ") };
-  const cardBg = `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${cfg.cardColor ?? "rgba(255,255,255,0.05)"}`;
+  const mode = getColorMode(cfg.colorMode);
+  const glow = cfg.gradient !== false;
+  const card = (color: string) =>
+    `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${color}`;
+
+  // Both palettes are always computed; which one the visitor sees is decided
+  // by the stylesheet below, not here.
+  const darkPalette = {
+    backdrop: backdropCss({
+      themeId: cfg.themeId,
+      accent: cfg.themeColor,
+      bgColor: cfg.bgColor ?? "#0a0812",
+      bgImage: cfg.bgImage,
+      glow,
+    }),
+    card: card(cfg.cardColor ?? "rgba(255,255,255,0.05)"),
+    ink: cfg.textColor || DEFAULT_TEXT_COLOR,
+    edges: false,
+  };
+  const lightPalette = {
+    backdrop: backdropCss({
+      // Falls back to the dark preset, so a creator who picked a backdrop and
+      // then switched light mode on gets that backdrop rather than nothing.
+      themeId: cfg.lightThemeId ?? cfg.themeId,
+      accent: cfg.themeColor,
+      bgColor: cfg.lightBgColor ?? DEFAULT_LIGHT_BG,
+      bgImage: cfg.bgImage,
+      glow,
+    }),
+    card: card(cfg.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    ink: cfg.lightTextColor || DEFAULT_LIGHT_TEXT_COLOR,
+    edges: true,
+  };
+
+  const border = borderVars(cfg.borderStyle, cfg.themeColor);
+  // Widths and shadow don't change with the mode, so they stay inline. The
+  // colours do, and an inline custom property beats every selector — so they
+  // have to live in the stylesheet or the light rules could never win.
+  const { "--site-border-color": edge, "--site-border-left-color": edgeLeft, "--site-border-hover": edgeHover, ...borderShape } = border;
+
+  const paletteVars = (p: typeof darkPalette) =>
+    [
+      [`--site-bd-color`, p.backdrop.backgroundColor],
+      [`--site-bd-image`, p.backdrop.backgroundImage ?? "none"],
+      [`--site-bd-size`, p.backdrop.backgroundSize ?? "auto"],
+      [`--site-bd-pos`, p.backdrop.backgroundPosition ?? "0% 0%"],
+      [`--site-bd-repeat`, p.backdrop.backgroundRepeat ?? "repeat"],
+      [`--site-card`, p.card],
+      [`--site-ink`, p.ink],
+      [`--site-border-color`, p.edges ? edgeForLight(edge) : edge],
+      [`--site-border-left-color`, p.edges ? edgeForLight(edgeLeft) : edgeLeft],
+      [`--site-border-hover`, p.edges ? edgeForLight(edgeHover) : edgeHover],
+    ]
+      .map(([k, v]) => `${k}:${v}`)
+      .join(";");
+
+  // "light" is a single look, so it is simply the base rule. "auto" ships the
+  // dark palette as the base and switches on either the visitor's explicit
+  // choice or, with no JavaScript at all, their device preference.
+  const base = mode === "light" ? lightPalette : darkPalette;
+  const modeCss = [
+    `.site-root{${paletteVars(base)}}`,
+    ...(mode === "auto"
+      ? [
+          `.site-root[data-site-mode="light"]{${paletteVars(lightPalette)}}`,
+          `@media (prefers-color-scheme: light){.site-root[data-site-mode="auto"]{${paletteVars(lightPalette)}}}`,
+        ]
+      : []),
+  ].join("");
+
+  const underlay: React.CSSProperties = {
+    backgroundColor: "var(--site-bd-color)",
+    backgroundImage: "var(--site-bd-image, none)",
+    backgroundSize: "var(--site-bd-size, auto)",
+    backgroundPosition: "var(--site-bd-pos, 0% 0%)",
+    backgroundRepeat: "var(--site-bd-repeat, repeat)",
+  };
 
   const layout = getLayout(cfg.layout);
 
   return (
     <div
-      className="site-ink relative isolate flex-1"
+      className="site-root site-ink relative isolate flex-1"
+      data-site-mode={mode === "auto" ? "auto" : mode}
       style={
         {
           "--site-accent": cfg.themeColor,
-          "--site-card": cardBg,
           // Container width and border style: the .site-w-* / .site-card rules
           // in globals.css read these, so one declaration here restyles every
-          // section on the page.
+          // section on the page. Colours are in the stylesheet above instead,
+          // because they change with the light/dark mode.
           "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
-          // Type: one family, one ink, and a base size every text size on the
-          // page is expressed as a multiple of (see the em values above), so
-          // the scale moves the headline and the fine print together.
-          "--site-ink": cfg.textColor || DEFAULT_TEXT_COLOR,
+          // Type: one family and a base size every text size on the page is
+          // expressed as a multiple of (see the em values above), so the scale
+          // moves the headline and the fine print together.
           fontFamily: getFont(cfg.fontId).family,
           fontSize: `calc(1rem * ${cfg.fontScale || DEFAULT_TEXT_SIZE})`,
-          ...borderVars(cfg.borderStyle, cfg.themeColor),
+          ...borderShape,
         } as React.CSSProperties
       }
     >
+      <style dangerouslySetInnerHTML={{ __html: modeCss }} />
+      {/* Runs before paint so a remembered choice doesn't flash the other
+          palette first. Visitors who've chosen nothing keep the server-rendered
+          "auto", which the media query already resolved. */}
+      {mode === "auto" && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var m=localStorage.getItem('ensemble-site-mode');" +
+              "if(m==='light'||m==='dark'){document.currentScript.parentElement.dataset.siteMode=m}}catch(e){}})()",
+          }}
+        />
+      )}
+      {mode === "auto" && <SiteModeToggle />}
       <div aria-hidden className="fixed inset-0 -z-10" style={underlay} />
       {/* Platform chrome, not the creator's page — fixed size and colour so it
           doesn't ride the creator's type scale. */}

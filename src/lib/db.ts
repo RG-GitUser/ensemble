@@ -222,7 +222,7 @@ function newEmbedToken(): string {
 // demo account can never be logged into.
 const DEMO_LOCKED_HASH = "0".repeat(32) + ":" + "0".repeat(128);
 
-/** Seed the public example page at /s/demo (idempotent). */
+/** Seed the public example page at /demo (idempotent). */
 function seedDemo(d: Database.Database): void {
   if (d.prepare("SELECT id FROM sites WHERE slug = 'demo'").get()) return;
 
@@ -526,6 +526,15 @@ export function getUserByEmail(email: string): (User & { passwordHash: string })
 export function getUserById(id: number): User | null {
   const r = db().prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
   return r ? toUser(r) : null;
+}
+
+/** Profile edits — identity only; email and password are changed elsewhere. */
+export function updateUser(id: number, fields: { name?: string; businessName?: string }): void {
+  const user = getUserById(id);
+  if (!user) return;
+  db()
+    .prepare("UPDATE users SET name = ?, business_name = ? WHERE id = ?")
+    .run(fields.name ?? user.name, fields.businessName ?? user.businessName, id);
 }
 
 export function createSession(token: string, userId: number, expiresAt: number): void {

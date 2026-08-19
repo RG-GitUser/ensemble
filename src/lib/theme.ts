@@ -46,6 +46,62 @@ export const CONTAINERS: Swatch[] = [
 ];
 
 /**
+ * Light-mode counterparts to BACKGROUNDS and CONTAINERS. A creator page is
+ * dark by default, so these only come into play once light or visitor-choice
+ * is switched on — but when they do, the same picker UI drives them.
+ */
+export const LIGHT_BACKGROUNDS: Swatch[] = [
+  { id: "paper", label: "Paper", value: "#faf9fc" },
+  { id: "bone", label: "Bone", value: "#f5f3ee" },
+  { id: "mist", label: "Mist", value: "#eef2f7" },
+  { id: "sky", label: "Sky", value: "#eef4fb" },
+  { id: "sage", label: "Sage", value: "#eef5ef" },
+  { id: "linen", label: "Linen", value: "#faf4ec" },
+  { id: "blush", label: "Blush", value: "#fbf0f4" },
+  { id: "lilac", label: "Lilac", value: "#f4f0fb" },
+];
+
+export const LIGHT_CONTAINERS: Swatch[] = [
+  { id: "white", label: "White", value: "rgba(255,255,255,0.72)" },
+  { id: "solid", label: "Solid white", value: "#ffffff" },
+  { id: "tint", label: "Tint", value: "rgba(0,0,0,0.04)" },
+  { id: "shell", label: "Shell", value: "#f3f1ee" },
+  { id: "haze", label: "Haze", value: "#eef1f6" },
+  { id: "cloud", label: "Cloud", value: "#eff4f1" },
+];
+
+/** How many named looks a creator can keep. */
+export const MAX_LOOKS = 8;
+
+export type ColorMode = "dark" | "light" | "auto";
+
+export const COLOR_MODES: Array<{ id: ColorMode; name: string; hint: string }> = [
+  { id: "dark", name: "Dark only", hint: "One look, the one you design below." },
+  { id: "light", name: "Light only", hint: "One look, built from your light colors." },
+  { id: "auto", name: "Visitor's choice", hint: "Follows their device, with a switch on your page." },
+];
+
+export const DEFAULT_COLOR_MODE: ColorMode = "dark";
+export const DEFAULT_LIGHT_BG = LIGHT_BACKGROUNDS[0].value;
+export const DEFAULT_LIGHT_CARD = LIGHT_CONTAINERS[0].value;
+
+export function getColorMode(id: string | undefined | null): ColorMode {
+  return COLOR_MODES.some((m) => m.id === id) ? (id as ColorMode) : DEFAULT_COLOR_MODE;
+}
+
+/**
+ * Container edges are authored for a dark page, so most of them are white at
+ * a low alpha — which is invisible on a light one. Flipping white to black
+ * keeps the creator's chosen weight and leaves accent-coloured edges alone.
+ */
+export function edgeForLight(color: string): string {
+  return color
+    .replace(/rgba\(\s*255\s*,\s*255\s*,\s*255\s*,/gi, "rgba(0, 0, 0,")
+    .replace(/#ffffff([0-9a-f]{2})/gi, "#000000$1")
+    .replace(/^#ffffff$/i, "#000000");
+}
+
+/**
  * How wide the containers on a creator page run. The value multiplies every
  * section's base width, so the page keeps its own proportions — a links list
  * stays narrower than a merch grid at any setting.

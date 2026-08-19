@@ -38,6 +38,16 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
+  /**
+   * Whether the public page offers light, dark, or lets the visitor choose.
+   * Absent = "dark", so every page that predates this setting is untouched.
+   */
+  colorMode?: "dark" | "light" | "auto";
+  /** Light-mode counterparts. Each falls back to a shipped light default. */
+  lightBgColor?: string;
+  lightCardColor?: string;
+  lightTextColor?: string;
+  lightThemeId?: string;
   stripeKey?: string;
   /** Creator's own Stripe key for the Finance tab (restricted key advised). */
   financeStripeKey?: string;
@@ -56,6 +66,41 @@ export interface SiteConfig {
   instagramStreamKey?: string;
   /** Creator hit Go Live — the Live section shows the on-air state. */
   liveNow?: boolean;
+  /** Named design snapshots the creator can switch between. */
+  looks?: SavedLook[];
+}
+
+/**
+ * The slice of SiteConfig the Design tab owns. A saved look stores exactly
+ * this and nothing else, so applying one can never disturb sections,
+ * integrations or billing.
+ */
+export type DesignConfig = Pick<
+  SiteConfig,
+  | "themeColor"
+  | "bgColor"
+  | "cardColor"
+  | "containerSize"
+  | "borderStyle"
+  | "bgImage"
+  | "cardImage"
+  | "gradient"
+  | "themeId"
+  | "fontId"
+  | "fontScale"
+  | "textColor"
+  | "layout"
+  | "colorMode"
+  | "lightBgColor"
+  | "lightCardColor"
+  | "lightTextColor"
+  | "lightThemeId"
+>;
+
+export interface SavedLook {
+  id: string;
+  name: string;
+  design: DesignConfig;
 }
 
 export interface Site {

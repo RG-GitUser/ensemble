@@ -12,7 +12,7 @@ export function SettingsForm({ slug, tagline }: { slug: string; tagline: string 
       <div>
         <label className="label" htmlFor="slug">Page URL</label>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-mist">/s/</span>
+          <span className="text-sm text-mist">/</span>
           <input className="field font-mono" id="slug" name="slug" defaultValue={slug} required />
         </div>
       </div>

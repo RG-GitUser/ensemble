@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { countLeads, countSections, getSiteBySlug, getUserById } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 
-const NAV = ["Overview", "Page Builder", "My Website", "Analytics", "Audience", "Chatroom", "Integrations", "Support", "Settings"];
+const NAV = ["Overview", "Socials", "Page Builder", "My Website", "Analytics", "Audience", "Chatroom", "Integrations", "Support", "Settings", "Profile"];
 
 /** Public, read-only tour of the dashboard using the seeded demo creator. */
 export default function DemoDashboardPage() {
@@ -62,13 +62,13 @@ export default function DemoDashboardPage() {
                 <div>
                   <h2 className="font-bold">Your page</h2>
                   <p className="mt-1 text-sm text-mist">
-                    ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
+                    ensemble / <span className="font-mono text-snow">{site.slug}</span>
                   </p>
                 </div>
                 <span className="rounded-full bg-good/15 px-3 py-1 text-xs font-semibold text-good">● Live</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href={`/s/${site.slug}`} className="btn-primary !py-2 text-sm" target="_blank">
+                <Link href={`/${site.slug}`} className="btn-primary !py-2 text-sm" target="_blank">
                   View the live page ↗
                 </Link>
                 <Link href="/signup" className="btn-ghost !py-2 text-sm">

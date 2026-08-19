@@ -28,7 +28,7 @@ export function FreeAddressCard({
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateSettings, {});
   const [draft, setDraft] = useState(slug);
   const [copied, setCopied] = useState(false);
-  const url = `${origin}/s/${slug}`;
+  const url = `${origin}/${slug}`;
   const pretty = url.replace(/^https?:\/\//, "");
 
   return (
@@ -71,7 +71,7 @@ export function FreeAddressCard({
       <form action={formAction} className="space-y-2">
         <label className="label" htmlFor="free-slug">Choose your address</label>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm text-mist">{origin.replace(/^https?:\/\//, "")}/s/</span>
+          <span className="font-mono text-sm text-mist">{origin.replace(/^https?:\/\//, "")}/</span>
           <input
             id="free-slug"
             name="slug"

@@ -445,3 +445,117 @@ export function themeCss(id: string | undefined | null, accent: string): CSSProp
   if (t.repeat) css.backgroundRepeat = t.repeat;
   return css;
 }
+
+/**
+ * Split a CSS list on its top-level commas only — the commas inside
+ * `radial-gradient(...)` or a `url("data:...")` are part of a single layer.
+ */
+function splitLayers(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote = "";
+  let cur = "";
+  for (const ch of value) {
+    if (quote) {
+      cur += ch;
+      if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      out.push(cur.trim());
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+/**
+ * Materialize a background-size/position/repeat list to exactly `n` entries,
+ * the way CSS itself does it: a shorter list repeats, an absent one is the
+ * property's initial value.
+ */
+function padList(value: string | undefined, n: number, initial: string): string[] {
+  const parts = value ? splitLayers(value) : [];
+  if (parts.length === 0) return Array.from({ length: n }, () => initial);
+  return Array.from({ length: n }, (_, i) => parts[i % parts.length]);
+}
+
+/** "ACCENT" / "ACCENT55" → the site accent, with the alpha suffix kept. */
+function withAccent(image: string, accent: string): string {
+  return image.replace(/ACCENT([0-9a-f]{2})/g, `${accent}$1`).replace(/ACCENT/g, accent);
+}
+
+export interface BackdropOpts {
+  /** Preset id, or "" / null for none. */
+  themeId?: string | null;
+  accent: string;
+  /** The creator's own base colour — always the bottom of the stack. */
+  bgColor: string;
+  /** Uploaded or generated image. */
+  bgImage?: string | null;
+  /** Accent glow at the top of the page (default on). */
+  glow?: boolean;
+  /** Glow geometry — the page uses pixels, the small preview percentages. */
+  glowSize?: string;
+}
+
+/**
+ * The whole page backdrop as one declaration.
+ *
+ * Layers, top to bottom: accent glow → the creator's image → the preset's own
+ * layers → their base colour. A preset is one layer in that stack rather than
+ * a mode, which is what lets the colour, image and glow controls keep working
+ * while a preset is picked.
+ *
+ * background-size / -position / -repeat are comma lists matched positionally
+ * to the layers, so anything prepended here has to prepend to all three as
+ * well — most of the textured presets set them, and a shift would land their
+ * values on the wrong layer.
+ */
+export function backdropCss(opts: BackdropOpts): CSSProperties {
+  const layers: string[] = [];
+  const sizes: string[] = [];
+  const positions: string[] = [];
+  const repeats: string[] = [];
+
+  const push = (image: string, size = "auto", position = "0% 0%", repeat = "no-repeat") => {
+    layers.push(image);
+    sizes.push(size);
+    positions.push(position);
+    repeats.push(repeat);
+  };
+
+  if (opts.glow !== false) {
+    push(`radial-gradient(${opts.glowSize ?? "800px 400px"} at 50% -10%, ${opts.accent}33, transparent 70%)`);
+  }
+  if (opts.bgImage) push(`url("${opts.bgImage}")`, "cover", "center");
+
+  const t = getThemeDef(opts.themeId);
+  if (t) {
+    const image = withAccent(t.image, opts.accent);
+    const n = splitLayers(image).length;
+    layers.push(image);
+    sizes.push(...padList(t.size, n, "auto"));
+    positions.push(...padList(t.position, n, "0% 0%"));
+    repeats.push(...padList(t.repeat, n, "repeat"));
+  }
+
+  const css: CSSProperties = { backgroundColor: opts.bgColor };
+  if (layers.length) {
+    css.backgroundImage = layers.join(", ");
+    css.backgroundSize = sizes.join(", ");
+    css.backgroundPosition = positions.join(", ");
+    css.backgroundRepeat = repeats.join(", ");
+  }
+  return css;
+}

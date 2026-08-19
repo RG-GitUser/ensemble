@@ -73,7 +73,7 @@ export default async function Home() {
               tour a live demo dashboard ↗
             </Link>
             <Link
-              href="/s/demo"
+              href="/demo"
               className="font-medium text-mist underline underline-offset-4 transition hover:text-snow"
             >
               see a live example page ↗
@@ -102,7 +102,7 @@ export default async function Home() {
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <Link href="/signup" className="btn-primary">Build my page</Link>
-              <Link href="/s/demo" className="text-sm font-semibold text-brand hover:underline">
+              <Link href="/demo" className="text-sm font-semibold text-brand hover:underline">
                 See an example ↗
               </Link>
               <Link href="/demo/dashboard" className="text-sm font-semibold text-brand hover:underline">

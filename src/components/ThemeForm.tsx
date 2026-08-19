@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { updateTheme, type FormState } from "@/lib/actions";
+import { deleteLookAction, saveLookAction, updateTheme, type FormState } from "@/lib/actions";
+import type { SavedLook } from "@/lib/types";
 import {
   ACCENTS,
   BACKGROUNDS,
@@ -9,15 +10,21 @@ import {
   borderCss,
   CONTAINER_SIZES,
   CONTAINERS,
+  COLOR_MODES,
+  type ColorMode,
   DEFAULT_BORDER,
   DEFAULT_SIZE,
+  edgeForLight,
   isLight,
   LAYOUTS,
+  LIGHT_BACKGROUNDS,
+  LIGHT_CONTAINERS,
+  MAX_LOOKS,
   normalizeHex,
   type Swatch,
 } from "@/lib/theme";
-import { BRIGHT_GROUP, getThemeDef, THEME_GROUPS, THEMES, themeCss } from "@/lib/themes";
-import { FONTS, getFont, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
+import { backdropCss, BRIGHT_GROUP, getThemeDef, THEME_GROUPS, THEMES, themeCss } from "@/lib/themes";
+import { FONTS, getFont, LIGHT_TEXT_COLORS, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
 import { CloseIcon, ShuffleIcon } from "@/components/icons";
 
 /** One titled block of related controls — the Design tab is a stack of these. */
@@ -515,6 +522,13 @@ export function ThemeForm({
   fontScale: fontScaleProp,
   textColor: textColorProp,
   layout: layoutProp,
+  colorMode: colorModeProp,
+  lightBgColor,
+  lightCardColor,
+  lightTextColor,
+  lightThemeId: lightThemeIdProp,
+  looks,
+  slug,
 }: {
   themeColor: string;
   bgColor: string;
@@ -538,6 +552,17 @@ export function ThemeForm({
   textColor: string;
   /** Section arrangement (LAYOUTS id). */
   layout: string;
+  /** Whether the page is dark, light, or the visitor's choice. */
+  colorMode: ColorMode;
+  lightBgColor: string;
+  lightCardColor: string;
+  lightTextColor: string;
+  /** Preset backdrop used in light mode ("" = follow the dark one). */
+  lightThemeId: string;
+  /** Named design snapshots saved on this site. */
+  looks: SavedLook[];
+  /** Page slug, for the link out to the real page. */
+  slug: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateTheme, {});
   const [accent, setAccent] = useState(themeColor);
@@ -551,6 +576,15 @@ export function ThemeForm({
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
+  const [colorMode, setColorMode] = useState<ColorMode>(colorModeProp);
+  const [lightBg, setLightBg] = useState(lightBgColor);
+  const [lightCard, setLightCard] = useState(lightCardColor);
+  const [lightInk, setLightInk] = useState(lightTextColor);
+  const [lightThemeId, setLightThemeId] = useState(lightThemeIdProp);
+  /** Which palette the preview is showing — editing aid only, never saved. */
+  const [previewMode, setPreviewMode] = useState<"dark" | "light">("dark");
+  const [lookName, setLookName] = useState("");
+  const [lookState, lookAction, lookPending] = useActionState<FormState, FormData>(saveLookAction, {});
   /** What the preview shows: saved URL, object URL of a picked file, or a generated data URI. */
   const [bgImg, setBgImg] = useState<string>(bgImage);
   const [cardImg, setCardImg] = useState<string>(cardImage);
@@ -590,8 +624,8 @@ export function ThemeForm({
     setBgSvg(svg);
     setBgImg(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
     setClearBg(false);
-    // Rolling a custom backdrop implies leaving any preset.
-    setThemeId("");
+    // The preset stays: a rolled SVG layers over it, which is usually the more
+    // interesting result and is one click to undo either way.
     if (bgFileRef.current) bgFileRef.current.value = "";
   }
 
@@ -599,6 +633,8 @@ export function ThemeForm({
   function rollAll() {
     const newAccent = randomOf(ACCENTS).value;
     setAccent(newAccent);
+    // "Roll everything" includes the preset — and sometimes rolls it off.
+    setThemeId(randomOf([...THEMES, { id: "" }]).id);
     setBg(randomOf(BACKGROUNDS).value);
     setCard(randomOf(CONTAINERS).value);
     setSize(randomOf(CONTAINER_SIZES).value);
@@ -619,11 +655,9 @@ export function ThemeForm({
     setBgImg("");
     setBgSvg("");
     setClearBg(true);
-    // Leaving any preset is part of it. A preset owns the whole backdrop, so
-    // typing a color while one is running would otherwise change nothing at
-    // all — the clearest possible reading of "use this color" is that the
-    // preset is no longer wanted.
-    setThemeId("");
+    // The preset stays put. It no longer owns the backdrop, so the typed color
+    // takes effect underneath it — and dropping someone's preset because they
+    // reached for the color picker would be the surprising move now.
     if (bgFileRef.current) bgFileRef.current.value = "";
   }
 
@@ -647,12 +681,81 @@ export function ThemeForm({
   // viewport, so a fixed 280x150 in a 24rem preview column was both the wrong
   // proportion and mostly clipped above the box — switching the overlay on
   // and off changed almost nothing you could see.
-  const previewBg =
-    `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}33, transparent 70%), ` : ""}` +
-    `${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`;
-  const previewCard = `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${card}`;
-  // An active preset owns the backdrop — in the preview and on the page.
-  const previewStyle = themeCss(themeId, accent) ?? { background: previewBg };
+  // Exactly what the page will render — same helper, only the glow geometry
+  // differs, because 800x400px in a 24rem column is the wrong proportion and
+  // mostly clipped above the box.
+  // The preview renders whichever palette is being looked at, so the light
+  // one is designed against the real thing rather than imagined.
+  const lit = previewMode === "light" && colorMode !== "dark";
+  const previewStyle = backdropCss({
+    themeId: lit ? lightThemeId || themeId : themeId,
+    accent,
+    bgColor: lit ? lightBg : bg,
+    bgImage: bgImg,
+    glow: gradient,
+    glowSize: "62% 44%",
+  });
+  /** Everything the Design tab owns, exactly as it stands right now. */
+  const currentDesign = {
+    themeColor: accent,
+    bgColor: bg,
+    cardColor: card,
+    containerSize: size,
+    borderStyle: border,
+    bgImage: bgImg,
+    cardImage: cardImg,
+    gradient,
+    themeId,
+    fontId,
+    fontScale: scale,
+    textColor: ink,
+    layout,
+    colorMode,
+    lightBgColor: lightBg,
+    lightCardColor: lightCard,
+    lightTextColor: lightInk,
+    lightThemeId,
+  };
+
+  /** Load a saved look into the form. Nothing is written until Save. */
+  function applyLook(l: SavedLook) {
+    const d = l.design;
+    if (d.themeColor) setAccent(d.themeColor);
+    if (d.bgColor) setBg(d.bgColor);
+    if (d.cardColor) setCard(d.cardColor);
+    if (d.containerSize) setSize(d.containerSize);
+    if (d.borderStyle) setBorder(d.borderStyle);
+    if (d.fontId !== undefined) setFontId(d.fontId);
+    if (d.fontScale) setScale(d.fontScale);
+    if (d.textColor) setInk(d.textColor);
+    if (d.layout) setLayout(d.layout);
+    if (d.colorMode) setColorMode(d.colorMode);
+    if (d.lightBgColor) setLightBg(d.lightBgColor);
+    if (d.lightCardColor) setLightCard(d.lightCardColor);
+    if (d.lightTextColor) setLightInk(d.lightTextColor);
+    setThemeId(d.themeId ?? "");
+    setLightThemeId(d.lightThemeId ?? "");
+    setGradient(d.gradient !== false);
+    // Images are files on the site, not part of the palette — a look only
+    // restores one if it's still the image the site has.
+    setBgImg(d.bgImage ?? "");
+    setClearBg(!d.bgImage);
+    setBgSvg("");
+  }
+
+  const previewInk = lit ? lightInk : ink;
+  const previewCardStyle = {
+    background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${lit ? lightCard : card}`,
+    ...borderCss(border, accent),
+    // Container edges are authored for a dark page — the public page flips
+    // them for light mode, so the preview has to as well.
+    ...(lit
+      ? {
+          borderColor: edgeForLight(borderCss(border, accent).borderColor as string),
+          borderLeftColor: edgeForLight(borderCss(border, accent).borderLeftColor as string),
+        }
+      : {}),
+  };
   /** Thumbnail for the "Custom" preset tile — reflects the current custom picks. */
   const customTileStyle = {
     backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}55, transparent 70%), ` : ""}${
@@ -663,13 +766,12 @@ export function ThemeForm({
   /** The preview card apes the chosen width against the widest option. */
   const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
   const previewCardWidth = `${(Number(size) / widest) * 100}%`;
-  /** Presets own the backdrop, so the custom backdrop controls go quiet. */
-  const backdropOff = themeId ? "pointer-events-none select-none opacity-40" : "";
   /** What the text actually sits on, so the ink can be checked against it. */
   const backdropBase = (themeId ? getThemeDef(themeId)?.color : bg) || bg;
 
   return (
-    <form action={formAction} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+    <>
+      <form action={formAction} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
       <input type="hidden" name="themeColor" value={accent} />
       <input type="hidden" name="bgColor" value={bg} />
       <input type="hidden" name="cardColor" value={card} />
@@ -680,12 +782,87 @@ export function ThemeForm({
       <input type="hidden" name="fontScale" value={scale} />
       <input type="hidden" name="textColor" value={ink} />
       <input type="hidden" name="layout" value={layout} />
+      <input type="hidden" name="colorMode" value={colorMode} />
+      <input type="hidden" name="lightBgColor" value={lightBg} />
+      <input type="hidden" name="lightCardColor" value={lightCard} />
+      <input type="hidden" name="lightTextColor" value={lightInk} />
+      <input type="hidden" name="lightThemeId" value={lightThemeId} />
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
       <input type="hidden" name="clearFavicon" value={clearIcon ? "1" : ""} />
 
       <div className="space-y-5">
+        {/* 0 — Looks you've already built. Its controls belong to the sibling
+            form below, wired up by id so they can sit here without nesting. */}
+        <Group
+          title="Saved looks"
+          hint="Keep a design you like and come back to it. Applying one loads it into this tab — nothing changes on your page until you save."
+        >
+          {looks.length === 0 ? (
+            <p className="text-xs text-mist/70">
+              Nothing saved yet. Design something below, name it, and it&apos;ll be one click away.
+            </p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {looks.map((l) => (
+                <li key={l.id} className="flex items-center gap-2 rounded-xl border border-edge bg-panel2 p-2">
+                  <span
+                    aria-hidden
+                    className="h-9 w-12 shrink-0 rounded-lg border border-white/15"
+                    style={backdropCss({
+                      themeId: l.design.themeId,
+                      accent: l.design.themeColor ?? accent,
+                      bgColor: l.design.bgColor ?? bg,
+                      glow: l.design.gradient !== false,
+                      glowSize: "80% 60%",
+                    })}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{l.name}</span>
+                  <button type="button" onClick={() => applyLook(l)} className="btn-ghost !px-2.5 !py-1 text-xs">
+                    Apply
+                  </button>
+                  <button
+                    type="submit"
+                    form="look-delete"
+                    name="lookId"
+                    value={l.id}
+                    className="text-xs font-semibold text-mist transition hover:text-brand2"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              form="look-save"
+              name="lookName"
+              value={lookName}
+              onChange={(e) => setLookName(e.target.value)}
+              maxLength={40}
+              placeholder="Name this look — e.g. Summer tour"
+              className="field flex-1 !py-2 text-sm"
+            />
+            {/* Carries the on-screen design across to the other form. */}
+            <input form="look-save" type="hidden" name="lookDesign" value={JSON.stringify(currentDesign)} />
+            <button
+              form="look-save"
+              className="btn-ghost !py-2 text-sm"
+              disabled={lookPending || !lookName.trim() || (looks.length >= MAX_LOOKS && !looks.some((l) => l.name.toLowerCase() === lookName.trim().toLowerCase()))}
+            >
+              {lookPending ? "Saving…" : "Save current look"}
+            </button>
+            <span className="text-xs text-mist/60">
+              {looks.length}/{MAX_LOOKS}
+            </span>
+          </div>
+          {lookState.error && <p className="text-xs text-brand2">{lookState.error}</p>}
+          {lookState.ok && <p className="text-xs font-semibold text-good">Look saved.</p>}
+        </Group>
+
         {/* 1 — What sits behind everything. */}
         <Group title="Backdrop" hint="The canvas your whole page sits on. Start from a preset or build your own.">
           <div>
@@ -731,34 +908,33 @@ export function ThemeForm({
             ))}
           </div>
 
-          {/* The single easiest thing to get wrong here: picking a background
-              colour while a preset is running, and seeing nothing change on
-              the live page. Say so in warning colours, with the fix attached. */}
+          {/* A preset is now just the bottom layer of the stack, so this is a
+              status line rather than a warning: what's underneath, and one
+              click to drop it. */}
           {themeId ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge bg-panel2 px-4 py-3">
               <span
                 aria-hidden
                 className="h-9 w-14 shrink-0 rounded-lg border border-white/15"
                 style={themeCss(themeId, accent) ?? undefined}
               />
               <p className="min-w-0 flex-1 text-xs text-mist">
-                The <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span> preset
-                is painting your whole backdrop, including any glow of its own. The background color, image and overlay
-                below do <span className="font-semibold text-snow">nothing</span> while it&apos;s on — your container,
-                accent and type choices still apply.
+                Starting from <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span>
+                . Everything below still applies on top of it — your background color sits underneath, and your image and
+                overlay layer over it.
               </p>
               <button type="button" onClick={() => setThemeId("")} className="btn-ghost shrink-0 !px-3 !py-1.5 text-xs">
-                Turn the preset off
+                Remove preset
               </button>
             </div>
           ) : null}
 
-          <div className={backdropOff}>
+          <div>
             <SwatchRow
               label="Background color"
               hint={
                 themeId
-                  ? "Off while a preset is painting the backdrop."
+                  ? "Sits underneath the preset — it shows through wherever the preset is translucent."
                   : "Paste a hex and your page is exactly that color — no overlay, no image. Add either back below."
               }
               swatches={BACKGROUNDS}
@@ -769,11 +945,11 @@ export function ThemeForm({
             />
           </div>
 
-          <div className={backdropOff}>
+          <div>
             <span className="label !mb-0">Background image</span>
             <p className="mt-0.5 text-xs text-mist/70">
               {themeId
-                ? "Off while a preset is painting the backdrop."
+                ? "Optional — layers over the preset. Upload your own SVG or image, or roll a random abstract SVG in your colors."
                 : "Optional — sits on top of your background color. Upload your own SVG or image, or roll a random abstract SVG in your colors."}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -821,7 +997,7 @@ export function ThemeForm({
               choice between the flat color and the color with a wash over it.
               Typing your own color turns it off, because "my color" means
               that color — this row is how you put it back. */}
-          <div className={backdropOff}>
+          <div>
             <span className="label !mb-0">Overlay</span>
             <p className="mt-0.5 text-xs text-mist/70">
               An optional wash of your accent color over the top of your background.
@@ -877,6 +1053,105 @@ export function ThemeForm({
           </div>
           {/* The form still submits the same field the action reads. */}
           <input type="hidden" name="gradient" value={gradient ? "on" : ""} />
+        </Group>
+
+        {/* 1b — Whether the page has a second palette at all. */}
+        <Group
+          title="Light & dark"
+          hint="Your page is dark by default. Offer a light version too, or let visitors pick."
+        >
+          <div>
+            <span className="label !mb-0">Mode</span>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {COLOR_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setColorMode(m.id);
+                    // Nothing to preview in the other palette when there isn't one.
+                    if (m.id === "dark") setPreviewMode("dark");
+                    if (m.id === "light") setPreviewMode("light");
+                  }}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                    colorMode === m.id ? "border-brand bg-brand/10" : "border-edge bg-panel2 hover:border-brand/40"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{m.name}</span>
+                  <span className="mt-0.5 block text-xs text-mist">{m.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {colorMode === "dark" ? (
+            <p className="text-xs text-mist/70">
+              Everything else on this tab is your dark look. Switch to light or visitor&apos;s choice to design a second
+              palette.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-mist/70">
+                {colorMode === "auto"
+                  ? "Visitors get whichever matches their device, and a switch in the corner of your page to change it. Your accent, type, layout and container shape are shared — only these colors differ."
+                  : "Your page uses these colors instead of the dark ones above. Accent, type, layout and container shape are shared."}
+              </p>
+              <SwatchRow
+                label="Light background"
+                hint="The base color under everything in light mode."
+                swatches={LIGHT_BACKGROUNDS}
+                value={lightBg}
+                onPick={setLightBg}
+                custom
+              />
+              <SwatchRow
+                label="Light container color"
+                hint="The tint of every card and panel in light mode."
+                swatches={LIGHT_CONTAINERS}
+                value={lightCard}
+                onPick={setLightCard}
+                base={lightBg}
+                custom
+              />
+              <SwatchRow
+                label="Light text color"
+                hint="Your words in light mode — the softer tones are mixed from it."
+                swatches={LIGHT_TEXT_COLORS}
+                value={lightInk}
+                onPick={setLightInk}
+                custom
+                warn={
+                  isLight(lightInk) === isLight(lightBg)
+                    ? "This is about as bright as your light background — your words will be hard to read on it."
+                    : undefined
+                }
+              />
+              <div>
+                <span className="label !mb-0">Light preset</span>
+                <p className="mt-0.5 text-xs text-mist/70">
+                  Optional — a different backdrop for light mode. Leave it on{" "}
+                  <span className="text-snow">Same as dark</span> to reuse the one above.
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                  <PresetTile
+                    name="Same as dark"
+                    selected={lightThemeId === ""}
+                    onPick={() => setLightThemeId("")}
+                    style={themeCss(themeId, accent) ?? { backgroundColor: bg }}
+                  />
+                  {THEMES.map((t) => (
+                    <PresetTile
+                      key={t.id}
+                      name={t.name}
+                      selected={lightThemeId === t.id}
+                      onPick={() => setLightThemeId(t.id)}
+                      style={themeCss(t.id, accent)!}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </Group>
 
         {/* 2 — The boxes your content lives in. */}
@@ -1029,6 +1304,23 @@ export function ThemeForm({
         <div className="card !p-4">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="text-sm font-bold">Live preview</h3>
+            {/* Only worth showing when there are two palettes to switch between. */}
+            {colorMode === "auto" && (
+              <div className="flex overflow-hidden rounded-lg border border-edge text-[11px] font-semibold">
+                {(["dark", "light"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPreviewMode(m)}
+                    className={`px-2 py-1 capitalize transition ${
+                      previewMode === m ? "bg-brand/20 text-snow" : "text-mist hover:text-snow"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               onClick={rollAll}
@@ -1051,7 +1343,7 @@ export function ThemeForm({
                 ...previewStyle,
                 fontFamily: getFont(fontId).family,
                 fontSize: `calc(0.85rem * ${scale})`,
-                color: ink,
+                color: previewInk,
               }}
             >
               <p className="text-center text-[1.6em] font-extrabold leading-tight">Your name here</p>
@@ -1069,7 +1361,7 @@ export function ThemeForm({
 
               <PreviewSections
                 layout={layout}
-                cardStyle={{ background: previewCard, ...borderCss(border, accent) }}
+                cardStyle={previewCardStyle}
                 width={previewCardWidth}
               />
 
@@ -1100,19 +1392,42 @@ export function ThemeForm({
                 {state.error}
               </p>
             )}
-            <button className="btn-primary w-full" disabled={pending}>
-              {pending ? "Saving…" : "Save theme"}
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1" disabled={pending}>
+                {pending ? "Saving…" : "Save theme"}
+              </button>
+              {/* An <a>, not a button: anything else inside this form would
+                  submit it. Opens in a new tab so the builder — and any
+                  unsaved edits in it — survives the trip. */}
+              <a
+                href={`/${slug}?preview=1`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-ghost shrink-0"
+                title="Open your real page in a new tab"
+              >
+                Open page ↗
+              </a>
+            </div>
             <p className="mt-2 text-center text-xs text-mist/70">
               {state.ok ? (
                 <span className="font-semibold text-good">Saved — it&apos;s live on your page.</span>
               ) : (
-                "Publishes to your live page."
+                // The preview above is live; the page itself is whatever was
+                // last saved. Worth saying, since the two can disagree.
+                "Publishes to your live page — open it to see the saved version."
               )}
             </p>
           </div>
         </div>
       </aside>
-    </form>
+      </form>
+
+      {/* Two sibling forms the Saved looks controls post to. They live outside
+          the design form because HTML has no nested forms — the controls stay
+          up in the group and are associated by id. */}
+      <form id="look-save" action={lookAction} className="hidden" />
+      <form id="look-delete" action={deleteLookAction} className="hidden" />
+    </>
   );
 }

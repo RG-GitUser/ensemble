@@ -89,4 +89,16 @@ export const TEXT_COLORS = [
   { id: "ink", label: "Ink", value: "#0b0714" },
 ];
 
+/** Inks that stay legible on the light backdrops. Any hex is allowed too. */
+export const LIGHT_TEXT_COLORS = [
+  { id: "ink", label: "Ink", value: "#0b0714" },
+  { id: "graphite", label: "Graphite", value: "#1f2430" },
+  { id: "slate", label: "Slate", value: "#334155" },
+  { id: "espresso", label: "Espresso", value: "#2a1d14" },
+  { id: "navy", label: "Navy", value: "#12203c" },
+  { id: "white", label: "White", value: "#ffffff" },
+];
+
+export const DEFAULT_LIGHT_TEXT_COLOR = LIGHT_TEXT_COLORS[0].value;
+
 export const DEFAULT_TEXT_COLOR = TEXT_COLORS[0].value;

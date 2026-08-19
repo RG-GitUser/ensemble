@@ -1,38 +1,27 @@
-import { notFound } from "next/navigation";
-import { getSections, getSiteBySlug } from "@/lib/db";
-import { PublicSite } from "@/components/PublicSite";
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 
 /**
- * Without this the tab inherited the root layout's metadata, so every
- * creator page announced itself as Ensemble. A creator page should carry the
- * creator's name and their own tab icon.
+ * Creator pages moved from /s/<slug> to /<slug>. This is the old address,
+ * kept permanently: these links are pasted into bios, printed on merch and
+ * shared in DMs, so they have to keep resolving indefinitely. A 308 also
+ * tells crawlers and clients where the page really lives now.
  */
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
-  const site = getSiteBySlug(slug);
-  if (!site) return {};
-  const hero = getSections(site.id).find((s) => s.type === "hero");
-  const icon = site.config.faviconUrl;
-  return {
-    title: hero?.content.heading || site.slug,
-    description: site.config.tagline || hero?.content.subheading || "",
-    // Omit entirely when unset so Next falls back to the default icon rather
-    // than emitting a link to nothing.
-    ...(icon ? { icons: { icon, shortcut: icon, apple: icon } } : {}),
-  };
-}
-
-export default async function PublicSitePage({
+export default async function LegacyCreatorPageRedirect({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
-  const { preview } = await searchParams;
-  const site = getSiteBySlug(slug);
-  if (!site) notFound();
-  return <PublicSite site={site} preview={!!preview} />;
+  const sp = await searchParams;
+  // ?preview=1 is how the dashboard opens an unpublished page — carry the
+  // whole query through so an old preview link still previews.
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (Array.isArray(v)) v.forEach((one) => qs.append(k, one));
+    else if (v !== undefined) qs.set(k, v);
+  }
+  const query = qs.toString();
+  permanentRedirect(`/${encodeURIComponent(slug)}${query ? `?${query}` : ""}`);
 }

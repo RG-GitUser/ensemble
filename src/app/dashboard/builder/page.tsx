@@ -10,8 +10,8 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_SIZE } from "@/lib/theme";
-import { DEFAULT_FONT, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, getColorMode } from "@/lib/theme";
+import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
   addSectionAction,
@@ -202,7 +202,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
               : "Copy & paste your content into sections below — changes go live when you save."}
           </p>
         </div>
-        <Link href={`/s/${site.slug}?preview=1`} target="_blank" className="btn-ghost !py-2 text-sm">
+        <Link href={`/${site.slug}?preview=1`} target="_blank" className="btn-ghost !py-2 text-sm">
           Preview page ↗
         </Link>
       </div>
@@ -231,6 +231,13 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
             textColor={site.config.textColor ?? DEFAULT_TEXT_COLOR}
             layout={site.config.layout ?? DEFAULT_LAYOUT}
+            colorMode={getColorMode(site.config.colorMode)}
+            lightBgColor={site.config.lightBgColor ?? DEFAULT_LIGHT_BG}
+            lightCardColor={site.config.lightCardColor ?? DEFAULT_LIGHT_CARD}
+            lightTextColor={site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR}
+            lightThemeId={site.config.lightThemeId ?? ""}
+            looks={site.config.looks ?? []}
+            slug={site.slug}
           />
         </div>
       ) : (

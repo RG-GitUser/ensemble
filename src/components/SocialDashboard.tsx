@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
   connectSocial,
@@ -139,14 +140,15 @@ function ConnectGrid({ accounts, threadsOAuthReady }: { accounts: SocialAccount[
 function Composer({ accounts }: { accounts: SocialAccount[] }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(createSocialPostAction, {});
   return (
-    <form action={formAction} className="mt-5 border-t border-edge pt-5">
-      <h3 className="text-sm font-bold">Post everywhere at once</h3>
-      <textarea name="body" maxLength={2000} className="field mt-3 min-h-20 text-sm" placeholder="What's happening?" required />
+    <form action={formAction} className="mt-4">
+      <textarea name="body" maxLength={2000} className="field min-h-20 text-sm" placeholder="What's happening?" required />
       <input name="mediaUrl" className="field mt-2 font-mono text-xs" placeholder="Image or video link (optional) — https://…" />
       {/* No per-platform picker: posts go everywhere you're connected, and the
-          connect grid above is already the source of truth for what that is. */}
+          Integrations connect grid is already the source of truth for what that is. */}
       {accounts.length === 0 && (
-        <p className="mt-3 text-xs text-warn">Connect a platform above to start posting.</p>
+        <p className="mt-3 text-xs text-warn">
+          <Link href="/dashboard/integrations" className="underline">Connect a platform in Integrations</Link> to start posting.
+        </p>
       )}
       {state.error && (
         <p className="mt-3 rounded-xl border border-brand2/40 bg-brand2/10 px-3 py-2 text-sm text-brand2">{state.error}</p>
@@ -261,7 +263,6 @@ function LiveStreamsForm({
 
 export function SocialIntegrations({
   accounts,
-  posts,
   twitchChannel,
   facebookLiveUrl,
   instagramLiveUser,
@@ -272,7 +273,6 @@ export function SocialIntegrations({
   showLive,
 }: {
   accounts: SocialAccount[];
-  posts: SocialPost[];
   twitchChannel: string;
   facebookLiveUrl: string;
   instagramLiveUser: string;
@@ -287,12 +287,12 @@ export function SocialIntegrations({
     <div className="card">
       <h2 className="font-bold">Social media</h2>
       <p className="mt-1 text-sm text-mist">
-        Connect your platforms, post to all of them at once{showLive ? ", link your lives" : ""}.
+        Connect your platforms{showLive ? " and link your lives" : ""} — then post to all of them at once from{" "}
+        <Link href="/dashboard/socials" className="text-brand hover:underline">Socials</Link>.
       </p>
       <div className="mt-4">
         <ConnectGrid accounts={accounts} threadsOAuthReady={threadsOAuthReady} />
       </div>
-      <Composer accounts={accounts} />
       {showLive && (
         <LiveStreamsForm
           twitchChannel={twitchChannel}
@@ -303,54 +303,127 @@ export function SocialIntegrations({
           ingestKey={ingestKey}
         />
       )}
-      {posts.length > 0 && (
-        <div className="mt-5 border-t border-edge pt-5">
-          <h3 className="text-sm font-bold">Recent posts</h3>
-          <ul className="mt-2 divide-y divide-edge">
-            {posts.map((post) => (
-              <li key={post.id} className="py-2.5">
-                <p className="whitespace-pre-line text-sm">{post.body}</p>
-                {post.mediaUrl && (
-                  <a href={post.mediaUrl} target="_blank" rel="noreferrer" className="mt-0.5 block truncate font-mono text-xs text-brand hover:underline">
-                    {post.mediaUrl}
-                  </a>
-                )}
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {post.targets.map((t) => {
-                    const p = getPlatform(t.platform);
-                    if (!p) return null;
-                    const chip = (
-                      <span
-                        key={t.platform}
-                        title={t.detail}
-                        className="flex items-center gap-1 rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-medium"
-                      >
-                        <PlatformIcon platform={p} size={11} /> {p.name}
-                        <span className={t.status === "posted" ? "text-good" : t.status === "failed" ? "text-brand2" : "text-warn"}>
-                          · {t.status}
-                        </span>
+    </div>
+  );
+}
+
+/**
+ * The Socials tab: the cross-post composer plus an activity feed. Every
+ * platform icon appears in the feed header — lit in its brand color when
+ * connected, greyed out when not — with the posting activity below.
+ */
+export function SocialsPanel({ accounts, posts }: { accounts: SocialAccount[]; posts: SocialPost[] }) {
+  return (
+    <>
+      <div className="card">
+        <h2 className="font-bold">Post everywhere at once</h2>
+        <p className="mt-1 text-sm text-mist">One post, every connected account.</p>
+        <Composer accounts={accounts} />
+      </div>
+      <ActivityFeed accounts={accounts} posts={posts} />
+    </>
+  );
+}
+
+function ActivityFeed({ accounts, posts }: { accounts: SocialAccount[]; posts: SocialPost[] }) {
+  const byPlatform = new Map(accounts.map((a) => [a.platform, a]));
+  return (
+    <div className="card">
+      <h2 className="font-bold">Activity Feed</h2>
+      <p className="mt-1 text-sm text-mist">Lit icons are connected — their activity shows below.</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {PLATFORMS.map((p) => {
+          const account = byPlatform.get(p.id);
+          const tile = (
+            <span
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
+                account ? "border-good/40 bg-good/5" : "border-edge bg-panel2 opacity-35"
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width={20}
+                height={20}
+                aria-hidden
+                style={account ? { filter: `drop-shadow(0 0 5px ${p.color})` } : undefined}
+              >
+                <path d={p.iconPath} fill={account ? iconFill(p.color) : "#71717a"} />
+              </svg>
+            </span>
+          );
+          return account ? (
+            <a
+              key={p.id}
+              href={p.profileUrl(account.handle)}
+              target="_blank"
+              rel="noreferrer noopener"
+              title={`${p.name} — @${account.handle.replace(/^@/, "")}`}
+              className="transition hover:scale-105"
+            >
+              {tile}
+            </a>
+          ) : (
+            <span key={p.id} title={`${p.name} — not connected`}>
+              {tile}
+            </span>
+          );
+        })}
+      </div>
+      {accounts.length === 0 ? (
+        <p className="mt-5 border-t border-edge pt-5 text-sm text-mist">
+          Nothing lit up yet —{" "}
+          <Link href="/dashboard/integrations" className="text-brand hover:underline">connect your accounts in Integrations</Link>{" "}
+          and their activity will land here.
+        </p>
+      ) : posts.length === 0 ? (
+        <p className="mt-5 border-t border-edge pt-5 text-sm text-mist">
+          No activity yet — your first cross-post will show up here with its delivery status per platform.
+        </p>
+      ) : (
+        <ul className="mt-5 divide-y divide-edge border-t border-edge">
+          {posts.map((post) => (
+            <li key={post.id} className="py-2.5">
+              <p className="whitespace-pre-line text-sm">{post.body}</p>
+              {post.mediaUrl && (
+                <a href={post.mediaUrl} target="_blank" rel="noreferrer" className="mt-0.5 block truncate font-mono text-xs text-brand hover:underline">
+                  {post.mediaUrl}
+                </a>
+              )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {post.targets.map((t) => {
+                  const p = getPlatform(t.platform);
+                  if (!p) return null;
+                  const chip = (
+                    <span
+                      key={t.platform}
+                      title={t.detail}
+                      className="flex items-center gap-1 rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-medium"
+                    >
+                      <PlatformIcon platform={p} size={11} /> {p.name}
+                      <span className={t.status === "posted" ? "text-good" : t.status === "failed" ? "text-brand2" : "text-warn"}>
+                        · {t.status}
                       </span>
-                    );
-                    return t.status === "posted" && t.detail.startsWith("http") ? (
-                      <a key={t.platform} href={t.detail} target="_blank" rel="noreferrer" className="hover:opacity-80">
-                        {chip}
-                      </a>
-                    ) : (
-                      chip
-                    );
-                  })}
-                  <span className="text-[11px] text-mist">{post.createdAt.slice(0, 16).replace("T", " ")}</span>
-                  {post.targets.some((t) => t.status !== "posted") && (
-                    <form action={retrySocialPost}>
-                      <input type="hidden" name="postId" value={post.id} />
-                      <button className="text-[11px] font-semibold text-brand hover:underline">Retry</button>
-                    </form>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+                    </span>
+                  );
+                  return t.status === "posted" && t.detail.startsWith("http") ? (
+                    <a key={t.platform} href={t.detail} target="_blank" rel="noreferrer" className="hover:opacity-80">
+                      {chip}
+                    </a>
+                  ) : (
+                    chip
+                  );
+                })}
+                <span className="text-[11px] text-mist">{post.createdAt.slice(0, 16).replace("T", " ")}</span>
+                {post.targets.some((t) => t.status !== "posted") && (
+                  <form action={retrySocialPost}>
+                    <input type="hidden" name="postId" value={post.id} />
+                    <button className="text-[11px] font-semibold text-brand hover:underline">Retry</button>
+                  </form>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
