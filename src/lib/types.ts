@@ -38,6 +38,8 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
+  /** Which way copy inside containers runs — a TEXT_ALIGNS value ("center"). */
+  textAlign?: string;
   /**
    * Whether the public page offers light, dark, or lets the visitor choose.
    * Absent = "dark", so every page that predates this setting is untouched.
@@ -90,6 +92,7 @@ export type DesignConfig = Pick<
   | "fontScale"
   | "textColor"
   | "layout"
+  | "textAlign"
   | "colorMode"
   | "lightBgColor"
   | "lightCardColor"

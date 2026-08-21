@@ -17,6 +17,7 @@ import {
   ACCENTS,
   BACKGROUNDS,
   CONTAINER_SIZES,
+  getTextAlign,
   CONTAINERS,
   DEFAULT_BG,
   DEFAULT_BORDER,
@@ -537,6 +538,7 @@ function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
     fontScale: pickSwatch(TEXT_SIZES, text("fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
     textColor: pickColor(TEXT_COLORS, text("textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     layout: getLayout(text("layout")) ? text("layout") : DEFAULT_LAYOUT,
+    textAlign: getTextAlign(text("textAlign")),
     colorMode: getColorMode(text("colorMode")),
     lightThemeId: getThemeDef(text("lightThemeId")) ? text("lightThemeId") : "",
     lightBgColor: pickColor(LIGHT_BACKGROUNDS, text("lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
@@ -624,6 +626,8 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     // Section arrangement — only known layout ids reach the page.
     layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
+    // Copy alignment inside containers — one of three known values.
+    textAlign: getTextAlign(str(fd, "textAlign")),
     // Light/dark. The mode is one of three known ids; the light palette goes
     // through the same pickColor gate as the dark one, against the light
     // swatch lists.

@@ -320,6 +320,25 @@ body,
 .site-ink-faint { color: color-mix(in srgb, var(--site-ink, #fff) 45%, transparent); }
 
 /**
+ * Copy alignment inside containers (TEXT_ALIGNS in lib/theme.ts).
+ *
+ * Sections are authored centred, so "center" is the default and needs no rule
+ * at all. The other two retarget prose only — headings, paragraphs and lists.
+ * Buttons, pills and badges are centred by their own design rather than by the
+ * page's alignment, so they are either not in this list (the <a> buttons) or
+ * carry .site-keep-center (the two paragraphs shaped like buttons).
+ *
+ * The type selector inside :is() is what beats Tailwind's own `text-center`
+ * utility: `.site-align-left h2` scores 0,1,1 against `.text-center`'s 0,1,0.
+ */
+.site-align-left :is(h1, h2, h3, h4, p, ul, ol, blockquote, dl):not(.site-keep-center) {
+  text-align: left;
+}
+.site-align-right :is(h1, h2, h3, h4, p, ul, ol, blockquote, dl):not(.site-keep-center) {
+  text-align: right;
+}
+
+/**
  * Section arrangement (LAYOUTS in lib/theme.ts). Both alternatives are pure
  * CSS on the page root: the sections themselves are rendered identically in
  * every mode, which is what keeps a creator's content untouched when they

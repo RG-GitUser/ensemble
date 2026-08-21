@@ -5,7 +5,7 @@ import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout } from "@/lib/theme";
+import { borderVars, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -160,7 +160,7 @@ function SectionView({
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="mt-3 rounded-lg border border-white/10 py-2 text-center text-[0.875em] site-ink-faint">
+                    <p className="site-keep-center mt-3 rounded-lg border border-white/10 py-2 text-center text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -265,7 +265,7 @@ function SectionView({
               />
             )}
             {instagramLiveUser && (
-              <p className="text-center">
+              <p className="site-keep-center text-center">
                 <a
                   href={`https://instagram.com/${encodeURIComponent(instagramLiveUser)}`}
                   target="_blank"
@@ -479,7 +479,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
 
   return (
     <div
-      className="site-root site-ink relative isolate flex-1"
+      className={`site-root site-ink site-align-${getTextAlign(cfg.textAlign)} relative isolate flex-1`}
       data-site-mode={mode === "auto" ? "auto" : mode}
       style={
         {

@@ -59,7 +59,7 @@ function seeded(seed: number): () => number {
 // ── Textures ──────────────────────────────────────────────────────────────
 
 /** Contour lines — nested rings, each one nudged off the last. */
-const TOPO = (() => {
+const topo = (stroke: string) => {
   const rnd = seeded(20260814);
   let paths = "";
   for (let i = 0; i < 11; i++) {
@@ -70,23 +70,25 @@ const TOPO = (() => {
     paths += `<ellipse cx='${cx.toFixed(1)}' cy='${cy.toFixed(1)}' rx='${r}' ry='${ry.toFixed(1)}' transform='rotate(${(rnd() * 40 - 20).toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)})'/>`;
   }
   return svg(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'><g fill='none' stroke='rgba(255,255,255,0.09)' stroke-width='1.1'>${paths}</g></svg>`
+    `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'><g fill='none' stroke='${stroke}' stroke-width='1.1'>${paths}</g></svg>`
   );
-})();
+};
+const TOPO = topo("rgba(255,255,255,0.09)");
 
 /** Halftone — dots that swell across the tile, the way print screens do. */
-const HALFTONE = (() => {
+const halftone = (fill: string) => {
   let dots = "";
   const step = 18;
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       // Radius tracks distance from the top-left, so tiles read as a ramp.
       const r = 1 + ((x + y) / 14) * 3.4;
-      dots += `<circle cx='${x * step + 9}' cy='${y * step + 9}' r='${r.toFixed(2)}' fill='rgba(255,255,255,0.13)'/>`;
+      dots += `<circle cx='${x * step + 9}' cy='${y * step + 9}' r='${r.toFixed(2)}' fill='${fill}'/>`;
     }
   }
   return svg(`<svg xmlns='http://www.w3.org/2000/svg' width='144' height='144'>${dots}</svg>`);
-})();
+};
+const HALFTONE = halftone("rgba(255,255,255,0.13)");
 
 /** Night sky. Three brightnesses so it has depth rather than looking sprayed. */
 const STARS = (() => {
@@ -112,6 +114,22 @@ const GRID = svg(
 
 const WAVES = svg(
   `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='rgba(255,255,255,0.05)' d='M0,192L60,181.3C120,171,240,149,360,154.7C480,160,600,192,720,197.3C840,203,960,181,1080,165.3C1200,149,1320,139,1380,133.3L1440,128L1440,320L0,320Z'/><path fill='rgba(255,255,255,0.08)' d='M0,256L80,240C160,224,320,192,480,197.3C640,203,800,245,960,250.7C1120,256,1280,224,1360,208L1440,192L1440,320L0,320Z'/></svg>`
+);
+
+/* ── Ink cuts, for the Bright shelf ───────────────────────────────────────
+   Every texture above is white-alpha, which is invisible on a pale backdrop.
+   These are the same drawings in black-alpha, weighted a little lighter —
+   ink on paper reads heavier than the same alpha of white on black. */
+
+const TOPO_INK = topo("rgba(0,0,0,0.10)");
+const HALFTONE_INK = halftone("rgba(0,0,0,0.10)");
+
+const DOTS_INK = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26'><circle cx='2' cy='2' r='1.5' fill='rgba(0,0,0,0.12)'/></svg>`
+);
+
+const GRID_INK = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'><path d='M44 0H0v44' fill='none' stroke='rgba(0,0,0,0.07)'/></svg>`
 );
 
 /**
@@ -425,6 +443,81 @@ export const THEMES: ThemeDef[] = [
       "radial-gradient(80% 50% at 50% -10%, ACCENT3d, transparent 66%), " +
       "linear-gradient(180deg, #ffffff 0%, #f2f2f6 100%)",
     color: "#f2f2f6",
+  },
+  {
+    // Three pastel corners bleeding into each other — the bright answer to Mesh.
+    id: "sorbet",
+    name: "Sorbet",
+    group: "Bright",
+    image:
+      "radial-gradient(55% 45% at 12% 8%, rgba(244,114,182,0.30), transparent 66%), " +
+      "radial-gradient(50% 42% at 88% 12%, rgba(129,140,248,0.28), transparent 66%), " +
+      "radial-gradient(60% 50% at 50% 104%, rgba(45,212,191,0.24), transparent 68%), " +
+      "linear-gradient(180deg, #ffffff 0%, #f6f4fb 100%)",
+    color: "#f6f4fb",
+  },
+  {
+    id: "sunrise",
+    name: "Sunrise",
+    group: "Bright",
+    image:
+      "radial-gradient(80% 52% at 50% -8%, rgba(251,146,60,0.34), transparent 64%), " +
+      "radial-gradient(70% 44% at 18% 10%, rgba(251,113,133,0.26), transparent 66%), " +
+      "linear-gradient(180deg, #fff8f1 0%, #fdeee0 100%)",
+    color: "#fdeee0",
+  },
+  {
+    id: "meadow",
+    name: "Meadow",
+    group: "Bright",
+    image:
+      "radial-gradient(75% 48% at 50% -6%, rgba(52,211,153,0.30), transparent 64%), " +
+      "radial-gradient(65% 45% at 85% 18%, rgba(163,230,53,0.24), transparent 66%), " +
+      "linear-gradient(180deg, #f6fbf5 0%, #e9f4ea 100%)",
+    color: "#e9f4ea",
+  },
+  {
+    // A sun sitting high in a pale sky, warming towards the horizon.
+    id: "daylight",
+    name: "Daylight",
+    group: "Bright",
+    image:
+      "radial-gradient(26% 17% at 50% 15%, rgba(253,224,71,0.55), transparent 70%), " +
+      "linear-gradient(180deg, #eaf4ff 0%, #f8fbff 55%, #fdf6ec 100%)",
+    color: "#f8fbff",
+  },
+  {
+    // Blueprint's daytime twin: the same rule, drawn in graphite on paper.
+    id: "drafting",
+    name: "Drafting",
+    group: "Bright",
+    image: `${GRID_INK}, linear-gradient(180deg, rgba(59,130,246,0.10), transparent 60%), linear-gradient(180deg, #f4f8fd, #eaf1fa)`,
+    color: "#eaf1fa",
+    size: "44px 44px, cover, cover",
+  },
+  {
+    id: "pinpoint",
+    name: "Pinpoint",
+    group: "Bright",
+    image: `${DOTS_INK}, radial-gradient(80% 50% at 50% -10%, ACCENT26, transparent 66%), linear-gradient(180deg, #ffffff, #f4f4f7)`,
+    color: "#f4f4f7",
+    size: "26px 26px, cover, cover",
+  },
+  {
+    id: "newsprint",
+    name: "Newsprint",
+    group: "Bright",
+    image: `${HALFTONE_INK}, linear-gradient(180deg, #fbf9f4, #f2eee4)`,
+    color: "#f2eee4",
+    size: "144px 144px, cover",
+  },
+  {
+    id: "relief",
+    name: "Relief",
+    group: "Bright",
+    image: `${TOPO_INK}, radial-gradient(80% 55% at 50% -8%, ACCENT1f, transparent 64%), linear-gradient(180deg, #faf6ef, #f0e9dc)`,
+    color: "#f0e9dc",
+    size: "400px 400px, cover, cover",
   },
 ];
 

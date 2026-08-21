@@ -3,8 +3,11 @@ import type { CSSProperties } from "react";
 /**
  * Curated page-theme palettes — every plan gets all of them. Values end up in
  * inline styles on the public page, so only values from these lists are ever
- * persisted (updateSettings validates with pickSwatch). All backgrounds are
- * dark so the page's white text and borders stay readable.
+ * persisted (updateSettings validates with pickSwatch).
+ *
+ * Backgrounds run dark to light. Page text defaults to white, so the light end
+ * needs an ink change to go with it — the Font pane's text colour control
+ * compares the two with isLight() and says so when they match.
  */
 export interface Swatch {
   id: string;
@@ -25,15 +28,32 @@ export const ACCENTS: Swatch[] = [
   { id: "pink", label: "Pink", value: "#ec4899" },
 ];
 
+/**
+ * Ink stays first: DEFAULT_BG is BACKGROUNDS[0], so every page that never
+ * chose a background is sitting on it.
+ *
+ * Dropping a swatch is safe — pickColor falls through to normalizeHex, so a
+ * page still holding a retired value keeps rendering it. Forest, Espresso and
+ * Wine went that way: at these depths they read as the same near-black as Ink,
+ * and a picker of eight indistinguishable darks is a picker of one.
+ */
 export const BACKGROUNDS: Swatch[] = [
+  // Dark
   { id: "ink", label: "Ink", value: "#0a0812" },
   { id: "charcoal", label: "Charcoal", value: "#101014" },
   { id: "midnight", label: "Midnight", value: "#0a1020" },
   { id: "ocean", label: "Deep ocean", value: "#06131c" },
-  { id: "forest", label: "Forest", value: "#081410" },
-  { id: "espresso", label: "Espresso", value: "#160e08" },
   { id: "plum", label: "Plum", value: "#170b1e" },
-  { id: "wine", label: "Wine", value: "#1a0a10" },
+  // Mid — still comfortably white-text territory.
+  { id: "slate", label: "Slate", value: "#1e2230" },
+  { id: "cocoa", label: "Cocoa", value: "#241a16" },
+  // Light — these want a dark text colour; the Font pane prompts for one.
+  { id: "porcelain", label: "Porcelain", value: "#f8f7f4" },
+  { id: "cloud", label: "Cloud", value: "#eef2f8" },
+  { id: "sand", label: "Sand", value: "#f5eee1" },
+  { id: "mint", label: "Mint", value: "#e9f4ee" },
+  { id: "blush", label: "Blush", value: "#fbeff3" },
+  { id: "periwinkle", label: "Periwinkle", value: "#eeecfb" },
 ];
 
 export const CONTAINERS: Swatch[] = [
@@ -113,6 +133,25 @@ export const CONTAINER_SIZES: Swatch[] = [
   { id: "roomy", label: "Roomy", value: "1.15" },
   { id: "wide", label: "Wide", value: "1.35" },
 ];
+
+/**
+ * Which way the copy inside every container runs.
+ *
+ * Sections are authored centred, so "center" is the default and the no-op —
+ * the other two are applied by `.site-align-*` in globals.css, which retargets
+ * prose elements only. Buttons and badges stay centred whatever is picked.
+ */
+export const TEXT_ALIGNS: Swatch[] = [
+  { id: "left", label: "Left", value: "left" },
+  { id: "center", label: "Center", value: "center" },
+  { id: "right", label: "Right", value: "right" },
+];
+
+export const DEFAULT_TEXT_ALIGN = TEXT_ALIGNS[1].value;
+
+export function getTextAlign(value: string | undefined | null): string {
+  return TEXT_ALIGNS.some((a) => a.value === value) ? (value as string) : DEFAULT_TEXT_ALIGN;
+}
 
 /**
  * How the containers are arranged down the page.

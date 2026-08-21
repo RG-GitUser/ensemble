@@ -10,7 +10,7 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, getColorMode } from "@/lib/theme";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, DEFAULT_TEXT_ALIGN, getColorMode } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -166,10 +166,27 @@ function SectionCard({
   );
 }
 
-function Tab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+/**
+ * `tour` rides on the link itself rather than a wrapper element. A wrapper is
+ * what a flex child becomes, leaving the <a> inside it inline — and vertical
+ * padding on an inline box doesn't contribute to layout height, so a wrapped
+ * tab's label sits higher than its unwrapped neighbour's.
+ */
+function Tab({
+  href,
+  active,
+  tour,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  tour?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
+      data-tour={tour}
       className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
         active ? "border-brand text-snow" : "border-transparent text-mist hover:text-snow"
       }`}
@@ -209,9 +226,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
 
       <div className="mt-6 flex border-b border-edge">
         <Tab href="/dashboard/builder" active={!designTab}>Sections</Tab>
-        <span data-tour="design">
-          <Tab href="/dashboard/builder?tab=design" active={designTab}>Design</Tab>
-        </span>
+        <Tab href="/dashboard/builder?tab=design" active={designTab} tour="design">Design</Tab>
       </div>
 
       {designTab ? (
@@ -231,6 +246,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
             textColor={site.config.textColor ?? DEFAULT_TEXT_COLOR}
             layout={site.config.layout ?? DEFAULT_LAYOUT}
+            textAlign={site.config.textAlign ?? DEFAULT_TEXT_ALIGN}
             colorMode={getColorMode(site.config.colorMode)}
             lightBgColor={site.config.lightBgColor ?? DEFAULT_LIGHT_BG}
             lightCardColor={site.config.lightCardColor ?? DEFAULT_LIGHT_CARD}
