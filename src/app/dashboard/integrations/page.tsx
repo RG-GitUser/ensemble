@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getLeads, getSiteByUser, getSocialAccounts } from "@/lib/db";
+import { configuredProviderIds } from "@/lib/oauth";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
 import { LockedOverlay } from "@/components/LockedOverlay";
@@ -54,7 +55,7 @@ export default async function IntegrationsPage({
               }}
               liveNow={site.config.liveNow === true}
               ingestKey={site.embedToken}
-              threadsOAuthReady={!!process.env.THREADS_APP_ID && !!process.env.THREADS_APP_SECRET}
+              oauthReady={configuredProviderIds()}
               showLive={plan.live}
             />
           );

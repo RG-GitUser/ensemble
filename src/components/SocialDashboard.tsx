@@ -23,15 +23,18 @@ function PlatformIcon({ platform, size = 18 }: { platform: PlatformDef; size?: n
   );
 }
 
-function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthReady: boolean }) {
+/** Platforms whose credentials come from a single Meta developer app. */
+const META_PLATFORMS = new Set(["threads", "instagram", "facebook"]);
+
+function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthReady: string[] }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(connectSocial, {});
 
-  if (platform.authType === "oauth" && platform.id === "threads" && oauthReady) {
+  if (platform.authType === "oauth" && oauthReady.includes(platform.id)) {
     return (
       <div className="mt-3 flex items-center gap-3">
         <PlatformIcon platform={platform} />
-        <a href="/api/oauth/threads" className="btn-primary !py-2 text-sm">
-          Continue with Threads
+        <a href={`/api/oauth/${platform.id}`} className="btn-primary !py-2 text-sm">
+          Continue with {platform.name}
         </a>
         <p className="text-xs text-mist">One click — posts publish for real.</p>
       </div>
@@ -69,7 +72,7 @@ function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthRea
       {platform.authType === "oauth" && (
         <p className="w-full text-xs text-mist/70">
           Handle-only for now — one-click connect &amp; real publishing unlock when Ensemble&apos;s{" "}
-          {platform.name === "Threads" ? "Meta" : platform.name} app credentials are added.
+          {META_PLATFORMS.has(platform.id) ? "Meta" : platform.name} app credentials are added.
         </p>
       )}
       {(platform.authType === "bluesky" || platform.authType === "webhook") && (
@@ -80,7 +83,7 @@ function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthRea
   );
 }
 
-function ConnectGrid({ accounts, threadsOAuthReady }: { accounts: SocialAccount[]; threadsOAuthReady: boolean }) {
+function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oauthReady: string[] }) {
   const [sel, setSel] = useState<string | null>(null);
   const byPlatform = new Map(accounts.map((a) => [a.platform, a]));
   const selected = sel ? getPlatform(sel) : null;
@@ -112,7 +115,7 @@ function ConnectGrid({ accounts, threadsOAuthReady }: { accounts: SocialAccount[
           );
         })}
       </div>
-      {selected && !selAccount && <ConnectForm platform={selected} oauthReady={threadsOAuthReady} />}
+      {selected && !selAccount && <ConnectForm platform={selected} oauthReady={oauthReady} />}
       {selected && selAccount && (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
           <PlatformIcon platform={selected} />
@@ -159,8 +162,8 @@ function Composer({ accounts }: { accounts: SocialAccount[] }) {
           {pending ? "Posting…" : "Post everywhere"}
         </button>
         <p className="text-xs text-mist/70">
-          Bluesky, Discord and OAuth-connected Threads publish for real; handle-only platforms queue until their API
-          credentials exist.
+          Bluesky and Discord publish for real with no approval. Threads, Instagram, Facebook, Pinterest and Reddit
+          publish once connected with one-click OAuth; handle-only connections queue until then.
         </p>
       </div>
     </form>
@@ -269,7 +272,7 @@ export function SocialIntegrations({
   streamKeys,
   liveNow,
   ingestKey,
-  threadsOAuthReady,
+  oauthReady,
   showLive,
 }: {
   accounts: SocialAccount[];
@@ -279,7 +282,7 @@ export function SocialIntegrations({
   streamKeys: { twitch: string; facebook: string; instagram: string };
   liveNow: boolean;
   ingestKey: string;
-  threadsOAuthReady: boolean;
+  oauthReady: string[];
   /** Live-stream tools are Enterprise — hidden (page shows a locked card) on lower plans. */
   showLive: boolean;
 }) {
@@ -291,7 +294,7 @@ export function SocialIntegrations({
         <Link href="/dashboard/socials" className="text-brand hover:underline">Socials</Link>.
       </p>
       <div className="mt-4">
-        <ConnectGrid accounts={accounts} threadsOAuthReady={threadsOAuthReady} />
+        <ConnectGrid accounts={accounts} oauthReady={oauthReady} />
       </div>
       {showLive && (
         <LiveStreamsForm
