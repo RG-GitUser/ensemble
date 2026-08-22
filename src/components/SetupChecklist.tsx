@@ -43,11 +43,20 @@ export function SetupChecklist({ steps }: { steps: Checkpoint[] }) {
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold">{complete ? "Your page is set up" : "Finish setting up your page"}</h2>
+          <h2 className="font-bold">{complete ? "Your profile is set up" : "Set up your profile"}</h2>
           <p className="mt-1 text-sm text-mist">
-            {complete
-              ? "Every checkpoint is done. Anything you change from here goes straight to your live page."
-              : (next?.hint ?? "")}
+            {complete ? (
+              "Every checkpoint is done. Anything you change from here goes straight to your live page."
+            ) : (
+              // The count is in the ring already, but the ring is a graphic.
+              // Saying it in words is what a screen reader and a glance both get.
+              <>
+                <span className="font-semibold text-snow">
+                  {done} of {steps.length} done.
+                </span>{" "}
+                {next?.hint ?? ""}
+              </>
+            )}
           </p>
         </div>
         {next && (

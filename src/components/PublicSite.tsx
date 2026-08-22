@@ -38,25 +38,27 @@ function SectionView({
           <h1 className="site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
           {c.subheading && <p className="mx-auto mt-5 max-w-xl text-[1.125em] site-ink-soft">{c.subheading}</p>}
           {c.ctaLabel && (
-            <a
-              href={c.ctaUrl || "#"}
-              className="mt-8 inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-              style={{ background: "var(--site-accent)" }}
-            >
-              {c.ctaLabel}
-            </a>
+            <div className="site-btn-row mt-8">
+              <a
+                href={c.ctaUrl || "#"}
+                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                style={{ background: "var(--site-accent)" }}
+              >
+                {c.ctaLabel}
+              </a>
+            </div>
           )}
         </section>
       );
     case "about":
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start">
+          <div className="site-align-stack flex flex-col items-center gap-8 sm:flex-row sm:items-start">
             {c.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={c.imageUrl} alt={c.heading} className="h-36 w-36 shrink-0 rounded-2xl object-cover" />
             )}
-            <div className="text-center sm:text-left">
+            <div className="text-center">
               <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
               <p className="mt-3 whitespace-pre-line site-ink-soft">{c.body}</p>
             </div>
@@ -120,7 +122,7 @@ function SectionView({
               <a
                 key={i}
                 href={url || "#"}
-                className="site-card block rounded-xl px-5 py-3.5 text-center font-semibold"
+                className="site-btn site-card block rounded-xl px-5 py-3.5 font-semibold"
                 style={{ background: "var(--site-card)" }}
               >
                 {label}
@@ -154,13 +156,13 @@ function SectionView({
                   {plan.payments && buyUrl ? (
                     <a
                       href={buyUrl}
-                      className="mt-3 block rounded-lg py-2 text-center text-[0.875em] font-semibold text-white transition hover:opacity-90"
+                      className="site-btn mt-3 block rounded-lg py-2 text-[0.875em] font-semibold text-white transition hover:opacity-90"
                       style={{ background: "var(--site-accent)" }}
                     >
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="site-keep-center mt-3 rounded-lg border border-white/10 py-2 text-center text-[0.875em] site-ink-faint">
+                    <p className="site-btn mt-3 rounded-lg border border-white/10 py-2 text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -191,15 +193,17 @@ function SectionView({
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {url ? (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-6 inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-              style={{ background: "var(--site-accent)" }}
-            >
-              Open calendar
-            </a>
+            <div className="site-btn-row mt-6">
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                style={{ background: "var(--site-accent)" }}
+              >
+                Open calendar
+              </a>
+            </div>
           ) : (
             <p className="mt-6 site-ink-faint">Calendar link coming soon.</p>
           )}
@@ -237,7 +241,7 @@ function SectionView({
       const hasAny = twitchChannel || facebookLiveUrl || instagramLiveUser;
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <h2 className="flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
+          <h2 className="site-align-row flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
             {c.heading}
             {site.config.liveNow && (
               <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1 text-[0.75em] font-bold uppercase text-red-400">
@@ -265,12 +269,12 @@ function SectionView({
               />
             )}
             {instagramLiveUser && (
-              <p className="site-keep-center text-center">
+              <p className="site-btn-row">
                 <a
                   href={`https://instagram.com/${encodeURIComponent(instagramLiveUser)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                  className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                   style={{ background: "var(--site-accent)" }}
                 >
                   {c.ctaLabel || "Watch my Instagram Live"}
@@ -287,9 +291,11 @@ function SectionView({
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {c.email && (
-            <a href={`mailto:${c.email}`} className="site-card mt-6 inline-block rounded-xl px-7 py-3 font-semibold">
-              {c.buttonLabel || c.email}
-            </a>
+            <div className="site-btn-row mt-6">
+              <a href={`mailto:${c.email}`} className="site-btn site-card inline-block rounded-xl px-7 py-3 font-semibold">
+                {c.buttonLabel || c.email}
+              </a>
+            </div>
           )}
         </section>
       );
@@ -308,7 +314,7 @@ function SectionView({
           <div className="border-t pt-8" style={{ borderColor: "var(--site-border-color, rgba(255,255,255,0.12))" }}>
             {tagline && <p className="text-[0.95em] site-ink-soft">{tagline}</p>}
             {policies.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-start justify-center gap-x-6 gap-y-3 text-[0.8em]">
+              <div className="site-align-row mt-4 flex flex-wrap items-start justify-center gap-x-6 gap-y-3 text-[0.8em]">
                 {policies.map((p) =>
                   p.url ? (
                     <a
@@ -418,9 +424,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   };
   const lightPalette = {
     backdrop: backdropCss({
-      // Falls back to the dark preset, so a creator who picked a backdrop and
-      // then switched light mode on gets that backdrop rather than nothing.
-      themeId: cfg.lightThemeId ?? cfg.themeId,
+      // No falling back to the dark preset. The two pickers now offer
+      // different halves of the catalogue, and borrowing a dark backdrop for
+      // light mode puts dark ink on a dark canvas. With no light preset
+      // chosen, light mode sits on the light background color.
+      themeId: cfg.lightThemeId || "",
       accent: cfg.themeColor,
       bgColor: cfg.lightBgColor ?? DEFAULT_LIGHT_BG,
       bgImage: cfg.bgImage,
@@ -479,7 +487,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
 
   return (
     <div
-      className={`site-root site-ink site-align-${getTextAlign(cfg.textAlign)} relative isolate flex-1`}
+      className="site-root site-ink relative isolate flex-1"
       data-site-mode={mode === "auto" ? "auto" : mode}
       style={
         {
@@ -543,7 +551,10 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
                 : "site-right"
               : "";
           return (
-            <div key={s.id} className={`${full ? "site-full" : ""} ${side}`.trim() || undefined}>
+            <div
+              key={s.id}
+              className={`site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
+            >
               {containerTheme ? (
                 <div className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl" style={containerTheme}>
                   <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />

@@ -320,22 +320,90 @@ body,
 .site-ink-faint { color: color-mix(in srgb, var(--site-ink, #fff) 45%, transparent); }
 
 /**
- * Copy alignment inside containers (TEXT_ALIGNS in lib/theme.ts).
+ * Copy alignment, set per section (TEXT_ALIGNS in lib/theme.ts). The class
+ * goes on each section's own wrapper, so a centred hero can sit above a
+ * left-aligned About passage.
  *
- * Sections are authored centred, so "center" is the default and needs no rule
- * at all. The other two retarget prose only — headings, paragraphs and lists.
- * Buttons, pills and badges are centred by their own design rather than by the
- * page's alignment, so they are either not in this list (the <a> buttons) or
- * carry .site-keep-center (the two paragraphs shaped like buttons).
+ * Sections are authored centred and that stays the default, so "center" needs
+ * no rule at all. The other two set text-align on the section box itself
+ * rather than on a list of elements inside it. That matters for buttons: an
+ * inline-block button has no text of its own to align, it is placed by the
+ * text-align of the box it sits in. Aligning only headings and paragraphs
+ * moved the words and left every button stranded in the middle.
  *
- * The type selector inside :is() is what beats Tailwind's own `text-center`
- * utility: `.site-align-left h2` scores 0,1,1 against `.text-center`'s 0,1,0.
+ * Which means the authored centring has to stand down. Tailwind's text-center
+ * is a single class, so reaching it through the wrapper scores 0,2,0 against
+ * its own 0,1,0 and wins. `inherit` rather than a literal value so one rule
+ * covers both directions.
  */
-.site-align-left :is(h1, h2, h3, h4, p, ul, ol, blockquote, dl):not(.site-keep-center) {
+.site-align-left {
   text-align: left;
 }
-.site-align-right :is(h1, h2, h3, h4, p, ul, ol, blockquote, dl):not(.site-keep-center) {
+.site-align-right {
   text-align: right;
+}
+.site-align-left [class~="text-center"],
+.site-align-right [class~="text-center"] {
+  text-align: inherit;
+}
+
+/**
+ * Buttons.
+ *
+ * A button's label is always centred, and there is deliberately no setting
+ * for it. A button is a target rather than a passage of prose, and ragged
+ * text inside a pill reads as a mistake rather than a choice.
+ *
+ * These elements carry no `text-center` class, so the rule above that stands
+ * authored centring down never matches them, and an explicit declaration
+ * beats whatever the section is inheriting.
+ */
+.site-btn {
+  text-align: center;
+}
+
+/**
+ * Where a button sits is a separate choice from where the words sit, made per
+ * section, so a centred button under a left-aligned paragraph is possible.
+ * Centre is the default in every section whatever the text is doing, which is
+ * also what every page looked like before the setting existed.
+ *
+ * Only buttons that size to their own label can move. A full-width one
+ * already spans its container and has nowhere to go.
+ */
+.site-btn-row {
+  text-align: center;
+}
+.site-btn-left .site-btn-row {
+  text-align: left;
+}
+.site-btn-right .site-btn-row {
+  text-align: right;
+}
+
+/**
+ * Flex containers ignore text-align entirely — a flex item is placed by
+ * justify-content, so these two need saying separately.
+ *
+ * .site-align-row is for rows: a heading with a badge beside it, a line of
+ * footer links. .site-align-stack is for the one column-direction flex on the
+ * page, and is scoped under the breakpoint where it is still a column —
+ * above that it becomes a row and align-items governs the vertical, which is
+ * not this setting's business.
+ */
+.site-align-left .site-align-row {
+  justify-content: flex-start;
+}
+.site-align-right .site-align-row {
+  justify-content: flex-end;
+}
+@media (max-width: 639px) {
+  .site-align-left .site-align-stack {
+    align-items: flex-start;
+  }
+  .site-align-right .site-align-stack {
+    align-items: flex-end;
+  }
 }
 
 /**

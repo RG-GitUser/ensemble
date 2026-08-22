@@ -38,8 +38,6 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
-  /** Which way copy inside containers runs — a TEXT_ALIGNS value ("center"). */
-  textAlign?: string;
   /**
    * Whether the public page offers light, dark, or lets the visitor choose.
    * Absent = "dark", so every page that predates this setting is untouched.
@@ -92,7 +90,6 @@ export type DesignConfig = Pick<
   | "fontScale"
   | "textColor"
   | "layout"
-  | "textAlign"
   | "colorMode"
   | "lightBgColor"
   | "lightCardColor"
@@ -133,6 +130,10 @@ export interface Section {
   content: Record<string, string>;
   /** Visual theme id from lib/themes.ts, or "" to inherit the page theme. */
   theme: string;
+  /** Which way this section's copy runs — a TEXT_ALIGNS value, or "" for centred. */
+  align: string;
+  /** Where this section's buttons sit — a TEXT_ALIGNS value, or "" for centred. */
+  buttonAlign: string;
 }
 
 export interface QuoteRequest {

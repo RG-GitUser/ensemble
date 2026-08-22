@@ -22,7 +22,7 @@ export function NewsletterSignup({ siteId, buttonLabel }: { siteId: number; butt
           required
         />
         <button
-          className="rounded-xl px-6 py-3 font-semibold text-white transition hover:opacity-90"
+          className="site-btn rounded-xl px-6 py-3 font-semibold text-white transition hover:opacity-90"
           style={{ background: "var(--site-accent)" }}
           disabled={pending}
         >

@@ -9,7 +9,6 @@ import {
   BORDER_STYLES,
   borderCss,
   CONTAINER_SIZES,
-  TEXT_ALIGNS,
   CONTAINERS,
   COLOR_MODES,
   type ColorMode,
@@ -24,7 +23,7 @@ import {
   normalizeHex,
   type Swatch,
 } from "@/lib/theme";
-import { backdropCss, BRIGHT_GROUP, getThemeDef, THEME_GROUPS, THEMES, themeCss } from "@/lib/themes";
+import { backdropCss, BRIGHT_GROUP, DARK_THEME_GROUPS, DARK_THEMES, getThemeDef, LIGHT_THEMES, themeCss, type ThemeGroup } from "@/lib/themes";
 import { FONTS, getFont, LIGHT_TEXT_COLORS, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
 import { CloseIcon, ShuffleIcon } from "@/components/icons";
 
@@ -35,7 +34,6 @@ import { CloseIcon, ShuffleIcon } from "@/components/icons";
  */
 const PANES = [
   { id: "backdrop", name: "Backdrop" },
-  { id: "mode", name: "Light & dark" },
   { id: "containers", name: "Containers" },
   { id: "accent", name: "Accent" },
   { id: "layout", name: "Layout" },
@@ -433,49 +431,6 @@ function PreviewSections({
 }
 
 /** Width picker — each tile draws its option to scale, widest option full. */
-/** Alignment picker — each tile draws the ragged edge the setting produces. */
-function AlignRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
-  const bar = "block h-1.5 rounded-[2px] bg-mist/35";
-  // Ragged widths, so the tile shows which edge lines up rather than three
-  // identical stacks that only differ by a label.
-  const widths = ["w-full", "w-3/5", "w-4/5"];
-  return (
-    <div>
-      <span className="label !mb-0">Text alignment</span>
-      <p className="mt-0.5 text-xs text-mist/70">
-        Which way the words inside your containers run. Buttons stay centred whichever you pick.
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {TEXT_ALIGNS.map((a) => {
-          const selected = value === a.value;
-          return (
-            <button
-              key={a.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onPick(a.value)}
-              className={`w-[5.5rem] rounded-xl border px-2.5 py-2 transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
-              }`}
-            >
-              <span
-                className={`flex h-7 flex-col justify-center gap-1 ${
-                  a.value === "left" ? "items-start" : a.value === "right" ? "items-end" : "items-center"
-                }`}
-              >
-                {widths.map((w, i) => (
-                  <span key={i} className={`${bar} ${w}`} />
-                ))}
-              </span>
-              <span className="mt-1.5 block text-center text-[10px] font-medium">{a.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function SizeRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
   const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
   return (
@@ -609,7 +564,6 @@ export function ThemeForm({
   fontScale: fontScaleProp,
   textColor: textColorProp,
   layout: layoutProp,
-  textAlign,
   colorMode: colorModeProp,
   lightBgColor,
   lightCardColor,
@@ -640,8 +594,6 @@ export function ThemeForm({
   textColor: string;
   /** Section arrangement (LAYOUTS id). */
   layout: string;
-  /** Copy alignment inside containers (TEXT_ALIGNS value). */
-  textAlign: string;
   /** Whether the page is dark, light, or the visitor's choice. */
   colorMode: ColorMode;
   lightBgColor: string;
@@ -666,7 +618,6 @@ export function ThemeForm({
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
-  const [align, setAlign] = useState(textAlign);
   const [colorMode, setColorMode] = useState<ColorMode>(colorModeProp);
   const [lightBg, setLightBg] = useState(lightBgColor);
   const [lightCard, setLightCard] = useState(lightCardColor);
@@ -675,7 +626,11 @@ export function ThemeForm({
   /** Which palette the preview is showing — editing aid only, never saved. */
   /** Which group of controls is on screen. Backdrop is where designing starts. */
   const [pane, setPane] = useState<PaneId>("backdrop");
-  const [previewMode, setPreviewMode] = useState<"dark" | "light">("dark");
+  // Which palette the colour controls are pointing at. With one look chosen
+  // there is nothing to switch and the mode decides; with both, the tab at the
+  // top of Backdrop does. The preview follows it, so you are always looking at
+  // the thing you are editing.
+  const [editTab, setEditTab] = useState<"dark" | "light">(colorModeProp === "light" ? "light" : "dark");
   const [lookName, setLookName] = useState("");
   const [lookState, lookAction, lookPending] = useActionState<FormState, FormData>(saveLookAction, {});
   /** What the preview shows: saved URL, object URL of a picked file, or a generated data URI. */
@@ -727,9 +682,9 @@ export function ThemeForm({
     const newAccent = randomOf(ACCENTS).value;
     setAccent(newAccent);
     // "Roll everything" includes the preset — and sometimes rolls it off.
-    setThemeId(randomOf([...THEMES, { id: "" }]).id);
-    setBg(randomOf(BACKGROUNDS).value);
-    setCard(randomOf(CONTAINERS).value);
+    palette.setThemeId(randomOf([...palette.presets, { id: "" }]).id);
+    palette.setBg(randomOf(palette.backgrounds).value);
+    palette.setCard(randomOf(palette.containers).value);
     setSize(randomOf(CONTAINER_SIZES).value);
     setBorder(randomOf(BORDER_STYLES).id);
     rollSvg(newAccent);
@@ -743,7 +698,7 @@ export function ThemeForm({
    * and nothing is written until Save.
    */
   function useOwnColor(color: string) {
-    setBg(color);
+    palette.setBg(color);
     setGradient(false);
     setBgImg("");
     setBgSvg("");
@@ -779,11 +734,48 @@ export function ThemeForm({
   // mostly clipped above the box.
   // The preview renders whichever palette is being looked at, so the light
   // one is designed against the real thing rather than imagined.
-  const lit = previewMode === "light" && colorMode !== "dark";
+  const editing: "dark" | "light" = colorMode === "auto" ? editTab : colorMode;
+  const lit = editing === "light";
+  /**
+   * Every colour control reads its list, its value and its setter from here,
+   * so adding a palette-aware control is one entry rather than a conditional
+   * threaded through the JSX.
+   */
+  const palette = lit
+    ? {
+        presets: LIGHT_THEMES,
+        groups: [BRIGHT_GROUP] as ThemeGroup[],
+        themeId: lightThemeId,
+        setThemeId: setLightThemeId,
+        backgrounds: LIGHT_BACKGROUNDS,
+        bg: lightBg,
+        setBg: setLightBg,
+        containers: LIGHT_CONTAINERS,
+        card: lightCard,
+        setCard: setLightCard,
+        inks: LIGHT_TEXT_COLORS,
+        ink: lightInk,
+        setInk: setLightInk,
+      }
+    : {
+        presets: DARK_THEMES,
+        groups: DARK_THEME_GROUPS,
+        themeId,
+        setThemeId,
+        backgrounds: BACKGROUNDS,
+        bg,
+        setBg,
+        containers: CONTAINERS,
+        card,
+        setCard,
+        inks: TEXT_COLORS,
+        ink,
+        setInk,
+      };
   const previewStyle = backdropCss({
-    themeId: lit ? lightThemeId || themeId : themeId,
+    themeId: palette.themeId,
     accent,
-    bgColor: lit ? lightBg : bg,
+    bgColor: palette.bg,
     bgImage: bgImg,
     glow: gradient,
     glowSize: "62% 44%",
@@ -803,7 +795,6 @@ export function ThemeForm({
     fontScale: scale,
     textColor: ink,
     layout,
-    textAlign: align,
     colorMode,
     lightBgColor: lightBg,
     lightCardColor: lightCard,
@@ -823,7 +814,6 @@ export function ThemeForm({
     if (d.fontScale) setScale(d.fontScale);
     if (d.textColor) setInk(d.textColor);
     if (d.layout) setLayout(d.layout);
-    if (d.textAlign) setAlign(d.textAlign);
     if (d.colorMode) setColorMode(d.colorMode);
     if (d.lightBgColor) setLightBg(d.lightBgColor);
     if (d.lightCardColor) setLightCard(d.lightCardColor);
@@ -838,9 +828,9 @@ export function ThemeForm({
     setBgSvg("");
   }
 
-  const previewInk = lit ? lightInk : ink;
+  const previewInk = palette.ink;
   const previewCardStyle = {
-    background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${lit ? lightCard : card}`,
+    background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${palette.card}`,
     ...borderCss(border, accent),
     // Container edges are authored for a dark page — the public page flips
     // them for light mode, so the preview has to as well.
@@ -856,13 +846,13 @@ export function ThemeForm({
     backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}55, transparent 70%), ` : ""}${
       bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
     }`,
-    backgroundColor: bg,
+    backgroundColor: palette.bg,
   };
   /** The preview card apes the chosen width against the widest option. */
   const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
   const previewCardWidth = `${(Number(size) / widest) * 100}%`;
   /** What the text actually sits on, so the ink can be checked against it. */
-  const backdropBase = (themeId ? getThemeDef(themeId)?.color : bg) || bg;
+  const backdropBase = (palette.themeId ? getThemeDef(palette.themeId)?.color : palette.bg) || palette.bg;
 
   return (
     <>
@@ -877,7 +867,6 @@ export function ThemeForm({
       <input type="hidden" name="fontScale" value={scale} />
       <input type="hidden" name="textColor" value={ink} />
       <input type="hidden" name="layout" value={layout} />
-      <input type="hidden" name="textAlign" value={align} />
       <input type="hidden" name="colorMode" value={colorMode} />
       <input type="hidden" name="lightBgColor" value={lightBg} />
       <input type="hidden" name="lightCardColor" value={lightCard} />
@@ -990,10 +979,59 @@ export function ThemeForm({
         {/* 1 — What sits behind everything. */}
         <Group pane="backdrop" active={pane} title="Backdrop" hint="The canvas your whole page sits on. Start from a preset or build your own.">
           <div>
+            <span className="label !mb-0">Your look</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              Design the one your own brand already is. Pick <span className="text-snow">Both</span> and you design a
+              second palette as well, and visitors get whichever suits them.
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {COLOR_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setColorMode(m.id)}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                    colorMode === m.id ? "border-brand bg-brand/10" : "border-edge bg-panel2 hover:border-brand/40"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{m.name}</span>
+                  <span className="mt-0.5 block text-xs text-mist">{m.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Only meaningful with two palettes. With one there is nothing to
+              switch between, and the mode already says which it is. */}
+          {colorMode === "auto" && (
+            <div>
+              <span className="label !mb-0">Editing</span>
+              <p className="mt-0.5 text-xs text-mist/70">
+                Every color on this tab — backdrop, containers and text — belongs to the palette you pick here. Your
+                accent, type, layout and container shape are shared by both.
+              </p>
+              <div className="mt-2 flex overflow-hidden rounded-xl border border-edge">
+                {(["dark", "light"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setEditTab(m)}
+                    className={`flex-1 px-3 py-2 text-sm font-semibold capitalize transition ${
+                      editing === m ? "bg-brand/20 text-snow" : "text-mist hover:text-snow"
+                    }`}
+                  >
+                    {m} look
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
             <span className="label !mb-0">Preset</span>
             <p className="mt-0.5 text-xs text-mist/70">
-              A complete backdrop look — {THEMES.length} of them. Pick <span className="text-snow">Custom</span> to
-              design your own with the controls below.
+              A complete backdrop look — {palette.presets.length} of them, all {lit ? "pale enough for dark" : "dark enough for pale"}{" "}
+              text. Pick <span className="text-snow">My colors</span> to design your own with the controls below.
             </p>
             {/* Grouped by what the look is made of, so twenty tiles stay
                 scannable: light and color, then textures, then patterns. */}
@@ -1002,28 +1040,21 @@ export function ThemeForm({
                   tile that hands the backdrop back to the controls below. */}
               <PresetTile
                 name="My colors"
-                selected={themeId === ""}
-                onPick={() => setThemeId("")}
+                selected={palette.themeId === ""}
+                onPick={() => palette.setThemeId("")}
                 style={customTileStyle}
               />
             </div>
-            {THEME_GROUPS.map((g) => (
+            {palette.groups.map((g) => (
               <div key={g} className="mt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-mist/60">
-                  {g}
-                  {g === BRIGHT_GROUP && (
-                    <span className="ml-2 font-medium normal-case tracking-normal text-mist/50">
-                      set a dark text color under Type
-                    </span>
-                  )}
-                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-mist/60">{g}</p>
                 <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-                  {THEMES.filter((t) => t.group === g).map((t) => (
+                  {palette.presets.filter((t) => t.group === g).map((t) => (
                     <PresetTile
                       key={t.id}
                       name={t.name}
-                      selected={themeId === t.id}
-                      onPick={() => setThemeId(t.id)}
+                      selected={palette.themeId === t.id}
+                      onPick={() => palette.setThemeId(t.id)}
                       style={themeCss(t.id, accent)!}
                     />
                   ))}
@@ -1043,7 +1074,7 @@ export function ThemeForm({
                 style={themeCss(themeId, accent) ?? undefined}
               />
               <p className="min-w-0 flex-1 text-xs text-mist">
-                Starting from <span className="font-semibold text-snow">{THEMES.find((t) => t.id === themeId)?.name}</span>
+                Starting from <span className="font-semibold text-snow">{getThemeDef(themeId)?.name}</span>
                 . Everything below still applies on top of it — your background color sits underneath, and your image and
                 overlay layer over it.
               </p>
@@ -1061,9 +1092,9 @@ export function ThemeForm({
                   ? "Sits underneath the preset — it shows through wherever the preset is translucent."
                   : "Paste a hex and your page is exactly that color — no overlay, no image. Add either back below."
               }
-              swatches={BACKGROUNDS}
-              value={bg}
-              onPick={setBg}
+              swatches={palette.backgrounds}
+              value={palette.bg}
+              onPick={palette.setBg}
               custom
               onPickCustom={useOwnColor}
             />
@@ -1179,120 +1210,19 @@ export function ThemeForm({
           <input type="hidden" name="gradient" value={gradient ? "on" : ""} />
         </Group>
 
-        {/* 1b — Whether the page has a second palette at all. */}
-        <Group
-          pane="mode" active={pane}
-          title="Light & dark"
-          hint="Your page is dark by default. Offer a light version too, or let visitors pick."
-        >
-          <div>
-            <span className="label !mb-0">Mode</span>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              {COLOR_MODES.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setColorMode(m.id);
-                    // Nothing to preview in the other palette when there isn't one.
-                    if (m.id === "dark") setPreviewMode("dark");
-                    if (m.id === "light") setPreviewMode("light");
-                  }}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                    colorMode === m.id ? "border-brand bg-brand/10" : "border-edge bg-panel2 hover:border-brand/40"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">{m.name}</span>
-                  <span className="mt-0.5 block text-xs text-mist">{m.hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {colorMode === "dark" ? (
-            <p className="text-xs text-mist/70">
-              Everything else on this tab is your dark look. Switch to light or visitor&apos;s choice to design a second
-              palette.
-            </p>
-          ) : (
-            <>
-              <p className="text-xs text-mist/70">
-                {colorMode === "auto"
-                  ? "Visitors get whichever matches their device, and a switch in the corner of your page to change it. Your accent, type, layout and container shape are shared — only these colors differ."
-                  : "Your page uses these colors instead of the dark ones above. Accent, type, layout and container shape are shared."}
-              </p>
-              <SwatchRow
-                label="Light background"
-                hint="The base color under everything in light mode."
-                swatches={LIGHT_BACKGROUNDS}
-                value={lightBg}
-                onPick={setLightBg}
-                custom
-              />
-              <SwatchRow
-                label="Light container color"
-                hint="The tint of every card and panel in light mode."
-                swatches={LIGHT_CONTAINERS}
-                value={lightCard}
-                onPick={setLightCard}
-                base={lightBg}
-                custom
-              />
-              <SwatchRow
-                label="Light text color"
-                hint="Your words in light mode — the softer tones are mixed from it."
-                swatches={LIGHT_TEXT_COLORS}
-                value={lightInk}
-                onPick={setLightInk}
-                custom
-                warn={
-                  isLight(lightInk) === isLight(lightBg)
-                    ? "This is about as bright as your light background — your words will be hard to read on it."
-                    : undefined
-                }
-              />
-              <div>
-                <span className="label !mb-0">Light preset</span>
-                <p className="mt-0.5 text-xs text-mist/70">
-                  Optional — a different backdrop for light mode. Leave it on{" "}
-                  <span className="text-snow">Same as dark</span> to reuse the one above.
-                </p>
-                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-                  <PresetTile
-                    name="Same as dark"
-                    selected={lightThemeId === ""}
-                    onPick={() => setLightThemeId("")}
-                    style={themeCss(themeId, accent) ?? { backgroundColor: bg }}
-                  />
-                  {THEMES.map((t) => (
-                    <PresetTile
-                      key={t.id}
-                      name={t.name}
-                      selected={lightThemeId === t.id}
-                      onPick={() => setLightThemeId(t.id)}
-                      style={themeCss(t.id, accent)!}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </Group>
-
         {/* 2 — The boxes your content lives in. */}
         <Group pane="containers" active={pane} title="Containers" hint="The cards and panels each section sits in — their tint, width and edges.">
           <SwatchRow
             label="Container color"
             hint="Shown over your backdrop, so the translucent tints pick up whatever is behind them. A pasted hex is solid — it covers the backdrop rather than tinting it."
-            swatches={CONTAINERS}
-            value={card}
-            onPick={setCard}
-            base={bg}
+            swatches={palette.containers}
+            value={palette.card}
+            onPick={palette.setCard}
+            base={palette.bg}
             custom
           />
           <SizeRow value={size} onPick={setSize} />
-          <AlignRow value={align} onPick={setAlign} />
-          <BorderRow value={border} onPick={setBorder} accent={accent} card={card} base={bg} />
+          <BorderRow value={border} onPick={setBorder} accent={accent} card={palette.card} base={palette.bg} />
 
           <div>
             <span className="label !mb-0">Container image</span>
@@ -1360,12 +1290,12 @@ export function ThemeForm({
           <TextSizeRow value={scale} onPick={setScale} family={getFont(fontId).family} />
           <SwatchRow
             label="Text color"
-            swatches={TEXT_COLORS}
-            value={ink}
-            onPick={setInk}
+            swatches={palette.inks}
+            value={palette.ink}
+            onPick={palette.setInk}
             custom
             warn={
-              isLight(ink) === isLight(backdropBase)
+              isLight(palette.ink) === isLight(backdropBase)
                 ? "This is about as bright as your backdrop — your words will be hard to read on it."
                 : ""
             }
@@ -1431,22 +1361,10 @@ export function ThemeForm({
         <div className="card !p-4">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="text-sm font-bold">Live preview</h3>
-            {/* Only worth showing when there are two palettes to switch between. */}
+            {/* Which palette is on screen. Only worth saying when there are
+                two of them; with one look the mode already said it. */}
             {colorMode === "auto" && (
-              <div className="flex overflow-hidden rounded-lg border border-edge text-[11px] font-semibold">
-                {(["dark", "light"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setPreviewMode(m)}
-                    className={`px-2 py-1 capitalize transition ${
-                      previewMode === m ? "bg-brand/20 text-snow" : "text-mist hover:text-snow"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-mist/60">{editing} look</span>
             )}
             <button
               type="button"
@@ -1471,7 +1389,6 @@ export function ThemeForm({
                 fontFamily: getFont(fontId).family,
                 fontSize: `calc(0.85rem * ${scale})`,
                 color: previewInk,
-                textAlign: align as React.CSSProperties["textAlign"],
               }}
             >
               <p className="text-[1.6em] font-extrabold leading-tight">Your name here</p>

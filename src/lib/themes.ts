@@ -521,6 +521,20 @@ export const THEMES: ThemeDef[] = [
   },
 ];
 
+/**
+ * The catalogue, split by which palette a look belongs to.
+ *
+ * A backdrop is either dark enough for pale text or light enough for dark
+ * text; there is no look that does both. So the dark picker offers one half
+ * and the light picker the other, rather than offering everything twice and
+ * leaving the creator to work out which of them will be readable.
+ */
+export const DARK_THEMES: ThemeDef[] = THEMES.filter((t) => t.group !== BRIGHT_GROUP);
+export const LIGHT_THEMES: ThemeDef[] = THEMES.filter((t) => t.group === BRIGHT_GROUP);
+
+/** Shelves the dark picker shows. Bright is the light picker's whole list. */
+export const DARK_THEME_GROUPS: ThemeGroup[] = THEME_GROUPS.filter((g) => g !== BRIGHT_GROUP);
+
 export function getThemeDef(id: string | undefined | null): ThemeDef | null {
   if (!id) return null;
   return THEMES.find((t) => t.id === id) ?? null;

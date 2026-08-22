@@ -5,9 +5,9 @@ import type { CSSProperties } from "react";
  * inline styles on the public page, so only values from these lists are ever
  * persisted (updateSettings validates with pickSwatch).
  *
- * Backgrounds run dark to light. Page text defaults to white, so the light end
- * needs an ink change to go with it — the Font pane's text colour control
- * compares the two with isLight() and says so when they match.
+ * This is the dark palette, so every value in it takes pale text. The light
+ * ones live in LIGHT_BACKGROUNDS and are offered by the light-mode controls,
+ * where the ink is dark and they are legible.
  */
 export interface Swatch {
   id: string;
@@ -47,13 +47,6 @@ export const BACKGROUNDS: Swatch[] = [
   // Mid — still comfortably white-text territory.
   { id: "slate", label: "Slate", value: "#1e2230" },
   { id: "cocoa", label: "Cocoa", value: "#241a16" },
-  // Light — these want a dark text colour; the Font pane prompts for one.
-  { id: "porcelain", label: "Porcelain", value: "#f8f7f4" },
-  { id: "cloud", label: "Cloud", value: "#eef2f8" },
-  { id: "sand", label: "Sand", value: "#f5eee1" },
-  { id: "mint", label: "Mint", value: "#e9f4ee" },
-  { id: "blush", label: "Blush", value: "#fbeff3" },
-  { id: "periwinkle", label: "Periwinkle", value: "#eeecfb" },
 ];
 
 export const CONTAINERS: Swatch[] = [
@@ -95,10 +88,17 @@ export const MAX_LOOKS = 8;
 
 export type ColorMode = "dark" | "light" | "auto";
 
+/**
+ * How many looks a page has, and which.
+ *
+ * The first two are one palette: whichever the creator's own design already
+ * is. The third is both, and is the only case where there is a second palette
+ * to design at all.
+ */
 export const COLOR_MODES: Array<{ id: ColorMode; name: string; hint: string }> = [
-  { id: "dark", name: "Dark only", hint: "One look, the one you design below." },
-  { id: "light", name: "Light only", hint: "One look, built from your light colors." },
-  { id: "auto", name: "Visitor's choice", hint: "Follows their device, with a switch on your page." },
+  { id: "dark", name: "Dark", hint: "One look. Your page is dark for everyone." },
+  { id: "light", name: "Light", hint: "One look. Your page is light for everyone." },
+  { id: "auto", name: "Both", hint: "Whichever suits the visitor's device, plus a switch on your page." },
 ];
 
 export const DEFAULT_COLOR_MODE: ColorMode = "dark";
@@ -135,10 +135,14 @@ export const CONTAINER_SIZES: Swatch[] = [
 ];
 
 /**
- * Which way the copy inside every container runs.
+ * Which way the copy inside a container runs.
  *
- * Sections are authored centred, so "center" is the default and the no-op —
- * the other two are applied by `.site-align-*` in globals.css, which retargets
+ * Set per section rather than per page: a creator centring their hero and
+ * left-aligning a long About passage is the normal case, and one page-wide
+ * switch cannot express it.
+ *
+ * Sections are authored centred, so "center" is the default and the no-op.
+ * The other two are applied by `.site-align-*` in globals.css, which retargets
  * prose elements only. Buttons and badges stay centred whatever is picked.
  */
 export const TEXT_ALIGNS: Swatch[] = [
@@ -149,6 +153,7 @@ export const TEXT_ALIGNS: Swatch[] = [
 
 export const DEFAULT_TEXT_ALIGN = TEXT_ALIGNS[1].value;
 
+/** A stored section alignment, or the centred default for "" and anything unknown. */
 export function getTextAlign(value: string | undefined | null): string {
   return TEXT_ALIGNS.some((a) => a.value === value) ? (value as string) : DEFAULT_TEXT_ALIGN;
 }

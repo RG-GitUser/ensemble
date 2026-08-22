@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
-import { embedUrl, getTemplate, planAllowsTemplate, RECOMMENDED_ORDER } from "./sections";
+import {
+  embedUrl,
+  getTemplate,
+  planAllowsTemplate,
+  RECOMMENDED_ORDER,
+  STARTER_SECTIONS,
+  starterContent,
+} from "./sections";
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
 import { blueskySession, publishPost } from "./publish";
@@ -17,7 +24,7 @@ import {
   ACCENTS,
   BACKGROUNDS,
   CONTAINER_SIZES,
-  getTextAlign,
+  TEXT_ALIGNS,
   CONTAINERS,
   DEFAULT_BG,
   DEFAULT_BORDER,
@@ -157,13 +164,11 @@ export async function startFromScratch(fd: FormData): Promise<void> {
   const config: SiteConfig = { themeColor: "#8b5cf6", tagline: "" };
   const site = store.createSite(user.id, uniqueSlug(user.businessName), planId, config);
 
-  // Seed a starter page so the builder never starts empty.
-  for (const type of ["hero", "about", "bonus", "links"]) {
-    const tpl = getTemplate(type)!;
-    store.addSection(site.id, type, {
-      ...tpl.defaults,
-      ...(type === "hero" ? { heading: user.businessName } : {}),
-    });
+  // Seed a starter page so the builder never starts empty. What goes in comes
+  // from starterContent, which the setup checklist also reads to work out
+  // which sections are still untouched.
+  for (const type of STARTER_SECTIONS) {
+    store.addSection(site.id, type, starterContent(type, user.businessName));
   }
 
   // With Stripe configured, the page needs a subscription before it can go live.
@@ -334,6 +339,19 @@ export async function deleteAllSectionsAction(): Promise<void> {
 /* ---------------- tutorials ---------------- */
 
 /** Records that this person has been through a tour, so it doesn't reappear. */
+/**
+ * Answer the first-sign-in walkthrough offer.
+ *
+ * Revalidates the whole dashboard layout, not just the page: the prompt and
+ * the tour bubbles are both mounted there, so the layout has to re-read prefs
+ * or the dialog stays on screen after it has been answered.
+ */
+export async function completeWelcomeAction(takeTour: boolean): Promise<void> {
+  const user = await requireUser();
+  store.completeWelcome(user.id, takeTour);
+  revalidatePath("/dashboard", "layout");
+}
+
 export async function dismissTourAction(tourId: string): Promise<void> {
   const user = await requireUser();
   store.markTourSeen(user.id, tourId);
@@ -391,6 +409,34 @@ export async function setSiteTheme(fd: FormData): Promise<void> {
   const themeId = str(fd, "themeId");
   if (themeId && !getThemeDef(themeId)) return;
   store.updateSite(site.id, { config: { ...site.config, themeId } });
+  revalidateSite(site);
+}
+
+/**
+ * Alignment is stored on the section, so it rides with the container it
+ * describes: reordering or deleting a section takes its alignment with it,
+ * and no page-level value has to be kept in step.
+ */
+export async function setSectionAlignAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const align = str(fd, "align");
+  if (!TEXT_ALIGNS.some((a) => a.value === align)) return;
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id) return;
+  store.setSectionAlign(id, align);
+  revalidateSite(site);
+}
+
+/** Where the section's buttons sit. Their labels are always centred. */
+export async function setSectionButtonAlignAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const align = str(fd, "align");
+  if (!TEXT_ALIGNS.some((a) => a.value === align)) return;
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id) return;
+  store.setSectionButtonAlign(id, align);
   revalidateSite(site);
 }
 
@@ -538,7 +584,6 @@ function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
     fontScale: pickSwatch(TEXT_SIZES, text("fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
     textColor: pickColor(TEXT_COLORS, text("textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     layout: getLayout(text("layout")) ? text("layout") : DEFAULT_LAYOUT,
-    textAlign: getTextAlign(text("textAlign")),
     colorMode: getColorMode(text("colorMode")),
     lightThemeId: getThemeDef(text("lightThemeId")) ? text("lightThemeId") : "",
     lightBgColor: pickColor(LIGHT_BACKGROUNDS, text("lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
@@ -626,8 +671,6 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     // Section arrangement — only known layout ids reach the page.
     layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
-    // Copy alignment inside containers — one of three known values.
-    textAlign: getTextAlign(str(fd, "textAlign")),
     // Light/dark. The mode is one of three known ids; the light palette goes
     // through the same pickColor gate as the dark one, against the light
     // swatch lists.

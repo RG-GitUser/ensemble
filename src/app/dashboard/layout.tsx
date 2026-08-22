@@ -5,6 +5,10 @@ import { getSiteByUser, getUserPrefs } from "@/lib/db";
 import { getPlan, type PlanDef } from "@/lib/plans";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TourGuide } from "@/components/TourGuide";
+import { WelcomeDialog } from "@/components/WelcomeDialog";
+
+/** Kept in step with setupSteps() on the dashboard, which builds exactly six. */
+const SETUP_STEPS = 6;
 
 const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?: string }> = [
   { href: "/dashboard", label: "Overview" },
@@ -101,8 +105,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="min-w-0 flex-1 px-6 py-8 md:px-10">{children}</main>
       {/* Mounted once for the whole dashboard: it picks the tour matching the
           current route, and shows nothing at all once they've been seen or
-          switched off in Settings. */}
-      <TourGuide seen={prefs.toursSeen} enabled={prefs.tutorialsEnabled} />
+          switched off in Settings. It waits for the welcome to be answered,
+          so bubbles never open underneath the dialog offering them. */}
+      <TourGuide seen={prefs.toursSeen} enabled={prefs.tutorialsEnabled && prefs.welcomed} />
+      {/* Only once a site exists — someone still in onboarding has no
+          dashboard to be walked through yet. */}
+      {site && !prefs.welcomed && (
+        <WelcomeDialog firstName={user.name.split(" ")[0]} steps={SETUP_STEPS} />
+      )}
     </div>
   );
 }

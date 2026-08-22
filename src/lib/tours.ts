@@ -33,7 +33,7 @@ export const TOURS: TourDef[] = [
       {
         target: "setup",
         title: "Start here",
-        body: "This checklist is the short version of getting live. Work down it and your page is done — each step ticks itself off.",
+        body: "Six checkpoints between you and a page worth sharing. Work down them in order and each one ticks itself off as you go.",
       },
       {
         target: "publish",

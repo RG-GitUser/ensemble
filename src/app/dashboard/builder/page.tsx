@@ -10,7 +10,7 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, DEFAULT_TEXT_ALIGN, getColorMode } from "@/lib/theme";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -19,6 +19,8 @@ import {
   deleteSectionAction,
   moveSectionAction,
   organizeSectionsAction,
+  setSectionAlignAction,
+  setSectionButtonAlignAction,
   setSectionThemeAction,
   updateSectionAction,
 } from "@/lib/actions";
@@ -37,10 +39,96 @@ function defaultCss(accent: string): React.CSSProperties {
   };
 }
 
-function SectionThemeRow({ section, accent }: { section: Section; accent: string }) {
-  const options = [{ id: "", name: "Page theme" }, ...THEMES];
+/**
+ * One row of Left / Center / Right. Each option posts its own form, so a
+ * choice lands in a click with no save step, the way the theme swatches do.
+ */
+function AlignPicker({
+  label,
+  hint,
+  sectionId,
+  value,
+  action,
+  icon,
+}: {
+  label: string;
+  hint: string;
+  sectionId: number;
+  value: string;
+  action: (fd: FormData) => Promise<void>;
+  icon: (value: string) => React.ReactNode;
+}) {
   return (
-    <div className="mb-4 border-b border-edge pb-4">
+    <div>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {TEXT_ALIGNS.map((a) => {
+          const selected = value === a.value;
+          return (
+            <form key={a.id} action={action}>
+              <input type="hidden" name="sectionId" value={sectionId} />
+              <input type="hidden" name="align" value={a.value} />
+              <button
+                title={`${label}: ${a.label.toLowerCase()}`}
+                className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium transition ${
+                  selected ? "border-brand text-snow ring-1 ring-brand" : "border-edge text-mist hover:border-brand/60"
+                }`}
+              >
+                {icon(a.value)}
+                {a.label}
+              </button>
+            </form>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11px] text-mist/70">{hint}</p>
+    </div>
+  );
+}
+
+/** A pill sitting where the setting would put it, on a line of its own. */
+function ButtonAlignIcon({ align }: { align: string }) {
+  const items = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "justify-center";
+  return (
+    <span aria-hidden className={`flex w-3.5 ${items}`}>
+      <span className="h-[6px] w-[7px] rounded-[2px] bg-current" />
+    </span>
+  );
+}
+
+/** Three bars, ragged on whichever edge the setting doesn't line up. */
+function AlignIcon({ align }: { align: string }) {
+  const widths = ["100%", "60%", "80%"];
+  const items = align === "left" ? "items-start" : align === "right" ? "items-end" : "items-center";
+  return (
+    <span aria-hidden className={`flex w-3.5 flex-col gap-[2px] ${items}`}>
+      {widths.map((w, i) => (
+        <span key={i} className="h-[2px] rounded-full bg-current" style={{ width: w }} />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Per-container appearance: the band this section sits in, and which way its
+ * words run.
+ *
+ * Alignment lives here rather than in the Design tab because it is rarely one
+ * answer for a whole page: a centred hero above a left-aligned About passage
+ * is the ordinary case, and a single page-wide switch can't say that. It moves
+ * the section's buttons along with its words, since a button sitting in the
+ * middle of a left-aligned block reads as a mistake.
+ *
+ * Both controls are one click with no save step, each posting its own form,
+ * which is how the theme swatches have always worked.
+ */
+function SectionAppearance({ section, accent }: { section: Section; accent: string }) {
+  const options = [{ id: "", name: "Page theme" }, ...THEMES];
+  const align = getTextAlign(section.align);
+  const buttonAlign = getTextAlign(section.buttonAlign);
+  return (
+    <div className="mb-4 space-y-3 border-b border-edge pb-4">
+      <div>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">Container theme</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((t) => {
@@ -62,6 +150,23 @@ function SectionThemeRow({ section, accent }: { section: Section; accent: string
           );
         })}
       </div>
+      </div>
+      <AlignPicker
+        label="Text alignment"
+        hint="Where this section's words sit."
+        sectionId={section.id}
+        value={align}
+        action={setSectionAlignAction}
+        icon={(v) => <AlignIcon align={v} />}
+      />
+      <AlignPicker
+        label="Button position"
+        hint="Where this section's buttons sit. Their labels are always centred."
+        sectionId={section.id}
+        value={buttonAlign}
+        action={setSectionButtonAlignAction}
+        icon={(v) => <ButtonAlignIcon align={v} />}
+      />
     </div>
   );
 }
@@ -154,7 +259,7 @@ function SectionCard({
           </form>
         </div>
       </div>
-      <SectionThemeRow section={section} accent={accent} />
+      <SectionAppearance section={section} accent={accent} />
       <form action={updateSectionAction} className="space-y-4">
         <input type="hidden" name="sectionId" value={section.id} />
         {tpl.fields.map((f) => (
@@ -246,7 +351,6 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
             textColor={site.config.textColor ?? DEFAULT_TEXT_COLOR}
             layout={site.config.layout ?? DEFAULT_LAYOUT}
-            textAlign={site.config.textAlign ?? DEFAULT_TEXT_ALIGN}
             colorMode={getColorMode(site.config.colorMode)}
             lightBgColor={site.config.lightBgColor ?? DEFAULT_LIGHT_BG}
             lightCardColor={site.config.lightCardColor ?? DEFAULT_LIGHT_CARD}

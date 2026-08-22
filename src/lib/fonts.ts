@@ -86,7 +86,6 @@ export const TEXT_COLORS = [
   { id: "sand", label: "Sand", value: "#f5e9d7" },
   { id: "mint", label: "Mint", value: "#e6fff4" },
   { id: "slate", label: "Slate", value: "#cbd5e1" },
-  { id: "ink", label: "Ink", value: "#0b0714" },
 ];
 
 /** Inks that stay legible on the light backdrops. Any hex is allowed too. */
@@ -96,7 +95,6 @@ export const LIGHT_TEXT_COLORS = [
   { id: "slate", label: "Slate", value: "#334155" },
   { id: "espresso", label: "Espresso", value: "#2a1d14" },
   { id: "navy", label: "Navy", value: "#12203c" },
-  { id: "white", label: "White", value: "#ffffff" },
 ];
 
 export const DEFAULT_LIGHT_TEXT_COLOR = LIGHT_TEXT_COLORS[0].value;

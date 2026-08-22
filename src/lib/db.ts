@@ -147,7 +147,10 @@ function createDb(): Database.Database {
       tutorials_enabled INTEGER NOT NULL DEFAULT 1,
       -- Comma-separated ids of tours already seen. A list rather than a row
       -- per tour: it is only ever read and written whole.
-      tours_seen TEXT NOT NULL DEFAULT ''
+      tours_seen TEXT NOT NULL DEFAULT '',
+      -- Has this person been offered the walkthrough yet? Distinct from
+      -- tours_seen, which fills in as they read individual bubbles.
+      welcomed INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS social_post_targets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,6 +170,23 @@ function createDb(): Database.Database {
   if (!saCols.has("external_id")) db.exec("ALTER TABLE social_accounts ADD COLUMN external_id TEXT NOT NULL DEFAULT ''");
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+  // The welcome prompt arrived after user_prefs shipped, so everyone who
+  // already had an account is marked as welcomed on the way in. They have
+  // been round the dashboard already, and greeting them with "Welcome" would
+  // be plainly wrong. Only accounts created from here on meet it.
+  //
+  // The backfill has to insert as well as update: a user who never touched
+  // the Tutorials switch has no prefs row at all, and getUserPrefs reads a
+  // missing row as brand new.
+  const prefCols = new Set((db.prepare("PRAGMA table_info(user_prefs)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!prefCols.has("welcomed")) {
+    db.exec(`
+      ALTER TABLE user_prefs ADD COLUMN welcomed INTEGER NOT NULL DEFAULT 0;
+      INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed)
+        SELECT id, 1, '', 1 FROM users WHERE id NOT IN (SELECT user_id FROM user_prefs);
+      UPDATE user_prefs SET welcomed = 1;
+    `);
+  }
   // Snippet-reported content discovery replaced the server-side URL scan.
   const connCols = new Set((db.prepare("PRAGMA table_info(connections)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!connCols.has("needs_report")) db.exec("ALTER TABLE connections ADD COLUMN needs_report INTEGER NOT NULL DEFAULT 1");
@@ -206,6 +226,16 @@ function createDb(): Database.Database {
   const sectionCols = db.prepare("PRAGMA table_info(sections)").all() as Array<{ name: string }>;
   if (!sectionCols.some((c) => c.name === "theme")) {
     db.exec("ALTER TABLE sections ADD COLUMN theme TEXT NOT NULL DEFAULT ''");
+  }
+  // Per-section text alignment. Empty means the shipped default, which is
+  // centred, so every existing section keeps the look it already had.
+  if (!sectionCols.some((c) => c.name === "align")) {
+    db.exec("ALTER TABLE sections ADD COLUMN align TEXT NOT NULL DEFAULT ''");
+  }
+  // Where the section's buttons sit. Kept apart from `align` on purpose: a
+  // centred button under a left-aligned paragraph is a normal thing to want.
+  if (!sectionCols.some((c) => c.name === "button_align")) {
+    db.exec("ALTER TABLE sections ADD COLUMN button_align TEXT NOT NULL DEFAULT ''");
   }
   // The demo/hq showcase sites are exempt from billing on databases seeded
   // before the billing columns existed.
@@ -432,6 +462,8 @@ interface SectionRow {
   position: number;
   content: string;
   theme: string | null;
+  align: string | null;
+  button_align: string | null;
 }
 interface QuoteRow {
   id: number;
@@ -487,6 +519,8 @@ function toSection(r: SectionRow): Section {
     position: r.position,
     content: JSON.parse(r.content || "{}"),
     theme: r.theme ?? "",
+    align: r.align ?? "",
+    buttonAlign: r.button_align ?? "",
   };
 }
 function toQuote(r: QuoteRow): QuoteRequest {
@@ -646,33 +680,56 @@ export interface UserPrefs {
   tutorialsEnabled: boolean;
   /** Tour ids this person has already been shown. */
   toursSeen: string[];
+  /** Whether the first-sign-in walkthrough offer has been answered. */
+  welcomed: boolean;
 }
 
 /** Preferences for a user, with the shipped defaults when they have none. */
 export function getUserPrefs(userId: number): UserPrefs {
   const r = db().prepare("SELECT * FROM user_prefs WHERE user_id = ?").get(userId) as
-    | { tutorials_enabled: number; tours_seen: string }
+    | { tutorials_enabled: number; tours_seen: string; welcomed: number }
     | undefined;
-  if (!r) return { tutorialsEnabled: true, toursSeen: [] };
+  // No row at all is the truest "brand new": nothing has been answered yet.
+  if (!r) return { tutorialsEnabled: true, toursSeen: [], welcomed: false };
   return {
     tutorialsEnabled: r.tutorials_enabled === 1,
     toursSeen: r.tours_seen ? r.tours_seen.split(",").filter(Boolean) : [],
+    welcomed: r.welcomed === 1,
   };
 }
 
 function writePrefs(userId: number, p: UserPrefs): void {
   db()
     .prepare(
-      `INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen) VALUES (?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET tutorials_enabled = excluded.tutorials_enabled, tours_seen = excluded.tours_seen`
+      `INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed) VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET tutorials_enabled = excluded.tutorials_enabled,
+         tours_seen = excluded.tours_seen, welcomed = excluded.welcomed`
     )
-    .run(userId, p.tutorialsEnabled ? 1 : 0, p.toursSeen.join(","));
+    .run(userId, p.tutorialsEnabled ? 1 : 0, p.toursSeen.join(","), p.welcomed ? 1 : 0);
 }
 
 /** Switching tutorials back on replays them, so the seen list is cleared. */
 export function setTutorialsEnabled(userId: number, enabled: boolean): void {
   const p = getUserPrefs(userId);
-  writePrefs(userId, { tutorialsEnabled: enabled, toursSeen: enabled ? [] : p.toursSeen });
+  // welcomed is carried through: turning tips off later doesn't make someone
+  // new again, so the welcome prompt must not come back.
+  writePrefs(userId, { ...p, tutorialsEnabled: enabled, toursSeen: enabled ? [] : p.toursSeen });
+}
+
+/**
+ * Answer the welcome prompt.
+ *
+ * Taking the walkthrough leaves the bubbles on and replays them from the top;
+ * declining turns them off, so someone who said "I'll look around myself"
+ * isn't then followed around by tips. Settings turns them back on.
+ */
+export function completeWelcome(userId: number, takeTour: boolean): void {
+  const p = getUserPrefs(userId);
+  writePrefs(userId, {
+    tutorialsEnabled: takeTour,
+    toursSeen: takeTour ? [] : p.toursSeen,
+    welcomed: true,
+  });
 }
 
 export function markTourSeen(userId: number, tourId: string): void {
@@ -710,6 +767,14 @@ export function addSection(siteId: number, type: string, content: Record<string,
 
 export function setSectionTheme(id: number, theme: string): void {
   db().prepare("UPDATE sections SET theme = ? WHERE id = ?").run(theme, id);
+}
+
+export function setSectionAlign(id: number, align: string): void {
+  db().prepare("UPDATE sections SET align = ? WHERE id = ?").run(align, id);
+}
+
+export function setSectionButtonAlign(id: number, align: string): void {
+  db().prepare("UPDATE sections SET button_align = ? WHERE id = ?").run(align, id);
 }
 
 export function updateSectionContent(id: number, content: Record<string, string>): void {
