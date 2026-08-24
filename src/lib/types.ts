@@ -15,8 +15,10 @@ export interface SiteConfig {
   bgColor?: string;
   /** Container/card background on the public page (curated palette). */
   cardColor?: string;
-  /** Container width multiplier — a CONTAINER_SIZES value from lib/theme.ts. */
+  /** Container width multiplier, free between SIZE_MIN and SIZE_MAX (lib/theme.ts). */
   containerSize?: string;
+  /** Floor under every container, in rem. "0" is none — content decides. */
+  containerMinHeight?: string;
   /** Container border treatment — a BORDER_STYLES id from lib/theme.ts. */
   borderStyle?: string;
   /** Uploaded or generated background image URL (/api/uploads/...). */
@@ -60,7 +62,11 @@ export interface SiteConfig {
   twitchChannel?: string;
   facebookLiveUrl?: string;
   instagramLiveUser?: string;
-  /** Per-platform RTMP stream keys for simulcast fan-out (stored for the relay). */
+  /**
+   * Per-platform RTMP stream keys. Stored only: there is no relay to spend
+   * them, so the dashboard stopped asking for them. Kept so nothing a creator
+   * already saved is lost when one exists.
+   */
   twitchStreamKey?: string;
   facebookStreamKey?: string;
   instagramStreamKey?: string;
@@ -81,6 +87,7 @@ export type DesignConfig = Pick<
   | "bgColor"
   | "cardColor"
   | "containerSize"
+  | "containerMinHeight"
   | "borderStyle"
   | "bgImage"
   | "cardImage"
@@ -202,6 +209,10 @@ export interface Connection {
 
 /** A creator-owned domain serving their hosted page. */
 export interface CustomDomain {
+  /** Value the creator publishes in a TXT record to prove the domain is theirs. */
+  verifyToken: string;
+  /** When ownership was proved; null while the claim is unproven. */
+  verifiedAt: string | null;
   siteId: number;
   hostname: string;
   createdAt: string;

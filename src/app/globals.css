@@ -320,6 +320,67 @@ body,
 .site-ink-faint { color: color-mix(in srgb, var(--site-ink, #fff) 45%, transparent); }
 
 /**
+ * Surfaces and edges drawn from the page's own ink.
+ *
+ * These replace white-alpha tints, which were invisible the moment a backdrop
+ * was pale: an 8%-white panel on a near-white page is nothing at all. Mixing
+ * from the ink means the same declaration reads as a light tint on a dark
+ * page and a dark one on a light page.
+ *
+ * The hover rule is for the one place a link brightens to full ink; Tailwind's
+ * hover: prefix can't reach a custom class.
+ */
+.site-surface { background-color: color-mix(in srgb, var(--site-ink, #fff) 8%, transparent); }
+.site-edge { border-color: color-mix(in srgb, var(--site-ink, #fff) 20%, transparent); }
+a.site-ink-soft:hover { color: var(--site-ink, #fff); }
+
+/**
+ * Text fields on a creator page.
+ *
+ * These were hardcoded white throughout: white text, a 15%-white border, a
+ * 40%-white placeholder. On a light page that is a near-invisible field with
+ * a placeholder nobody can read. They take the page's own ink and accent
+ * instead, so a field is legible in either palette and wears the creator's
+ * colour rather than a generic grey.
+ *
+ * Border longhands, not the shorthand: the CSS optimizer expands `border` at
+ * build time and drops the value when it contains a var(), which would leave
+ * every field with no border at all. Same reason .site-card does it.
+ */
+.site-field {
+  color: var(--site-ink, #fff);
+  background-color: color-mix(in srgb, var(--site-ink, #fff) 6%, transparent);
+  border-style: solid;
+  border-width: 1px;
+  /* Accent mixed into the ink, not faded into transparency. A saturated
+     accent at low alpha can sit at almost the same luminance as the field it
+     is drawn on, which looks like no border at all; mixing toward the ink
+     guarantees the edge is visible whatever colour the creator picked. */
+  border-color: color-mix(in srgb, var(--site-accent, #8b5cf6) 55%, var(--site-ink, #fff));
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.site-field::placeholder {
+  color: color-mix(in srgb, var(--site-ink, #fff) 60%, transparent);
+}
+.site-field:focus {
+  border-color: var(--site-accent, #8b5cf6);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--site-accent, #8b5cf6) 25%, transparent);
+}
+
+/**
+ * A floor under each container (MIN_HEIGHT_MAX in lib/theme.ts).
+ *
+ * On the section wrapper and on a themed band alike, so a section that carries
+ * its own backdrop grows with the rest rather than floating at its natural
+ * height inside a taller box. Zero by default, which is the same as no rule.
+ */
+.site-section,
+.site-section > .site-band {
+  min-height: var(--site-min-h, 0);
+}
+
+/**
  * Copy alignment, set per section (TEXT_ALIGNS in lib/theme.ts). The class
  * goes on each section's own wrapper, so a centred hero can sit above a
  * left-aligned About passage.
@@ -379,6 +440,22 @@ body,
 }
 .site-btn-right .site-btn-row {
   text-align: right;
+}
+
+/**
+ * A button welded to a field, which is the newsletter signup and nothing else
+ * so far. The button alone has nowhere to go: the field beside it is flex-1
+ * and eats the row, so text-align on the wrapper moves nothing. What the
+ * setting moves is the pair, within whatever slack its container has.
+ */
+.site-btn-group {
+  margin-inline: auto;
+}
+.site-btn-left .site-btn-group {
+  margin-inline: 0 auto;
+}
+.site-btn-right .site-btn-group {
+  margin-inline: auto 0;
 }
 
 /**

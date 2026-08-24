@@ -48,13 +48,7 @@ export default async function IntegrationsPage({
               twitchChannel={site.config.twitchChannel ?? ""}
               facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
               instagramLiveUser={site.config.instagramLiveUser ?? ""}
-              streamKeys={{
-                twitch: site.config.twitchStreamKey ?? "",
-                facebook: site.config.facebookStreamKey ?? "",
-                instagram: site.config.instagramStreamKey ?? "",
-              }}
               liveNow={site.config.liveNow === true}
-              ingestKey={site.embedToken}
               oauthReady={configuredProviderIds()}
               showLive={plan.live}
             />
@@ -63,8 +57,8 @@ export default async function IntegrationsPage({
         })()}
         {!plan.live && (
           <LockedCard
-            title="Live streams & simulcast"
-            body="Link Twitch, Facebook and Instagram Live, show the players on your page, and go live everywhere with one click."
+            title="Live streams"
+            body="Link Twitch, Facebook and Instagram Live, show the players on your page, and announce every stream to your followers in one press."
             plan="Enterprise"
           />
         )}
@@ -72,11 +66,9 @@ export default async function IntegrationsPage({
         <IntegrationsForm
           payments={plan.payments}
           calendar={plan.calendar}
-          chatroom={plan.chatroom}
           newsletter={plan.newsletter}
           stripeKey={site.config.stripeKey ?? ""}
           calendlyUrl={site.config.calendlyUrl ?? ""}
-          chatroomEnabled={site.config.chatroomEnabled ?? true}
           newsletterEnabled={site.config.newsletterEnabled ?? true}
         />
 

@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { updateSettings, type FormState } from "@/lib/actions";
 
-export function SettingsForm({ slug, tagline }: { slug: string; tagline: string }) {
+export function SettingsForm({ slug }: { slug: string }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateSettings, {});
   return (
     <form action={formAction} className="card space-y-4">
@@ -16,14 +16,14 @@ export function SettingsForm({ slug, tagline }: { slug: string; tagline: string 
           <input className="field font-mono" id="slug" name="slug" defaultValue={slug} required />
         </div>
       </div>
-      <div>
-        <label className="label" htmlFor="tagline">Tagline (shown in your page footer)</label>
-        <input className="field" id="tagline" name="tagline" defaultValue={tagline} placeholder="Made with love for my followers" />
-      </div>
       <p className="text-xs text-mist/70">
-        Looking for colors? Your page&apos;s theme now lives in the{" "}
+        Looking for your tagline? It lives in the{" "}
+        <Link href="/dashboard/builder" className="text-brand hover:underline">
+          Footer section
+        </Link>
+        , and your colors are in the{" "}
         <Link href="/dashboard/builder?tab=design" className="text-brand hover:underline">
-          Page Builder&apos;s Design tab
+          Design tab
         </Link>
         .
       </p>

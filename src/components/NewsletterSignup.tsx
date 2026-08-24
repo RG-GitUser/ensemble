@@ -7,15 +7,15 @@ export function NewsletterSignup({ siteId, buttonLabel }: { siteId: number; butt
   const [state, formAction, pending] = useActionState<FormState, FormData>(subscribeAction, {});
 
   if (state.ok) {
-    return <p className="mt-6 text-center font-semibold text-white/90">You&apos;re in — check your inbox soon.</p>;
+    return <p className="mt-6 text-center font-semibold site-ink">You&apos;re in — check your inbox soon.</p>;
   }
 
   return (
-    <form action={formAction} className="mx-auto mt-6 w-full max-w-md">
+    <form action={formAction} className="site-btn-group mt-6 w-full max-w-md">
       <div className="flex flex-col gap-3 sm:flex-row">
         <input type="hidden" name="siteId" value={siteId} />
         <input
-          className="w-full flex-1 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:border-white/40"
+          className="site-field w-full flex-1 rounded-xl px-4 py-3"
           name="email"
           type="email"
           placeholder="you@example.com"

@@ -23,6 +23,7 @@ export default async function SettingsPage() {
   const prefs = getUserPrefs(user.id);
   const domainState = domainProgress({
     hostname: domain?.hostname ?? "",
+    verified: !!domain?.verifiedAt,
     dnsSeen: !!domain?.lastSeen,
     published: site.published,
   });
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
       <p className="mt-1 text-sm text-mist">Your page URL, domain, branding and plan.</p>
 
       <div className="mt-6 space-y-6">
-        <SettingsForm slug={site.slug} tagline={site.config.tagline} />
+        <SettingsForm slug={site.slug} />
 
         {/* The full step-by-step lives on My Website so there's exactly one
             place to set a domain up — this is just the status + a way in. */}

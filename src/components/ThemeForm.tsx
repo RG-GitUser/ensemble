@@ -8,7 +8,11 @@ import {
   BACKGROUNDS,
   BORDER_STYLES,
   borderCss,
-  CONTAINER_SIZES,
+  clampMinHeight,
+  clampSize,
+  MIN_HEIGHT_MAX,
+  SIZE_MAX,
+  SIZE_MIN,
   CONTAINERS,
   COLOR_MODES,
   type ColorMode,
@@ -151,7 +155,7 @@ function PresetTile({
       aria-pressed={selected}
       onClick={onPick}
       className={`overflow-hidden rounded-xl border text-left transition ${
-        selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+        selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
       }`}
     >
       <div className="h-12 w-full" style={style} />
@@ -264,7 +268,7 @@ function FontRow({ value, onPick }: { value: string; onPick: (v: string) => void
               aria-pressed={selected}
               onClick={() => onPick(f.id)}
               className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
               }`}
             >
               <span className="block truncate text-base" style={{ fontFamily: f.family }}>
@@ -297,7 +301,7 @@ function TextSizeRow({ value, onPick, family }: { value: string; onPick: (v: str
               aria-pressed={selected}
               onClick={() => onPick(s.value)}
               className={`w-[5.5rem] rounded-xl border px-2 py-2 transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
               }`}
             >
               <span className="flex h-7 items-center justify-center">
@@ -327,7 +331,7 @@ function LayoutRow({ value, onPick }: { value: string; onPick: (v: string) => vo
               aria-pressed={selected}
               onClick={() => onPick(l.id)}
               className={`rounded-xl border p-3 text-left transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
               }`}
             >
               {/* The diagram carries the idea faster than the sentence does. */}
@@ -431,37 +435,135 @@ function PreviewSections({
 }
 
 /** Width picker — each tile draws its option to scale, widest option full. */
-function SizeRow({ value, onPick }: { value: string; onPick: (v: string) => void }) {
-  const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
+/**
+ * Container size: pull the sample's edges and they follow your cursor.
+ *
+ * Five named widths were a guess at which ones anyone would want. The value
+ * underneath was always a plain multiplier, so setting it freely needed no new
+ * storage, only a control that lets you land between the old steps.
+ *
+ * The sample grows from its centre horizontally because that is what a real
+ * section does: page containers are centred, so an edge dragged right moves
+ * the opposite edge left by the same amount.
+ *
+ * Height is a floor rather than a fixed size. Sections hold wildly different
+ * amounts, and one exact height would clip a merch grid or strand a links list
+ * in whitespace, so a taller section still grows past whatever is set here.
+ */
+function SizeRow({
+  width,
+  onWidth,
+  minHeight,
+  onMinHeight,
+}: {
+  width: string;
+  onWidth: (v: string) => void;
+  minHeight: string;
+  onMinHeight: (v: string) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const w = Number(clampSize(width));
+  const h = Number(clampMinHeight(minHeight));
+  const span = SIZE_MAX - SIZE_MIN;
+  const widthPct = ((w - SIZE_MIN) / span) * 100;
+  // The sample is scaled to sit in a control, not to be a ruler. The number
+  // beside it is the honest value; this only has to move the right way.
+  const boxPx = 44 + (h / MIN_HEIGHT_MAX) * 150;
+
+  function widthFromClientX(clientX: number) {
+    const el = boxRef.current?.parentElement;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return;
+    const half = Math.abs(clientX - (r.left + r.width / 2));
+    onWidth(clampSize(SIZE_MIN + Math.min(1, (half * 2) / r.width) * span));
+  }
+
+  function heightFromClientY(clientY: number) {
+    const el = boxRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = Math.max(0, clientY - r.top);
+    onMinHeight(clampMinHeight(((px - 44) / 150) * MIN_HEIGHT_MAX));
+  }
+
+  const handle =
+    "absolute flex touch-none items-center justify-center rounded-md border border-brand bg-panel transition hover:bg-brand/20";
+
   return (
     <div>
-      <span className="label !mb-0">Container width</span>
+      <span className="label !mb-0">Container size</span>
       <p className="mt-0.5 text-xs text-mist/70">
-        How wide your sections run. Every section scales together, so a links list stays narrower than a merch grid.
+        Drag the side edges to set how wide your sections run, and the bottom edge to give them a minimum height. Every
+        section scales together, so a links list stays narrower than a merch grid.
       </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {CONTAINER_SIZES.map((s) => {
-          const selected = value === s.value;
-          return (
+
+      <div className="mt-3 select-none rounded-xl border border-edge bg-panel2 px-3 py-4">
+        <div
+          ref={boxRef}
+          className="relative mx-auto rounded-lg bg-mist/20 shadow-[inset_0_0_0_1px_var(--hairline)]"
+          style={{ width: `${Math.max(widthPct, 6)}%`, height: `${boxPx}px` }}
+        >
+          {/* Either side edge says the same thing, and reaching for the nearer
+              one is what anyone does. */}
+          {([-1, 1] as const).map((side) => (
             <button
-              key={s.id}
+              key={side}
               type="button"
-              aria-pressed={selected}
-              onClick={() => onPick(s.value)}
-              className={`w-[4.5rem] rounded-xl border px-2 py-2 transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
-              }`}
+              role="slider"
+              aria-label={`Container width, ${side === -1 ? "left" : "right"} edge`}
+              aria-valuemin={SIZE_MIN}
+              aria-valuemax={SIZE_MAX}
+              aria-valuenow={w}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                widthFromClientX(e.clientX);
+              }}
+              onPointerMove={(e) => {
+                if (e.currentTarget.hasPointerCapture(e.pointerId)) widthFromClientX(e.clientX);
+              }}
+              onKeyDown={(e) => {
+                const by = e.key === "ArrowRight" || e.key === "ArrowUp" ? 0.02 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -0.02 : 0;
+                if (by) { e.preventDefault(); onWidth(clampSize(w + by)); }
+              }}
+              className={`${handle} top-1/2 h-10 w-4 -translate-y-1/2 cursor-ew-resize ${side === -1 ? "-left-2" : "-right-2"}`}
             >
-              <span className="flex h-7 items-center justify-center">
-                <span
-                  className="block h-full rounded-md bg-mist/25 shadow-[inset_0_0_0_1px_var(--hairline)]"
-                  style={{ width: `${(Number(s.value) / widest) * 100}%` }}
-                />
-              </span>
-              <span className="mt-1.5 block text-center text-[10px] font-medium">{s.label}</span>
+              <span aria-hidden className="h-4 w-[2px] rounded-full bg-brand" />
             </button>
-          );
-        })}
+          ))}
+
+          <button
+            type="button"
+            role="slider"
+            aria-label="Container minimum height"
+            aria-valuemin={0}
+            aria-valuemax={MIN_HEIGHT_MAX}
+            aria-valuenow={h}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              heightFromClientY(e.clientY);
+            }}
+            onPointerMove={(e) => {
+              if (e.currentTarget.hasPointerCapture(e.pointerId)) heightFromClientY(e.clientY);
+            }}
+            onKeyDown={(e) => {
+              const by = e.key === "ArrowDown" ? 0.5 : e.key === "ArrowUp" ? -0.5 : 0;
+              if (by) { e.preventDefault(); onMinHeight(clampMinHeight(h + by)); }
+            }}
+            className={`${handle} -bottom-2 left-1/2 h-4 w-10 -translate-x-1/2 cursor-ns-resize`}
+          >
+            <span aria-hidden className="h-[2px] w-4 rounded-full bg-brand" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-xs">
+        <span className="text-mist/70">
+          {h === 0 ? "Height follows your content" : `At least ${h}rem tall, and taller when the content needs it`}
+        </span>
+        <span className="font-mono text-snow">
+          {w.toFixed(2)}&times; wide{h > 0 ? ` · ${h}rem min` : ""}
+        </span>
       </div>
     </div>
   );
@@ -496,7 +598,7 @@ function BorderRow({
               aria-pressed={selected}
               onClick={() => onPick(b.id)}
               className={`w-[5.5rem] rounded-xl border p-2 transition ${
-                selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
               }`}
             >
               <span
@@ -554,6 +656,7 @@ export function ThemeForm({
   bgColor,
   cardColor,
   containerSize,
+  containerMinHeight,
   borderStyle,
   bgImage,
   cardImage,
@@ -575,8 +678,10 @@ export function ThemeForm({
   themeColor: string;
   bgColor: string;
   cardColor: string;
-  /** Container width multiplier (CONTAINER_SIZES value). */
+  /** Container width multiplier, anywhere between SIZE_MIN and SIZE_MAX. */
   containerSize: string;
+  /** Floor under every container, in rem ("0" = none). */
+  containerMinHeight: string;
   /** Container border treatment (BORDER_STYLES id). */
   borderStyle: string;
   bgImage: string;
@@ -611,6 +716,7 @@ export function ThemeForm({
   const [bg, setBg] = useState(bgColor);
   const [card, setCard] = useState(cardColor);
   const [size, setSize] = useState(containerSize);
+  const [minH, setMinH] = useState(containerMinHeight);
   const [border, setBorder] = useState(borderStyle);
   const [gradient, setGradient] = useState(gradientProp);
   const [themeId, setThemeId] = useState(themeIdProp);
@@ -685,7 +791,7 @@ export function ThemeForm({
     palette.setThemeId(randomOf([...palette.presets, { id: "" }]).id);
     palette.setBg(randomOf(palette.backgrounds).value);
     palette.setCard(randomOf(palette.containers).value);
-    setSize(randomOf(CONTAINER_SIZES).value);
+    setSize(clampSize(SIZE_MIN + Math.random() * (SIZE_MAX - SIZE_MIN)));
     setBorder(randomOf(BORDER_STYLES).id);
     rollSvg(newAccent);
   }
@@ -786,6 +892,7 @@ export function ThemeForm({
     bgColor: bg,
     cardColor: card,
     containerSize: size,
+    containerMinHeight: minH,
     borderStyle: border,
     bgImage: bgImg,
     cardImage: cardImg,
@@ -809,6 +916,7 @@ export function ThemeForm({
     if (d.bgColor) setBg(d.bgColor);
     if (d.cardColor) setCard(d.cardColor);
     if (d.containerSize) setSize(d.containerSize);
+    if (d.containerMinHeight !== undefined) setMinH(d.containerMinHeight);
     if (d.borderStyle) setBorder(d.borderStyle);
     if (d.fontId !== undefined) setFontId(d.fontId);
     if (d.fontScale) setScale(d.fontScale);
@@ -849,8 +957,7 @@ export function ThemeForm({
     backgroundColor: palette.bg,
   };
   /** The preview card apes the chosen width against the widest option. */
-  const widest = Math.max(...CONTAINER_SIZES.map((s) => Number(s.value)));
-  const previewCardWidth = `${(Number(size) / widest) * 100}%`;
+  const previewCardWidth = `${(Number(clampSize(size)) / SIZE_MAX) * 100}%`;
   /** What the text actually sits on, so the ink can be checked against it. */
   const backdropBase = (palette.themeId ? getThemeDef(palette.themeId)?.color : palette.bg) || palette.bg;
 
@@ -861,6 +968,7 @@ export function ThemeForm({
       <input type="hidden" name="bgColor" value={bg} />
       <input type="hidden" name="cardColor" value={card} />
       <input type="hidden" name="containerSize" value={size} />
+      <input type="hidden" name="containerMinHeight" value={minH} />
       <input type="hidden" name="borderStyle" value={border} />
       <input type="hidden" name="themeId" value={themeId} />
       <input type="hidden" name="fontId" value={fontId} />
@@ -1168,7 +1276,7 @@ export function ThemeForm({
                   aria-pressed={gradient === o.on}
                   onClick={() => setGradient(o.on)}
                   className={`w-[8.5rem] overflow-hidden rounded-xl border text-left transition ${
-                    gradient === o.on ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                    gradient === o.on ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
                   }`}
                 >
                   {/* Both tiles carry every layer the page will actually draw —
@@ -1221,7 +1329,7 @@ export function ThemeForm({
             base={palette.bg}
             custom
           />
-          <SizeRow value={size} onPick={setSize} />
+          <SizeRow width={size} onWidth={setSize} minHeight={minH} onMinHeight={setMinH} />
           <BorderRow value={border} onPick={setBorder} accent={accent} card={palette.card} base={palette.bg} />
 
           <div>
@@ -1391,8 +1499,8 @@ export function ThemeForm({
                 color: previewInk,
               }}
             >
-              <p className="text-[1.6em] font-extrabold leading-tight">Your name here</p>
-              <p className="mx-auto mt-1.5 max-w-[22em] text-[0.8em] opacity-70">
+              <p className="text-center text-[1.6em] font-extrabold leading-tight">Your name here</p>
+              <p className="mx-auto mt-1.5 max-w-[22em] text-center text-[0.8em] opacity-70">
                 This is how your page will feel — your type, your colors, your layout.
               </p>
               <div className="mt-4 text-center">
@@ -1410,11 +1518,15 @@ export function ThemeForm({
                 width={previewCardWidth}
               />
 
-              <p className="mt-6 border-t pt-3 text-[0.7em] opacity-50" style={{ borderColor: "currentColor" }}>
+              <p className="mt-6 border-t pt-3 text-center text-[0.7em] opacity-50" style={{ borderColor: "currentColor" }}>
                 Your tagline goes here
               </p>
             </div>
           </div>
+          <p className="mt-2 text-[11px] text-mist/70">
+            Colors, type and container shape are exactly what your page uses. Text and button alignment are set per
+            section, in the Page Builder, so this shows the centred default.
+          </p>
           {(size !== DEFAULT_SIZE || border !== DEFAULT_BORDER) && (
             <button
               type="button"

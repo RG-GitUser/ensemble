@@ -9,6 +9,7 @@ import {
   getQuoteByUser,
   getSections,
   getSiteByUser,
+  getUserPrefs,
   getSocialAccounts,
   getSocialPosts,
 } from "@/lib/db";
@@ -42,6 +43,7 @@ function setupSteps(
   businessName: string
 ): Checkpoint[] {
   const cfg = site.config;
+  const footerTagline = sections.find((sec) => sec.type === "footer")?.content.tagline?.trim();
   const written = sections.filter((sec) => !isStarterContent(sec.type, sec.content, businessName));
   const heroWritten = written.some((sec) => sec.type === "hero");
   const othersWritten = written.filter((sec) => sec.type !== "hero").length;
@@ -82,12 +84,14 @@ function setupSteps(
     {
       id: "tagline",
       label: "Write your tagline",
-      hint: "One line at the foot of your page. Say who you are, or make a joke.",
-      // Optional chain despite the type: config is JSON from the database, and
-      // a row written before tagline existed simply has no key.
-      done: !!cfg.tagline?.trim(),
-      href: "/dashboard/settings",
-      cta: "Add a tagline",
+      hint: "One line at the foot of your page. Add a Footer section and it's the first field.",
+      // Two places it can come from. The Footer section is where it's written
+      // now; site.config holds what Page settings used to save, which still
+      // shows on pages with no Footer section of their own. Optional chain
+      // despite the type, since config is JSON and an old row may lack the key.
+      done: !!(footerTagline || cfg.tagline?.trim()),
+      href: "/dashboard/builder",
+      cta: "Open the builder",
     },
     {
       id: "publish",
@@ -112,6 +116,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ quote?: string; billing?: string }>;
 }) {
   const user = await requireUser();
+  const prefs = getUserPrefs(user.id);
   let site = getSiteByUser(user.id);
   const quote = getQuoteByUser(user.id);
   const { quote: quoteFlag, billing: billingFlag } = await searchParams;
@@ -138,6 +143,7 @@ export default async function DashboardPage({
   const socialPosts = site && plan?.social ? countSocialPosts(site.id) : 0;
   const domainState = domainProgress({
     hostname: domain?.hostname ?? "",
+    verified: !!domain?.verifiedAt,
     dnsSeen: !!domain?.lastSeen,
     published: !!site?.published,
   });
@@ -207,7 +213,14 @@ export default async function DashboardPage({
 
       {site && plan ? (
         <>
-          <SetupChecklist steps={setupSteps(site, sections, user.businessName)} />
+          {/* A finished checklist can be put away, and comes straight back
+              if anything stops being done — unpublishing the page, say. So
+              the flag only ever hides a card with nothing left to say. */}
+          {(() => {
+            const steps = setupSteps(site, sections, user.businessName);
+            const complete = steps.every((s) => s.done);
+            return complete && prefs.setupDismissed ? null : <SetupChecklist steps={steps} />;
+          })()}
 
           <div className="card mt-6" data-tour="address">
             <div className="flex flex-wrap items-center justify-between gap-4">

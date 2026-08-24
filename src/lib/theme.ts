@@ -126,13 +126,21 @@ export function edgeForLight(color: string): string {
  * section's base width, so the page keeps its own proportions — a links list
  * stays narrower than a merch grid at any setting.
  */
-export const CONTAINER_SIZES: Swatch[] = [
-  { id: "snug", label: "Snug", value: "0.75" },
-  { id: "compact", label: "Compact", value: "0.88" },
-  { id: "standard", label: "Standard", value: "1" },
-  { id: "roomy", label: "Roomy", value: "1.15" },
-  { id: "wide", label: "Wide", value: "1.35" },
-];
+/**
+ * Container width is a free multiplier now, not one of five presets.
+ *
+ * The creator drags the edge of a sample container and lands wherever they
+ * like between these bounds. The old named steps sat inside this range, so a
+ * page that stored one keeps rendering at exactly the width it always did.
+ */
+export const SIZE_MIN = 0.6;
+export const SIZE_MAX = 1.6;
+/** Two decimals is finer than the eye can tell at these widths. */
+export function clampSize(raw: string | number | undefined | null): string {
+  const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(n)) return DEFAULT_SIZE;
+  return String(Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, n)) * 100) / 100);
+}
 
 /**
  * Which way the copy inside a container runs.
@@ -264,7 +272,28 @@ export const BORDER_STYLES: BorderStyleDef[] = [
 export const DEFAULT_ACCENT = ACCENTS[0].value;
 export const DEFAULT_BG = BACKGROUNDS[0].value;
 export const DEFAULT_CARD = CONTAINERS[0].value;
-export const DEFAULT_SIZE = CONTAINER_SIZES[2].value;
+export const DEFAULT_SIZE = "1";
+
+/**
+ * A floor under every container, in rem, with 0 meaning none.
+ *
+ * A floor rather than a fixed height because sections hold wildly different
+ * amounts: a links list is short, a merch grid is tall, a chatroom scrolls.
+ * One exact height would either clip the tall ones or strand the short ones in
+ * whitespace. A minimum lets a thin section fill out while a full one still
+ * grows past it, so nothing is ever hidden.
+ *
+ * rem rather than pixels so it rides the creator's type scale and never
+ * outruns a phone screen the way a literal pixel height would.
+ */
+export const MIN_HEIGHT_MAX = 24;
+export const DEFAULT_MIN_HEIGHT = "0";
+
+export function clampMinHeight(raw: string | number | undefined | null): string {
+  const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(n)) return DEFAULT_MIN_HEIGHT;
+  return String(Math.round(Math.min(MIN_HEIGHT_MAX, Math.max(0, n)) * 2) / 2);
+}
 export const DEFAULT_BORDER = BORDER_STYLES[0].id;
 
 /** The candidate if it's in the palette, otherwise the fallback. */

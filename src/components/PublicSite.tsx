@@ -5,7 +5,7 @@ import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout, getTextAlign } from "@/lib/theme";
+import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -84,7 +84,7 @@ function SectionView({
                     {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
                   </div>
                   {c.ctaLabel ? (
-                    <span className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-[0.875em] font-semibold">
+                    <span className="site-edge shrink-0 rounded-lg border px-3 py-1.5 text-[0.875em] font-semibold">
                       {c.ctaLabel}
                     </span>
                   ) : (
@@ -146,7 +146,7 @@ function SectionView({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={name} className="aspect-square w-full object-cover" />
                 ) : (
-                  <div className="flex aspect-[5/2] w-full items-center justify-center bg-white/5 text-[0.875em] site-ink-faint sm:aspect-square">{name}</div>
+                  <div className="site-surface flex aspect-[5/2] w-full items-center justify-center text-[0.875em] site-ink-faint sm:aspect-square">{name}</div>
                 )}
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -162,7 +162,7 @@ function SectionView({
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="site-btn mt-3 rounded-lg border border-white/10 py-2 text-[0.875em] site-ink-faint">
+                    <p className="site-btn site-edge mt-3 rounded-lg border py-2 text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -222,7 +222,7 @@ function SectionView({
                 <p className="text-center text-[0.875em] site-ink-faint">No messages yet — say hi.</p>
               )}
               {chat.map((m) => (
-                <div key={m.id} className="w-fit max-w-[80%] rounded-2xl rounded-bl-sm bg-white/10 px-4 py-2 text-[0.875em]">
+                <div key={m.id} className="site-surface w-fit max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2 text-[0.875em]">
                   <span className="mr-2 font-semibold" style={{ color: "var(--site-accent)" }}>
                     {m.author}
                   </span>
@@ -488,6 +488,13 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   return (
     <div
       className="site-root site-ink relative isolate flex-1"
+      // The boot script below rewrites data-site-mode from localStorage before
+      // React hydrates, which is the whole point of it: a remembered choice
+      // must be applied before first paint or the other palette flashes. React
+      // then finds an attribute it did not render and warns. Suppressing is
+      // the sanctioned answer, and it reaches this element's own attributes
+      // only, never its children, so a real mismatch further down still shows.
+      suppressHydrationWarning
       data-site-mode={mode === "auto" ? "auto" : mode}
       style={
         {
@@ -497,6 +504,8 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           // section on the page. Colours are in the stylesheet above instead,
           // because they change with the light/dark mode.
           "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
+          // A floor, never a ceiling: content taller than this still grows.
+          "--site-min-h": `${clampMinHeight(cfg.containerMinHeight)}rem`,
           // Type: one family and a base size every text size on the page is
           // expressed as a multiple of (see the em values above), so the scale
           // moves the headline and the fine print together.
@@ -553,7 +562,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           return (
             <div
               key={s.id}
-              className={`site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
+              className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
             >
               {containerTheme ? (
                 <div className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl" style={containerTheme}>
@@ -570,12 +579,12 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           section — that section carries the tagline, the policies and the
           Powered by line, so keeping both would print the footer twice. */}
       {!sections.some((s) => s.type === "footer") && (site.config.tagline || !plan.whiteLabel) && (
-        <footer className="border-t border-white/10 px-6 py-10 text-center text-[0.875em] site-ink-faint">
+        <footer className="site-edge border-t px-6 py-10 text-center text-[0.875em] site-ink-faint">
           {site.config.tagline && <p className="mb-2 site-ink-soft">{site.config.tagline}</p>}
           {!plan.whiteLabel && (
             <p>
               Powered by{" "}
-              <a href={appUrl || "/"} className="font-semibold site-ink-soft hover:text-white">
+              <a href={appUrl || "/"} className="font-semibold site-ink-soft">
                 Ensemble
               </a>
             </p>

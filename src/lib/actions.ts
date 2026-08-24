@@ -17,13 +17,16 @@ import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
+import { randomBytes } from "node:crypto";
+import { checkDomainOwnership } from "./domain-verify";
 import { cleanHostname, platformHosts } from "./domains";
 import { isReservedSlug } from "./slugs";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import {
   ACCENTS,
   BACKGROUNDS,
-  CONTAINER_SIZES,
+  clampMinHeight,
+  clampSize,
   TEXT_ALIGNS,
   CONTAINERS,
   DEFAULT_BG,
@@ -352,6 +355,13 @@ export async function completeWelcomeAction(takeTour: boolean): Promise<void> {
   revalidatePath("/dashboard", "layout");
 }
 
+/** Put the finished setup checklist away. */
+export async function dismissSetupAction(): Promise<void> {
+  const user = await requireUser();
+  store.dismissSetup(user.id);
+  revalidatePath("/dashboard");
+}
+
 export async function dismissTourAction(tourId: string): Promise<void> {
   const user = await requireUser();
   store.markTourSeen(user.id, tourId);
@@ -456,7 +466,6 @@ export async function setSectionThemeAction(fd: FormData): Promise<void> {
 export async function updateSettings(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
   const slug = slugify(str(fd, "slug"));
-  const tagline = str(fd, "tagline");
   // Length rule only applies to slug changes, so sites with a shorter
   // pre-existing slug can still save their other settings.
   if (slug.length < 3 && slug !== site.slug) return { error: "Your page URL must be at least 3 characters." };
@@ -466,7 +475,10 @@ export async function updateSettings(_prev: FormState, fd: FormData): Promise<Fo
   if (slug !== site.slug && isReservedSlug(slug)) {
     return { error: "That page URL is reserved by Ensemble — try another." };
   }
-  store.updateSite(site.id, { slug, config: { ...site.config, tagline } });
+  // Page settings is the address and nothing else now. Passing no config at
+  // all leaves site.config untouched, which matters because the tagline moved
+  // to the Footer section and this form no longer carries it.
+  store.updateSite(site.id, { slug });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   // The free-address card lives here and shows the slug back to the user.
@@ -574,7 +586,8 @@ function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
     themeColor: pickColor(ACCENTS, text("themeColor"), site.config.themeColor),
     bgColor: pickColor(BACKGROUNDS, text("bgColor"), site.config.bgColor ?? DEFAULT_BG),
     cardColor: pickColor(CONTAINERS, text("cardColor"), site.config.cardColor ?? DEFAULT_CARD),
-    containerSize: pickSwatch(CONTAINER_SIZES, text("containerSize"), site.config.containerSize ?? DEFAULT_SIZE),
+    containerSize: clampSize(text("containerSize") || site.config.containerSize),
+    containerMinHeight: clampMinHeight(text("containerMinHeight")),
     borderStyle: getBorderStyle(text("borderStyle")) ? text("borderStyle") : DEFAULT_BORDER,
     bgImage: image("bgImage"),
     cardImage: image("cardImage"),
@@ -648,7 +661,9 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   // isn't one of those two things still can't reach the page.
   const bgColor = pickColor(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
   const cardColor = pickColor(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
-  const containerSize = pickSwatch(CONTAINER_SIZES, str(fd, "containerSize"), site.config.containerSize ?? DEFAULT_SIZE);
+  // Free value now, so it is clamped into range rather than matched to a list.
+  const containerSize = clampSize(str(fd, "containerSize") || site.config.containerSize);
+  const containerMinHeight = clampMinHeight(str(fd, "containerMinHeight"));
   const borderRaw = str(fd, "borderStyle");
   const themeIdRaw = str(fd, "themeId");
   const fontIdRaw = str(fd, "fontId");
@@ -659,6 +674,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     bgColor,
     cardColor,
     containerSize,
+    containerMinHeight,
     // Border treatment — only known style ids reach the page's inline CSS.
     borderStyle: getBorderStyle(borderRaw) ? borderRaw : DEFAULT_BORDER,
     gradient: fd.get("gradient") === "on",
@@ -730,8 +746,44 @@ export async function setCustomDomainAction(_prev: FormState, fd: FormData): Pro
   const hostname = cleanHostname(str(fd, "hostname"));
   if (!hostname) return { error: "Enter just your domain, like janedoe.com — no https:// or paths needed." };
   if (platformHosts().has(hostname)) return { error: "That domain is reserved." };
+  // Only a verified claim reserves a name, so this refuses the real owner of
+  // an already-proven domain and nobody else.
   if (store.domainTaken(hostname, site.id)) return { error: "That domain is already connected to another Ensemble page." };
-  store.setCustomDomain(site.id, hostname);
+  store.claimCustomDomain(site.id, hostname, randomBytes(16).toString("hex"));
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/connect");
+  return { ok: true };
+}
+
+/**
+ * Check the TXT record and, if it holds our token, trust the domain.
+ *
+ * Re-checks that nobody proved the same name first: two sites can hold an
+ * unverified claim on one hostname, and the race is settled here rather than
+ * by whoever typed it first.
+ */
+export async function verifyDomainAction(): Promise<FormState> {
+  const { site } = await requireSite();
+  const domain = store.getDomainBySite(site.id);
+  if (!domain) return { error: "Add your domain first." };
+  if (domain.verifiedAt) return { ok: true };
+  if (store.domainTaken(domain.hostname, site.id)) {
+    return { error: "Another Ensemble page proved this domain first. Contact support if that isn't right." };
+  }
+
+  const result = await checkDomainOwnership(domain.hostname, domain.verifyToken);
+  if (!result.ok) {
+    revalidatePath("/dashboard/connect");
+    return {
+      error:
+        result.reason === "no-record"
+          ? "We couldn't find that TXT record yet. DNS changes can take a few minutes to spread, so try again shortly."
+          : "We found a TXT record, but not the value above. Check it was copied whole, then try again.",
+    };
+  }
+
+  store.markDomainVerified(site.id);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/connect");
@@ -843,7 +895,9 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   const config: SiteConfig = { ...site.config };
   if (plan.payments) config.stripeKey = str(fd, "stripeKey");
   if (plan.calendar) config.calendlyUrl = str(fd, "calendlyUrl");
-  if (plan.chatroom) config.chatroomEnabled = fd.get("chatroomEnabled") === "on";
+  // Not read here any more. The chatroom switch lives on its own page, and
+  // an absent checkbox reads as "off", so leaving this in would have turned
+  // the chatroom off on every unrelated save from this form.
   if (plan.newsletter) config.newsletterEnabled = fd.get("newsletterEnabled") === "on";
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/integrations");
@@ -1096,9 +1150,9 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
       twitchChannel,
       facebookLiveUrl,
       instagramLiveUser,
-      twitchStreamKey: str(fd, "twitchStreamKey"),
-      facebookStreamKey: str(fd, "facebookStreamKey"),
-      instagramStreamKey: str(fd, "instagramStreamKey"),
+      // Not read from the form any more: the key inputs are gone until there
+      // is a relay to use them, and reading absent fields would blank whatever
+      // a creator had already saved. Spreading site.config above keeps them.
     },
   });
   revalidatePath("/dashboard/integrations");

@@ -10,7 +10,7 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -71,7 +71,7 @@ function AlignPicker({
               <button
                 title={`${label}: ${a.label.toLowerCase()}`}
                 className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium transition ${
-                  selected ? "border-brand text-snow ring-1 ring-brand" : "border-edge text-mist hover:border-brand/60"
+                  selected ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
                 }`}
               >
                 {icon(a.value)}
@@ -139,7 +139,7 @@ function SectionAppearance({ section, accent }: { section: Section; accent: stri
               <input type="hidden" name="theme" value={t.id} />
               <button
                 className={`block h-8 w-12 overflow-hidden rounded-lg border transition ${
-                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                  selected ? "border-brand" : "border-edge hover:border-brand/60"
                 }`}
                 title={t.name}
                 style={themeCss(t.id, accent) ?? defaultCss(accent)}
@@ -341,6 +341,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             bgColor={site.config.bgColor ?? DEFAULT_BG}
             cardColor={site.config.cardColor ?? DEFAULT_CARD}
             containerSize={site.config.containerSize ?? DEFAULT_SIZE}
+            containerMinHeight={site.config.containerMinHeight ?? DEFAULT_MIN_HEIGHT}
             borderStyle={site.config.borderStyle ?? DEFAULT_BORDER}
             bgImage={site.config.bgImage ?? ""}
             cardImage={site.config.cardImage ?? ""}
@@ -364,6 +365,46 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
         <BuilderSections site={site} plan={plan} sections={sections} atLimit={atLimit} />
       )}
     </div>
+  );
+}
+
+/**
+ * Both gallery tiles are the same box; only what they do differs. `h-full`
+ * plus the grid's `items-stretch` is what keeps a row of them level, since
+ * otherwise each shrink-wraps its own text.
+ */
+const TILE = "flex h-full w-full flex-col rounded-xl border p-3.5 text-left transition";
+
+function TileFace({
+  tpl,
+  allowed,
+  added,
+}: {
+  tpl: (typeof SECTION_TEMPLATES)[number];
+  allowed: boolean;
+  added: boolean;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-semibold">{tpl.name}</span>
+        {!allowed ? (
+          <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
+            {tpl.requires}
+          </span>
+        ) : added ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
+            <CheckIcon />
+            Added
+          </span>
+        ) : null}
+      </div>
+      {/* flex-1 pushes every tile's footer to the same baseline. */}
+      <p className="mt-1.5 flex-1 text-xs text-mist">{tpl.description}</p>
+      <p className={`mt-2.5 text-[11px] font-semibold ${added ? "text-brand/80" : "text-mist/70"}`}>
+        {added ? "On your page. Click to remove it." : "Add to page"}
+      </p>
+    </>
   );
 }
 
@@ -395,8 +436,10 @@ function BuilderSections({
   // How many of each type are already on the page — drives the "Added" state,
   // so the gallery shows what you've used rather than reading identically
   // whether your page is empty or finished.
-  const used = new Map<string, number>();
-  for (const s of sections) used.set(s.type, (used.get(s.type) ?? 0) + 1);
+  // One of each kind per page, so the first match is the section a tile
+  // stands for, and the one its tile removes.
+  const onPage = new Map<string, Section>();
+  for (const s of sections) if (!onPage.has(s.type)) onPage.set(s.type, s);
 
   return (
     <>
@@ -415,45 +458,36 @@ function BuilderSections({
         <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {galleryOrder(SECTION_TEMPLATES).map((tpl) => {
             const allowed = planAllowsTemplate(site.plan, tpl);
-            const added = used.has(tpl.type);
-            // One of each kind per page — an added type is done, not repeatable.
-            const disabled = !allowed || added || atLimit;
+            const existing = onPage.get(tpl.type);
+
+            // A tile that's already on the page is the way off it again.
+            // Clicking asks first, because the section's content goes too.
+            if (existing) {
+              return (
+                <DangerButton
+                  key={tpl.type}
+                  className={`${TILE} border-brand/50 bg-brand/5 hover:border-brand`}
+                  label={<TileFace tpl={tpl} allowed={allowed} added />}
+                  title={`Are you sure you want to delete the "${tpl.name}" section?`}
+                  body="Everything you've typed into it goes with it. Nothing else on your page changes, and you can add a fresh one back any time."
+                  confirmLabel={`Delete ${tpl.name}`}
+                  action={deleteSectionAction}
+                  fields={{ sectionId: String(existing.id) }}
+                />
+              );
+            }
+
             return (
               <form key={tpl.type} action={addSectionAction} className="h-full">
                 <input type="hidden" name="type" value={tpl.type} />
                 <button
-                  disabled={disabled}
-                  className={`flex h-full w-full flex-col rounded-xl border p-3.5 text-left transition disabled:cursor-not-allowed ${
-                    added
-                      ? "border-brand/50 bg-brand/5 opacity-100 disabled:opacity-100"
-                      : "border-edge bg-panel2 hover:border-brand/60 disabled:opacity-40"
-                  }`}
+                  disabled={!allowed || atLimit}
+                  className={`${TILE} border-edge bg-panel2 hover:border-brand/60 disabled:cursor-not-allowed disabled:opacity-40`}
                   title={
-                    !allowed
-                      ? `Requires the ${tpl.requires === "pro" ? "Pro" : "Enterprise"} plan`
-                      : added
-                        ? `${tpl.name} is already on your page — edit it below, or delete it to add a fresh one`
-                        : tpl.description
+                    !allowed ? `Requires the ${tpl.requires === "pro" ? "Pro" : "Enterprise"} plan` : tpl.description
                   }
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold">{tpl.name}</span>
-                    {!allowed ? (
-                      <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
-                        {tpl.requires}
-                      </span>
-                    ) : added ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
-                        <CheckIcon />
-                        Added
-                      </span>
-                    ) : null}
-                  </div>
-                  {/* flex-1 pushes every tile's footer to the same baseline. */}
-                  <p className="mt-1.5 flex-1 text-xs text-mist">{tpl.description}</p>
-                  <p className={`mt-2.5 text-[11px] font-semibold ${added ? "text-brand/80" : "text-mist/70"}`}>
-                    {added ? "On your page — edit it below" : "Add to page"}
-                  </p>
+                  <TileFace tpl={tpl} allowed={allowed} added={false} />
                 </button>
               </form>
             );
