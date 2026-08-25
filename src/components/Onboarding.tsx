@@ -18,7 +18,7 @@ export function Onboarding({ initialPath, initialPlan }: { initialPath?: string;
         <button
           type="button"
           onClick={() => setPath("scratch")}
-          className={`card text-left transition hover:border-brand/60 ${path === "scratch" ? "border-brand ring-1 ring-brand" : ""}`}
+          className={`card text-left transition hover:border-brand/60 ${path === "scratch" ? "border-brand bg-brand/10" : ""}`}
         >
           <h2 className="mt-3 font-bold">Start From Scratch</h2>
           <p className="mt-1 text-sm text-mist">
@@ -28,7 +28,7 @@ export function Onboarding({ initialPath, initialPlan }: { initialPath?: string;
         <button
           type="button"
           onClick={() => setPath("integrate")}
-          className={`card text-left transition hover:border-brand2/60 ${path === "integrate" ? "border-brand2 ring-1 ring-brand2" : ""}`}
+          className={`card text-left transition hover:border-brand2/60 ${path === "integrate" ? "border-brand2 bg-brand2/10" : ""}`}
         >
           <h2 className="mt-3 font-bold">Integrate a Current Website</h2>
           <p className="mt-1 text-sm text-mist">
@@ -62,7 +62,7 @@ function PlanPicker({ initialPlan }: { initialPlan?: string }) {
               key={id}
               type="button"
               onClick={() => setPlan(id)}
-              className={`card !p-5 text-left transition hover:border-brand/60 ${selected ? "border-brand ring-1 ring-brand" : ""}`}
+              className={`card !p-5 text-left transition hover:border-brand/60 ${selected ? "border-brand bg-brand/10" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold">{p.name}</span>

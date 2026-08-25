@@ -15,8 +15,10 @@ export interface SiteConfig {
   bgColor?: string;
   /** Container/card background on the public page (curated palette). */
   cardColor?: string;
-  /** Container width multiplier — a CONTAINER_SIZES value from lib/theme.ts. */
+  /** Container width multiplier, free between SIZE_MIN and SIZE_MAX (lib/theme.ts). */
   containerSize?: string;
+  /** Floor under every container, in rem. "0" is none — content decides. */
+  containerMinHeight?: string;
   /** Container border treatment — a BORDER_STYLES id from lib/theme.ts. */
   borderStyle?: string;
   /** Uploaded or generated background image URL (/api/uploads/...). */
@@ -38,6 +40,16 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
+  /**
+   * Whether the public page offers light, dark, or lets the visitor choose.
+   * Absent = "dark", so every page that predates this setting is untouched.
+   */
+  colorMode?: "dark" | "light" | "auto";
+  /** Light-mode counterparts. Each falls back to a shipped light default. */
+  lightBgColor?: string;
+  lightCardColor?: string;
+  lightTextColor?: string;
+  lightThemeId?: string;
   stripeKey?: string;
   /** Creator's own Stripe key for the Finance tab (restricted key advised). */
   financeStripeKey?: string;
@@ -50,12 +62,52 @@ export interface SiteConfig {
   twitchChannel?: string;
   facebookLiveUrl?: string;
   instagramLiveUser?: string;
-  /** Per-platform RTMP stream keys for simulcast fan-out (stored for the relay). */
+  /**
+   * Per-platform RTMP stream keys. Stored only: there is no relay to spend
+   * them, so the dashboard stopped asking for them. Kept so nothing a creator
+   * already saved is lost when one exists.
+   */
   twitchStreamKey?: string;
   facebookStreamKey?: string;
   instagramStreamKey?: string;
   /** Creator hit Go Live — the Live section shows the on-air state. */
   liveNow?: boolean;
+  /** Named design snapshots the creator can switch between. */
+  looks?: SavedLook[];
+}
+
+/**
+ * The slice of SiteConfig the Design tab owns. A saved look stores exactly
+ * this and nothing else, so applying one can never disturb sections,
+ * integrations or billing.
+ */
+export type DesignConfig = Pick<
+  SiteConfig,
+  | "themeColor"
+  | "bgColor"
+  | "cardColor"
+  | "containerSize"
+  | "containerMinHeight"
+  | "borderStyle"
+  | "bgImage"
+  | "cardImage"
+  | "gradient"
+  | "themeId"
+  | "fontId"
+  | "fontScale"
+  | "textColor"
+  | "layout"
+  | "colorMode"
+  | "lightBgColor"
+  | "lightCardColor"
+  | "lightTextColor"
+  | "lightThemeId"
+>;
+
+export interface SavedLook {
+  id: string;
+  name: string;
+  design: DesignConfig;
 }
 
 export interface Site {
@@ -85,6 +137,10 @@ export interface Section {
   content: Record<string, string>;
   /** Visual theme id from lib/themes.ts, or "" to inherit the page theme. */
   theme: string;
+  /** Which way this section's copy runs — a TEXT_ALIGNS value, or "" for centred. */
+  align: string;
+  /** Where this section's buttons sit — a TEXT_ALIGNS value, or "" for centred. */
+  buttonAlign: string;
 }
 
 export interface QuoteRequest {
@@ -153,6 +209,10 @@ export interface Connection {
 
 /** A creator-owned domain serving their hosted page. */
 export interface CustomDomain {
+  /** Value the creator publishes in a TXT record to prove the domain is theirs. */
+  verifyToken: string;
+  /** When ownership was proved; null while the claim is unproven. */
+  verifiedAt: string | null;
   siteId: number;
   hostname: string;
   createdAt: string;

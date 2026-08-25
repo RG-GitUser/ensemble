@@ -6,20 +6,16 @@ import { updateIntegrations, type FormState } from "@/lib/actions";
 export function IntegrationsForm({
   payments,
   calendar,
-  chatroom,
   newsletter,
   stripeKey,
   calendlyUrl,
-  chatroomEnabled,
   newsletterEnabled,
 }: {
   payments: boolean;
   calendar: boolean;
-  chatroom: boolean;
   newsletter: boolean;
   stripeKey: string;
   calendlyUrl: string;
-  chatroomEnabled: boolean;
   newsletterEnabled: boolean;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateIntegrations, {});
@@ -47,15 +43,6 @@ export function IntegrationsForm({
             Default calendar link used by Event Calendar sections when they don&apos;t set their own.
           </p>
           <input className="field mt-3" name="calendlyUrl" defaultValue={calendlyUrl} placeholder="https://calendly.com/you" />
-        </div>
-      )}
-      {chatroom && (
-        <div className="card flex items-center justify-between gap-4">
-          <div>
-            <h2 className="font-bold">Community chatroom</h2>
-            <p className="mt-1 text-sm text-mist">Show the chatroom space on your page&apos;s Chatroom sections.</p>
-          </div>
-          <input type="checkbox" name="chatroomEnabled" defaultChecked={chatroomEnabled} className="h-5 w-5 accent-brand" />
         </div>
       )}
       {newsletter && (

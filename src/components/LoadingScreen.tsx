@@ -41,11 +41,29 @@ const RING = 88;
 const CIRCUMFERENCE = 2 * Math.PI * RING;
 const ARC = CIRCUMFERENCE * 0.18;
 
+/**
+ * Fixed colours, not theme tokens.
+ *
+ * This screen is the brand's one held moment, and it should be the same mark
+ * every time it appears. Read from the tokens it wasn't: the light theme
+ * flips `--color-snow` to near-black and darkens the brand ramp a step for
+ * contrast on white, so "En" came out dark and "semble" ran a duller,
+ * more magenta gradient. Painting its own dark sky underneath means the
+ * values below are the dark-mode ones in both themes, and stay legible.
+ */
+const SKY = "#0b0714";
+const SNOW = "#f4f1fb";
+const MIST = "#a89dcb";
+const EDGE = "#2b2148";
+const BRAND = "#8b5cf6";
+const BRAND2 = "#ec4899";
+
 
 export function LoadingScreen({ label = "Loading" }: { label?: string }) {
   return (
     <div
       className="flex flex-1 flex-col items-center justify-center gap-7 px-6 py-20"
+      style={{ background: SKY }}
       role="status"
       aria-live="polite"
     >
@@ -64,12 +82,12 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
         <svg viewBox="0 0 200 200" className="relative h-56 w-56 sm:h-72 sm:w-72" aria-hidden>
           <defs>
             <linearGradient id="ens-line" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--color-brand)" />
-              <stop offset="100%" stopColor="var(--color-brand2)" />
+              <stop offset="0%" stopColor={BRAND} />
+              <stop offset="100%" stopColor={BRAND2} />
             </linearGradient>
             <linearGradient id="ens-arc" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="var(--color-brand2)" stopOpacity="0" />
-              <stop offset="100%" stopColor="var(--color-brand2)" />
+              <stop offset="0%" stopColor={BRAND2} stopOpacity="0" />
+              <stop offset="100%" stopColor={BRAND2} />
             </linearGradient>
           </defs>
 
@@ -79,7 +97,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
             cy="100"
             r={RING}
             fill="none"
-            stroke="var(--color-edge)"
+            stroke={EDGE}
             strokeWidth="1"
             opacity="0.5"
           />
@@ -102,7 +120,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
               cx={x}
               cy={y}
               r={r}
-              fill="var(--color-snow)"
+              fill={SNOW}
               style={{ animationDuration: `${dur}s`, animationDelay: `${-i * 0.7}s` }}
             />
           ))}
@@ -117,13 +135,15 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
             letterSpacing="-0.5"
             style={{ fontFamily: "var(--font-sans)" }}
           >
-            <tspan fill="var(--color-snow)">En</tspan>
+            <tspan fill={SNOW}>En</tspan>
             <tspan fill="url(#ens-line)">semble</tspan>
           </text>
         </svg>
       </div>
 
-      <p className="ens-label text-xs font-semibold uppercase tracking-[0.28em] text-mist">{label}</p>
+      <p className="ens-label text-xs font-semibold uppercase tracking-[0.28em]" style={{ color: MIST }}>
+        {label}
+      </p>
     </div>
   );
 }

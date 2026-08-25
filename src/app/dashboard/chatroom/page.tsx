@@ -82,7 +82,7 @@ export default async function ChatroomPage() {
 
       <p className="mt-4 text-xs text-mist">
         The chat lives in your page&apos;s Chatroom section —{" "}
-        <Link href={`/s/${site.slug}?preview=1`} target="_blank" className="text-brand hover:underline">
+        <Link href={`/${site.slug}?preview=1`} target="_blank" className="text-brand hover:underline">
           view it live ↗
         </Link>
       </p>

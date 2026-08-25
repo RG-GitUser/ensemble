@@ -107,6 +107,49 @@ async function upgradeToLongLived(
   }
 }
 
+/**
+ * Trade a refresh token for a fresh access token.
+ *
+ * Reddit and Pinterest issue access tokens measured in hours, so without this
+ * every scheduled post beyond that window fails with an expired-token error
+ * that looks, to a creator, exactly like a broken integration. Meta platforms
+ * don't use this grant — they carry an empty refreshToken and are skipped.
+ */
+export async function refreshAccessToken(
+  p: OAuthProvider,
+  creds: { clientId: string; clientSecret: string },
+  refreshToken: string
+): Promise<TokenSet | null> {
+  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "User-Agent": "Ensemble/1.0",
+  };
+  if (p.tokenAuth === "basic") {
+    headers.Authorization = `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`;
+  } else {
+    body.set("client_id", creds.clientId);
+    body.set("client_secret", creds.clientSecret);
+  }
+
+  try {
+    const res = await fetch(p.tokenUrl, { method: "POST", headers, body, signal: AbortSignal.timeout(TIMEOUT) });
+    if (!res.ok) return null;
+    const json = (await res.json().catch(() => null)) as
+      | { access_token?: string; refresh_token?: string; expires_in?: number }
+      | null;
+    if (!json?.access_token) return null;
+    return {
+      accessToken: json.access_token,
+      // Reddit omits refresh_token on refresh; keeping the old one is correct.
+      refreshToken: json.refresh_token ?? refreshToken,
+      expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function getJson(url: string, token: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(url, {

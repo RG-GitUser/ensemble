@@ -268,7 +268,6 @@ export default async function ConnectPage() {
       <div className="mt-4 space-y-6">
         <FreeAddressCard
           slug={site.slug}
-          tagline={site.config.tagline}
           origin={appOrigin}
           published={site.published}
           billingReady={billingOk(site)}
@@ -283,6 +282,8 @@ export default async function ConnectPage() {
         <div data-tour="domain">
         <DomainSetup
           hostname={domain?.hostname ?? ""}
+          verifyToken={domain?.verifyToken ?? ""}
+          verifiedAt={domain?.verifiedAt ?? null}
           lastSeen={domain?.lastSeen ?? null}
           published={site.published}
           billingReady={billingOk(site)}

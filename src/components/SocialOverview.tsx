@@ -135,7 +135,7 @@ export function SocialOverview({
           Left-aligned rather than pushed apart — at narrow widths `ml-auto`
           wrapped the icons onto their own line and stranded them on the right. */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Link href="/dashboard/integrations" className="btn-primary !py-2 text-sm">
+        <Link href="/dashboard/socials" className="btn-primary !py-2 text-sm">
           New post
         </Link>
         <span aria-hidden className="mx-1 hidden h-6 w-px bg-edge sm:block" />

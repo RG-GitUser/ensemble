@@ -225,7 +225,7 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
         key: "tagline",
         label: "Tagline",
         kind: "text",
-        help: "The line under everything. Leave empty to use the tagline from Settings.",
+        help: "The line under everything, sitting below your policy links.",
         placeholder: "Making things on the internet since 2019",
       },
       {
@@ -317,6 +317,44 @@ export const RECOMMENDED_ORDER: string[] = [
 
 export function getTemplate(type: string): SectionTemplate | undefined {
   return SECTION_TEMPLATES.find((t) => t.type === type);
+}
+
+/** The sections a brand-new page is seeded with, in the order they are added. */
+export const STARTER_SECTIONS = ["hero", "about", "bonus", "links"];
+
+/**
+ * What a freshly seeded section holds.
+ *
+ * Signup seeds a starter page so the builder is never empty, which means
+ * "has sections" and "has content" are true for someone who has typed
+ * nothing. The setup checklist needs to tell those apart, so it compares
+ * against this rather than against a section merely existing. One function,
+ * called by both the seeder and the checklist, so the two cannot drift.
+ */
+export function starterContent(type: string, businessName: string): Record<string, string> {
+  const tpl = getTemplate(type);
+  if (!tpl) return {};
+  return { ...tpl.defaults, ...(type === "hero" ? { heading: businessName } : {}) };
+}
+
+/** True while every field in this section still holds what we put there. */
+export function isStarterContent(type: string, content: Record<string, string>, businessName: string): boolean {
+  const tpl = getTemplate(type);
+  if (!tpl) return false;
+
+  // A template with no defaults has nothing to have changed away from, so it
+  // only counts as written once something is in it.
+  const keys = Object.keys(tpl.defaults);
+  if (keys.length === 0) return Object.values(content).every((v) => !v.trim());
+
+  const matches = (shape: Record<string, string>) => keys.every((k) => (content[k] ?? "") === shape[k]);
+
+  // Two shapes count as untouched, not one. Signup seeds the hero with the
+  // creator's business name in the headline, but a hero sitting on the bare
+  // template default is equally unwritten — and reading only the seeded shape
+  // marked exactly that case as "written", which is the one it most needs to
+  // catch. Every other type has a single shape, so this costs them nothing.
+  return matches(starterContent(type, businessName)) || matches(tpl.defaults);
 }
 
 export function planAllowsTemplate(plan: Plan, tpl: SectionTemplate): boolean {

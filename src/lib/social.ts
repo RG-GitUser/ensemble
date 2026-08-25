@@ -38,16 +38,18 @@ export interface PlatformDef {
 /** Most popular platforms first — this order drives the connect grid. */
 export const PLATFORMS: PlatformDef[] = [
   { id: "instagram", name: "Instagram", iconPath: siInstagram.path, color: `#${siInstagram.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://instagram.com/${h}`, authType: "oauth" },
+  // TikTok has no OAUTH_PROVIDERS entry yet (its content API needs video
+  // uploads and an audited app), so it stays handle-only until one is added.
   { id: "tiktok", name: "TikTok", iconPath: siTiktok.path, color: `#${siTiktok.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://tiktok.com/@${h}`, authType: "oauth" },
   { id: "youtube", name: "YouTube", iconPath: siYoutube.path, color: `#${siYoutube.hex}`, placeholder: "yourchannel", profileUrl: (h) => `https://youtube.com/@${h}`, authType: "handle" },
   { id: "x", name: "X", iconPath: siX.path, color: `#${siX.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://x.com/${h}`, authType: "handle" },
-  { id: "facebook", name: "Facebook", iconPath: siFacebook.path, color: `#${siFacebook.hex}`, placeholder: "yourpage", profileUrl: (h) => `https://facebook.com/${h}`, authType: "handle" },
+  { id: "facebook", name: "Facebook", iconPath: siFacebook.path, color: `#${siFacebook.hex}`, placeholder: "yourpage", profileUrl: (h) => `https://facebook.com/${h}`, authType: "oauth" },
   { id: "twitch", name: "Twitch", iconPath: siTwitch.path, color: `#${siTwitch.hex}`, placeholder: "yourchannel", profileUrl: (h) => `https://twitch.tv/${h}`, authType: "handle" },
   { id: "threads", name: "Threads", iconPath: siThreads.path, color: `#${siThreads.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://threads.net/@${h}`, authType: "oauth" },
   { id: "snapchat", name: "Snapchat", iconPath: siSnapchat.path, color: `#${siSnapchat.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://snapchat.com/add/${h}`, authType: "handle" },
   { id: "discord", name: "Discord", iconPath: siDiscord.path, color: `#${siDiscord.hex}`, placeholder: "webhook URL", profileUrl: (h) => `https://discord.gg/${h}`, authType: "webhook" },
-  { id: "pinterest", name: "Pinterest", iconPath: siPinterest.path, color: `#${siPinterest.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://pinterest.com/${h}`, authType: "handle" },
-  { id: "reddit", name: "Reddit", iconPath: siReddit.path, color: `#${siReddit.hex}`, placeholder: "u/yourname", profileUrl: (h) => `https://reddit.com/user/${h.replace(/^u\//, "")}`, authType: "handle" },
+  { id: "pinterest", name: "Pinterest", iconPath: siPinterest.path, color: `#${siPinterest.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://pinterest.com/${h}`, authType: "oauth" },
+  { id: "reddit", name: "Reddit", iconPath: siReddit.path, color: `#${siReddit.hex}`, placeholder: "u/yourname", profileUrl: (h) => `https://reddit.com/user/${h.replace(/^u\//, "")}`, authType: "oauth" },
   { id: "bluesky", name: "Bluesky", iconPath: siBluesky.path, color: `#${siBluesky.hex}`, placeholder: "you.bsky.social", profileUrl: (h) => `https://bsky.app/profile/${h}`, authType: "bluesky" },
 ];
 

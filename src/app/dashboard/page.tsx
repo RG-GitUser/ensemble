@@ -4,11 +4,12 @@ import { requireUser } from "@/lib/auth";
 import { billingEnabled, billingOk, reconcileBilling } from "@/lib/billing";
 import {
   countLeads,
-  countSections,
   countSocialPosts,
   getDomainBySite,
   getQuoteByUser,
+  getSections,
   getSiteByUser,
+  getUserPrefs,
   getSocialAccounts,
   getSocialPosts,
 } from "@/lib/db";
@@ -16,43 +17,59 @@ import { domainProgress } from "@/lib/domains";
 import { getPlan } from "@/lib/plans";
 import { resumeCheckout, togglePublish } from "@/lib/actions";
 import { SocialOverview } from "@/components/SocialOverview";
+import { isStarterContent } from "@/lib/sections";
 import { SetupChecklist, type Checkpoint } from "@/components/SetupChecklist";
+import type { Section } from "@/lib/types";
 
 /**
- * The checkpoints, in the order they're worth doing. Publishing is last on
+ * The six checkpoints, in the order they're worth doing. Publishing is last on
  * purpose: it's the one that puts the page in front of people, so it reads as
  * the finish line rather than something to get out of the way.
+ *
+ * Always six, on every plan. A count that moves with the plan makes "4 of 6"
+ * mean different amounts of work to different people, and a brand-new account
+ * has to be able to read 0/6 — which is why the content checkpoints ask
+ * whether a section has been *written*, not whether one exists. Signup seeds
+ * four starter sections, so "has sections" is true before anyone has typed a
+ * word.
+ *
+ * The domain used to be a seventh checkpoint on the plans that include it. It
+ * has its own card directly below this one, with its own progress, so nothing
+ * was lost by taking it out of the count.
  */
 function setupSteps(
   site: NonNullable<ReturnType<typeof getSiteByUser>>,
-  plan: ReturnType<typeof getPlan>,
-  sectionsUsed: number,
-  hasDomain: boolean
+  sections: Section[],
+  businessName: string
 ): Checkpoint[] {
   const cfg = site.config;
-  const styled = !!cfg.themeId || !!cfg.bgImage || cfg.bgColor !== undefined || cfg.fontId !== undefined;
-  const steps: Checkpoint[] = [
+  const footerTagline = sections.find((sec) => sec.type === "footer")?.content.tagline?.trim();
+  const written = sections.filter((sec) => !isStarterContent(sec.type, sec.content, businessName));
+  const heroWritten = written.some((sec) => sec.type === "hero");
+  const othersWritten = written.filter((sec) => sec.type !== "hero").length;
+
+  return [
     {
-      id: "sections",
-      label: "Add your first section",
-      hint: "Start with a hero — your name, what you make, and a button.",
-      done: sectionsUsed > 0,
+      id: "hero",
+      label: "Write your headline",
+      hint: "The hero is the first thing anyone reads. Put your name and what you make in it.",
+      done: heroWritten,
       href: "/dashboard/builder",
-      cta: "Add a section",
+      cta: "Edit my hero",
     },
     {
       id: "content",
-      label: "Fill in your content",
-      hint: "Put your own words in — every section is copy, paste, save.",
-      done: sectionsUsed >= 3,
+      label: "Fill in your other sections",
+      hint: "Two more sections in your own words and the page stops sounding like a template.",
+      done: othersWritten >= 2,
       href: "/dashboard/builder",
-      cta: "Edit your page",
+      cta: "Edit my page",
     },
     {
       id: "design",
       label: "Pick your look",
-      hint: "Choose a backdrop, a layout and your type — all of it is on every plan.",
-      done: styled,
+      hint: "Choose a backdrop, a layout and a font. All of it is on every plan.",
+      done: !!cfg.themeId || !!cfg.bgImage || cfg.bgColor !== undefined || cfg.fontId !== undefined,
       href: "/dashboard/builder?tab=design",
       cta: "Open Design",
     },
@@ -64,28 +81,27 @@ function setupSteps(
       href: "/dashboard/builder?tab=design",
       cta: "Upload an icon",
     },
+    {
+      id: "tagline",
+      label: "Write your tagline",
+      hint: "One line at the foot of your page. Add a Footer section and it's the first field.",
+      // Two places it can come from. The Footer section is where it's written
+      // now; site.config holds what Page settings used to save, which still
+      // shows on pages with no Footer section of their own. Optional chain
+      // despite the type, since config is JSON and an old row may lack the key.
+      done: !!(footerTagline || cfg.tagline?.trim()),
+      href: "/dashboard/builder",
+      cta: "Open the builder",
+    },
+    {
+      id: "publish",
+      label: "Publish your page",
+      hint: "When it's ready, publish. Your page goes live at your address.",
+      done: site.published,
+      href: "/dashboard",
+      cta: "Publish",
+    },
   ];
-  // Only offered where the plan includes it, so the list never shows a
-  // checkpoint that can't be ticked.
-  if (plan.customDomain) {
-    steps.push({
-      id: "domain",
-      label: "Connect your own domain",
-      hint: "Your plan includes serving this page on a domain you own.",
-      done: hasDomain,
-      href: "/dashboard/connect#domain",
-      cta: "Set up my domain",
-    });
-  }
-  steps.push({
-    id: "publish",
-    label: "Publish your page",
-    hint: "When it's ready, publish — your page goes live at your address.",
-    done: site.published,
-    href: "/dashboard",
-    cta: "Publish",
-  });
-  return steps;
 }
 
 const QUOTE_STATUS: Record<string, { label: string; tone: string }> = {
@@ -100,6 +116,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ quote?: string; billing?: string }>;
 }) {
   const user = await requireUser();
+  const prefs = getUserPrefs(user.id);
   let site = getSiteByUser(user.id);
   const quote = getQuoteByUser(user.id);
   const { quote: quoteFlag, billing: billingFlag } = await searchParams;
@@ -117,7 +134,8 @@ export default async function DashboardPage({
 
   const plan = site ? getPlan(site.plan) : null;
   const domain = site ? getDomainBySite(site.id) : null;
-  const sectionsUsed = site ? countSections(site.id) : 0;
+  const sections = site ? getSections(site.id) : [];
+  const sectionsUsed = sections.length;
   const leads = site && plan?.newsletter ? countLeads(site.id) : 0;
   const needsBilling = !!site && billingEnabled() && !billingOk(site);
   // Only read social rows for plans that can actually use the feature.
@@ -125,6 +143,7 @@ export default async function DashboardPage({
   const socialPosts = site && plan?.social ? countSocialPosts(site.id) : 0;
   const domainState = domainProgress({
     hostname: domain?.hostname ?? "",
+    verified: !!domain?.verifiedAt,
     dnsSeen: !!domain?.lastSeen,
     published: !!site?.published,
   });
@@ -194,7 +213,14 @@ export default async function DashboardPage({
 
       {site && plan ? (
         <>
-          <SetupChecklist steps={setupSteps(site, plan, sectionsUsed, !!domain)} />
+          {/* A finished checklist can be put away, and comes straight back
+              if anything stops being done — unpublishing the page, say. So
+              the flag only ever hides a card with nothing left to say. */}
+          {(() => {
+            const steps = setupSteps(site, sections, user.businessName);
+            const complete = steps.every((s) => s.done);
+            return complete && prefs.setupDismissed ? null : <SetupChecklist steps={steps} />;
+          })()}
 
           <div className="card mt-6" data-tour="address">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -205,7 +231,7 @@ export default async function DashboardPage({
                     <span className="font-mono text-snow">{domain.hostname}</span>
                   ) : (
                     <>
-                      ensemble / <span className="font-mono text-snow">s/{site.slug}</span>
+                      ensemble / <span className="font-mono text-snow">{site.slug}</span>
                     </>
                   )}
                 </p>
@@ -266,7 +292,7 @@ export default async function DashboardPage({
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link href="/dashboard/builder" className="btn-primary !py-2 text-sm">Edit page</Link>
-              <Link href={`/s/${site.slug}?preview=1`} className="btn-ghost !py-2 text-sm" target="_blank">
+              <Link href={`/${site.slug}?preview=1`} className="btn-ghost !py-2 text-sm" target="_blank">
                 Preview ↗
               </Link>
             </div>
