@@ -62,11 +62,18 @@ export function getPlatform(id: string): PlatformDef | undefined {
   return PLATFORMS.find((p) => p.id === id);
 }
 
-/** Brand marks that are near-black need a light fill on the dark UI. */
+/**
+ * Brand marks that are near-black vanish against the dark UI, so they borrow
+ * the foreground colour instead of their own. This returns the token rather
+ * than a hex: the light theme flips --color-snow to near-black, which is how
+ * these marks are meant to sit on a white card anyway, and a var resolves at
+ * paint time — so Server Components, which can't know the active theme, get
+ * it right too.
+ */
 export function iconFill(color: string): string {
   const n = parseInt(color.slice(1), 16);
   const luminance = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return luminance < 40 ? "#f4f4f5" : color;
+  return luminance < 40 ? "var(--color-snow)" : color;
 }
 
 /** "@name", a pasted profile URL (with or without https://), or plain handle → bare handle. */
