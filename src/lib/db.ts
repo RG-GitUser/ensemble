@@ -16,6 +16,7 @@ import type {
   SocialAccount,
   SocialAccountAuth,
   SocialPost,
+  SocialStat,
   SupportTicket,
   User,
 } from "./types";
@@ -169,6 +170,18 @@ function createDb(): Database.Database {
       status TEXT NOT NULL DEFAULT 'queued',
       detail TEXT NOT NULL DEFAULT ''
     );
+    CREATE TABLE IF NOT EXISTS social_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      -- The date the count was true, not the date it was typed in: growth
+      -- tracking is exactly the case where people backfill old milestones.
+      day TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (site_id, platform, day)
+    );
   `);
 
   // Publisher-pipeline columns arrived after the social tables shipped.
@@ -235,6 +248,19 @@ function createDb(): Database.Database {
   for (const row of untokened) setToken.run(newEmbedToken(), row.id);
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_embed_token ON sites(embed_token)");
 
+  // Live-relay ingest keys arrived after the first schema shipped. Same shape
+  // as embed tokens: every site gets one, because handing them out lazily
+  // would mean a null-check at every read for no benefit.
+  if (!siteCols.some((c) => c.name === "ingest_key")) {
+    db.exec("ALTER TABLE sites ADD COLUMN ingest_key TEXT");
+  }
+  const unkeyed = db.prepare("SELECT id FROM sites WHERE ingest_key IS NULL OR ingest_key = ''").all() as Array<{
+    id: number;
+  }>;
+  const setIngest = db.prepare("UPDATE sites SET ingest_key = ? WHERE id = ?");
+  for (const row of unkeyed) setIngest.run(newIngestKey(), row.id);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_ingest_key ON sites(ingest_key)");
+
   // Stripe billing columns arrived after the first schema shipped.
   if (!siteCols.some((c) => c.name === "stripe_customer_id")) {
     db.exec("ALTER TABLE sites ADD COLUMN stripe_customer_id TEXT NOT NULL DEFAULT ''");
@@ -273,6 +299,15 @@ function createDb(): Database.Database {
 
 function newEmbedToken(): string {
   return randomBytes(12).toString("hex");
+}
+
+/**
+ * Longer than an embed token on purpose: an embed token only reads public
+ * page content, but whoever holds an ingest key can broadcast video to the
+ * creator's channels.
+ */
+function newIngestKey(): string {
+  return randomBytes(24).toString("hex");
 }
 
 // A syntactically valid salt:hash that no real password can produce, so the
@@ -476,6 +511,7 @@ interface SiteRow {
   published: number;
   config: string;
   embed_token: string | null;
+  ingest_key: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   billing_status: string | null;
@@ -531,6 +567,7 @@ function toSite(r: SiteRow): Site {
       ...JSON.parse(r.config || "{}"),
     },
     embedToken: r.embed_token ?? "",
+    ingestKey: r.ingest_key ?? "",
     stripeCustomerId: r.stripe_customer_id ?? "",
     stripeSubscriptionId: r.stripe_subscription_id ?? "",
     billingStatus: r.billing_status ?? "",
@@ -649,6 +686,18 @@ export function getSiteByToken(token: string): Site | null {
 /** Issue a fresh embed token, invalidating any snippets using the old one. */
 export function regenerateEmbedToken(siteId: number): void {
   db().prepare("UPDATE sites SET embed_token = ? WHERE id = ?").run(newEmbedToken(), siteId);
+}
+
+/** The site allowed to broadcast with this ingest key, or null. */
+export function getSiteByIngestKey(key: string): Site | null {
+  if (!key) return null;
+  const r = db().prepare("SELECT * FROM sites WHERE ingest_key = ?").get(key) as SiteRow | undefined;
+  return r ? toSite(r) : null;
+}
+
+/** Issue a fresh ingest key — the old one stops opening the relay immediately. */
+export function regenerateIngestKey(siteId: number): void {
+  db().prepare("UPDATE sites SET ingest_key = ? WHERE id = ?").run(newIngestKey(), siteId);
 }
 
 export function slugTaken(slug: string, excludeSiteId?: number): boolean {
@@ -1402,6 +1451,47 @@ export function upsertSocialAccount(
 
 export function deleteSocialAccount(siteId: number, platform: string): void {
   db().prepare("DELETE FROM social_accounts WHERE site_id = ? AND platform = ?").run(siteId, platform);
+}
+
+interface SocialStatRow {
+  id: number;
+  site_id: number;
+  platform: string;
+  day: string;
+  count: number;
+  note: string;
+  created_at: string;
+}
+
+function toSocialStat(r: SocialStatRow): SocialStat {
+  return { id: r.id, siteId: r.site_id, platform: r.platform, day: r.day, count: r.count, note: r.note, createdAt: r.created_at };
+}
+
+/** All recorded counts for a site, oldest first (chart and delta order). */
+export function getSocialStats(siteId: number): SocialStat[] {
+  const rows = db()
+    .prepare("SELECT * FROM social_stats WHERE site_id = ? ORDER BY day, id")
+    .all(siteId) as SocialStatRow[];
+  return rows.map(toSocialStat);
+}
+
+/**
+ * Record a count for one platform on one date. A second entry for the same
+ * date overwrites the first — re-typing a date is how a typo gets corrected,
+ * and two competing counts for the same day would mean nothing anyway.
+ */
+export function upsertSocialStat(siteId: number, platform: string, day: string, count: number, note: string): void {
+  db()
+    .prepare(
+      `INSERT INTO social_stats (site_id, platform, day, count, note) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(site_id, platform, day) DO UPDATE SET count = excluded.count, note = excluded.note`
+    )
+    .run(siteId, platform, day, count, note);
+}
+
+/** The site_id guard makes ownership part of the delete itself. */
+export function deleteSocialStat(siteId: number, statId: number): void {
+  db().prepare("DELETE FROM social_stats WHERE id = ? AND site_id = ?").run(statId, siteId);
 }
 
 interface SocialPostRow {

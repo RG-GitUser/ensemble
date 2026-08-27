@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getLeads, getSiteByUser, getSocialAccounts } from "@/lib/db";
+import { liveIngestUrl, relayConfigured } from "@/lib/live";
 import { configuredProviderIds } from "@/lib/oauth";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
@@ -51,6 +52,13 @@ export default async function IntegrationsPage({
               liveNow={site.config.liveNow === true}
               oauthReady={configuredProviderIds()}
               showLive={plan.live}
+              ingestUrl={relayConfigured() ? liveIngestUrl() : ""}
+              ingestKey={site.ingestKey}
+              streamKeys={{
+                twitch: site.config.twitchStreamKey ?? "",
+                youtube: site.config.youtubeStreamKey ?? "",
+                facebook: site.config.facebookStreamKey ?? "",
+              }}
             />
           );
           return plan.social ? social : <LockedOverlay plan="Pro">{social}</LockedOverlay>;

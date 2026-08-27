@@ -8,10 +8,12 @@ import {
   disconnectSocial,
   endLive,
   goLive,
+  regenerateIngestKeyAction,
   retrySocialPost,
   saveLiveStreams,
   type FormState,
 } from "@/lib/actions";
+import { CopyButton } from "@/components/CopyButton";
 import { getPlatform, iconFill, PLATFORMS, type PlatformDef } from "@/lib/social";
 import type { SocialAccount, SocialPost } from "@/lib/types";
 
@@ -199,31 +201,86 @@ function GoLiveButton({ liveNow }: { liveNow: boolean }) {
 }
 
 /**
+ * Where the creator points OBS to stream through the relay. Shown only when
+ * the relay is deployed (LIVE_INGEST_URL set) — an address that goes nowhere
+ * is worse than no address.
+ */
+function IngestPanel({ ingestUrl, ingestKey }: { ingestUrl: string; ingestKey: string }) {
+  const [showKey, setShowKey] = useState(false);
+  return (
+    <div className="mt-4 rounded-xl border border-good/40 bg-good/5 p-3" data-tour="live-ingest">
+      <p className="text-sm font-bold">Stream once, reach everywhere</p>
+      <p className="mt-1 text-xs text-mist">
+        In OBS (Settings → Stream → Custom), use this server and key. The relay pushes your stream to every
+        platform you saved a stream key for below.
+      </p>
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 shrink-0 text-xs font-semibold uppercase text-mist">Server</span>
+          <code className="min-w-0 flex-1 truncate rounded-lg bg-panel2 px-2.5 py-1.5 font-mono text-xs">{ingestUrl}</code>
+          <CopyButton text={ingestUrl} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 shrink-0 text-xs font-semibold uppercase text-mist">Key</span>
+          <code className="min-w-0 flex-1 truncate rounded-lg bg-panel2 px-2.5 py-1.5 font-mono text-xs">
+            {showKey ? ingestKey : "•".repeat(24)}
+          </code>
+          <button type="button" onClick={() => setShowKey(!showKey)} className="btn-ghost !py-2 text-sm">
+            {showKey ? "Hide" : "Show"}
+          </button>
+          <CopyButton text={ingestKey} />
+        </div>
+      </div>
+      <form
+        action={regenerateIngestKeyAction}
+        className="mt-2 flex items-center gap-2"
+        onSubmit={(e) => {
+          if (!confirm("Replace your stream key? The current one stops working immediately.")) e.preventDefault();
+        }}
+      >
+        <button className="text-xs font-semibold text-mist transition hover:text-brand2">Replace key</button>
+        <span className="text-xs text-mist/70">Treat the key like a password — anyone holding it can broadcast as you.</span>
+      </form>
+    </div>
+  );
+}
+
+/**
  * Where the creator streams, and the button that tells people about it.
  *
- * There used to be a stream-key field per platform and an RTMP address to
- * point OBS at. Neither did anything: the keys were stored and never read
- * again, and no media server exists to receive a stream. A field that
- * quietly discards whatever you paste into it is worse than no field, so
- * both are gone until the relay is real. Keys already saved stay in the
- * database, untouched, ready for when it is.
+ * The stream-key fields are back: the relay (MediaMTX + ffmpeg, see
+ * deploy/DEPLOY-LIVE section) reads these keys and pushes the creator's one
+ * ingest stream to each platform. Instagram stays view-only — it has no
+ * official third-party ingest.
  */
 function LiveStreamsForm({
   twitchChannel,
   facebookLiveUrl,
   instagramLiveUser,
   liveNow,
+  ingestUrl,
+  ingestKey,
+  streamKeys,
 }: {
   twitchChannel: string;
   facebookLiveUrl: string;
   instagramLiveUser: string;
   liveNow: boolean;
+  /** "" while the relay isn't deployed — hides the ingest panel. */
+  ingestUrl: string;
+  ingestKey: string;
+  streamKeys: { twitch: string; youtube: string; facebook: string };
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveLiveStreams, {});
   const rows: Array<{ platform: PlatformDef; name: string; value: string; placeholder: string }> = [
     { platform: getPlatform("twitch")!, name: "twitchChannel", value: twitchChannel, placeholder: "yourchannel or twitch.tv/yourchannel" },
     { platform: getPlatform("facebook")!, name: "facebookLiveUrl", value: facebookLiveUrl, placeholder: "https://www.facebook.com/you/videos/..." },
     { platform: getPlatform("instagram")!, name: "instagramLiveUser", value: instagramLiveUser, placeholder: "yourhandle (for Instagram Live)" },
+  ];
+  const keyRows: Array<{ platform: PlatformDef; name: string; value: string; hint: string }> = [
+    { platform: getPlatform("twitch")!, name: "twitchStreamKey", value: streamKeys.twitch, hint: "Twitch → Creator Dashboard → Settings → Stream" },
+    { platform: getPlatform("youtube")!, name: "youtubeStreamKey", value: streamKeys.youtube, hint: "YouTube Studio → Go live → Stream settings" },
+    { platform: getPlatform("facebook")!, name: "facebookStreamKey", value: streamKeys.facebook, hint: "Facebook Live Producer → Streaming software" },
   ];
   return (
     <div className="mt-5 border-t border-edge pt-5">
@@ -235,10 +292,16 @@ function LiveStreamsForm({
             <span className="text-snow">Live Streams</span> section in the Page Builder to put it there.
           </p>
         </div>
-        <GoLiveButton liveNow={liveNow} />
+        <div data-tour="go-live">
+          <GoLiveButton liveNow={liveNow} />
+        </div>
       </div>
+
+      {ingestUrl && <IngestPanel ingestUrl={ingestUrl} ingestKey={ingestKey} />}
+
       <form action={formAction} className="mt-4">
-        <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-mist">Shown on your page</p>
+        <div className="mt-2 space-y-2" data-tour="live-page">
           {rows.map((r) => (
             <div key={r.name} className="flex items-center gap-2">
               <PlatformIcon platform={r.platform} size={16} />
@@ -246,6 +309,29 @@ function LiveStreamsForm({
             </div>
           ))}
         </div>
+
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-mist">
+          Stream keys — where the relay pushes your stream
+        </p>
+        {/* Two tour anchors for one block: the bubble copy differs depending
+            on whether the relay is live yet, and TourGuide picks whichever
+            target exists. */}
+        <div className="mt-2 space-y-2" data-tour={ingestUrl ? "live-keys" : "live-keys-waiting"}>
+          {keyRows.map((r) => (
+            <div key={r.name} className="flex items-center gap-2">
+              <PlatformIcon platform={r.platform} size={16} />
+              <input
+                name={r.name}
+                type="password"
+                autoComplete="off"
+                defaultValue={r.value}
+                className="field flex-1 !py-2 font-mono text-xs"
+                placeholder={r.hint}
+              />
+            </div>
+          ))}
+        </div>
+
         {state.error && (
           <p className="mt-3 rounded-xl border border-brand2/40 bg-brand2/10 px-3 py-2 text-sm text-brand2">{state.error}</p>
         )}
@@ -255,17 +341,22 @@ function LiveStreamsForm({
         </button>
       </form>
 
-      {/* The most useful thing this panel can say, and the thing it used to
-          bury underneath a stream-key field that went nowhere. */}
-      <p className="mt-4 rounded-xl border border-edge bg-panel2 p-3 text-xs text-mist">
-        <span className="font-semibold text-snow">Start the stream on the platform itself.</span> Ensemble does not
-        broadcast for you. Go live on Twitch, Facebook or Instagram the way you normally do, then press Go Live here:
-        your page shows an on-air badge, and every connected account gets a post saying where to watch.
-      </p>
-      <p className="mt-2 text-xs text-mist/70">
-        Streaming once and appearing on all three at the same time needs a media server we have not switched on yet.
-        When it is ready, this is where each platform&apos;s stream key will go.
-      </p>
+      {ingestUrl ? (
+        <p className="mt-4 rounded-xl border border-edge bg-panel2 p-3 text-xs text-mist">
+          <span className="font-semibold text-snow">One stream in, every platform out.</span> Point OBS at the server
+          and key above and the relay forwards your stream to each platform you saved a key for. Your page flips to
+          on-air by itself when the stream starts; the announcement post stays behind the button above, so a test
+          stream never posts to your followers. Instagram Live can&apos;t be pushed to (they offer no way in), but the
+          player on your page still works.
+        </p>
+      ) : (
+        <p className="mt-4 rounded-xl border border-edge bg-panel2 p-3 text-xs text-mist">
+          <span className="font-semibold text-snow">Simulcasting is nearly here.</span> The relay that fans one stream
+          out to every platform is built and waiting on server setup. Stream keys you save now are used the moment it
+          switches on. Until then, go live on the platform itself and press Announce — your page shows the on-air
+          badge and every connected account gets a post saying where to watch.
+        </p>
+      )}
     </div>
   );
 }
@@ -279,6 +370,9 @@ export function SocialIntegrations({
   liveNow,
   oauthReady,
   showLive,
+  ingestUrl,
+  ingestKey,
+  streamKeys,
 }: {
   accounts: SocialAccount[];
   twitchChannel: string;
@@ -288,6 +382,9 @@ export function SocialIntegrations({
   oauthReady: string[];
   /** Live-stream tools are Enterprise — hidden (page shows a locked card) on lower plans. */
   showLive: boolean;
+  ingestUrl: string;
+  ingestKey: string;
+  streamKeys: { twitch: string; youtube: string; facebook: string };
 }) {
   return (
     <div className="card">
@@ -296,7 +393,7 @@ export function SocialIntegrations({
         Connect your platforms{showLive ? " and link your lives" : ""} — then post to all of them at once from{" "}
         <Link href="/dashboard/socials" className="text-brand hover:underline">Socials</Link>.
       </p>
-      <div className="mt-4">
+      <div className="mt-4" data-tour="social-connect">
         <ConnectGrid accounts={accounts} oauthReady={oauthReady} />
       </div>
       {showLive && (
@@ -305,6 +402,9 @@ export function SocialIntegrations({
           facebookLiveUrl={facebookLiveUrl}
           instagramLiveUser={instagramLiveUser}
           liveNow={liveNow}
+          ingestUrl={ingestUrl}
+          ingestKey={ingestKey}
+          streamKeys={streamKeys}
         />
       )}
     </div>

@@ -14,7 +14,7 @@ import {
   starterContent,
 } from "./sections";
 import { getThemeDef } from "./themes";
-import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
+import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { randomBytes } from "node:crypto";
@@ -1121,6 +1121,33 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
   return { ok: true };
 }
 
+/**
+ * Record a follower count for a platform on a date. Counts are typed in by
+ * hand — most connections are handle-only, so there is no API to ask — and
+ * the date is the day the number was true, which is often in the past.
+ */
+export async function addSocialStat(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).social) return { error: "Growth tracking is a Pro feature — upgrade in Settings." };
+  const platform = getPlatform(str(fd, "platform"));
+  if (!platform) return { error: "Pick a platform." };
+  const day = str(fd, "day");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) return { error: "Pick the date the count was true." };
+  const count = parseCount(str(fd, "count"));
+  if (Number.isNaN(count)) return { error: "Enter the count as a number — 10000, 10,000, 10k and 1.2m all work." };
+  const note = str(fd, "note").slice(0, 200);
+  store.upsertSocialStat(site.id, platform.id, day, count, note);
+  revalidatePath("/dashboard/socials");
+  return { ok: true };
+}
+
+export async function removeSocialStat(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "id"));
+  if (id) store.deleteSocialStat(site.id, id);
+  revalidatePath("/dashboard/socials");
+}
+
 /** Re-attempt delivery of a post's queued/failed targets. */
 export async function retrySocialPost(fd: FormData): Promise<void> {
   const { site } = await requireSite();
@@ -1144,15 +1171,22 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
   const instagramLiveUser = cleanInstagramUser(rawInstagram);
   if (rawInstagram && !instagramLiveUser) return { error: "That doesn't look like an Instagram username." };
 
+  // The relay exists now, so the key fields are back and mean something:
+  // each saved key is a destination the relay pushes the creator's one
+  // stream to. Blank clears, same as the channel fields above.
+  const twitchStreamKey = str(fd, "twitchStreamKey").slice(0, 200);
+  const youtubeStreamKey = str(fd, "youtubeStreamKey").slice(0, 200);
+  const facebookStreamKey = str(fd, "facebookStreamKey").slice(0, 200);
+
   store.updateSite(site.id, {
     config: {
       ...site.config,
       twitchChannel,
       facebookLiveUrl,
       instagramLiveUser,
-      // Not read from the form any more: the key inputs are gone until there
-      // is a relay to use them, and reading absent fields would blank whatever
-      // a creator had already saved. Spreading site.config above keeps them.
+      twitchStreamKey,
+      youtubeStreamKey,
+      facebookStreamKey,
     },
   });
   revalidatePath("/dashboard/integrations");
@@ -1161,6 +1195,17 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
 }
 
 /** Flip everything live at once and announce it to every connected platform. */
+/**
+ * A fresh ingest key. The old one stops opening the relay the moment this
+ * runs, which is the point — it's the recovery move for a leaked key.
+ */
+export async function regenerateIngestKeyAction(): Promise<void> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).live) return;
+  store.regenerateIngestKey(site.id);
+  revalidatePath("/dashboard/integrations");
+}
+
 export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
   if (!getPlan(site.plan).live) return { error: "Going live is an Enterprise feature — upgrade in Settings." };

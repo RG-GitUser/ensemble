@@ -76,6 +76,30 @@ export function iconFill(color: string): string {
   return luminance < 40 ? "var(--color-snow)" : color;
 }
 
+/**
+ * A follower count the way people actually type one: "10000", "10,000",
+ * "10 000", "10k", "1.2m", "50K". Returns a whole number, or NaN when the
+ * text doesn't read as a count.
+ */
+export function parseCount(raw: string): number {
+  const t = raw.trim().toLowerCase().replace(/[\s,]/g, "");
+  const m = /^(\d+(?:\.\d+)?)([km]?)$/.exec(t);
+  if (!m) return NaN;
+  const mult = m[2] === "k" ? 1_000 : m[2] === "m" ? 1_000_000 : 1;
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
+/** Compact count for headlines: 950 → "950", 12_340 → "12.3k", 1_200_000 → "1.2m". */
+export function formatCount(n: number): string {
+  const compact = (v: number, suffix: string) => {
+    const s = v >= 100 ? Math.round(v).toString() : (Math.round(v * 10) / 10).toString();
+    return `${s}${suffix}`;
+  };
+  if (n >= 1_000_000) return compact(n / 1_000_000, "m");
+  if (n >= 1_000) return compact(n / 1_000, "k");
+  return n.toString();
+}
+
 /** "@name", a pasted profile URL (with or without https://), or plain handle → bare handle. */
 export function cleanHandle(raw: string): string {
   let h = raw.trim().replace(/^@/, "");

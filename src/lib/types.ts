@@ -63,11 +63,13 @@ export interface SiteConfig {
   facebookLiveUrl?: string;
   instagramLiveUser?: string;
   /**
-   * Per-platform RTMP stream keys. Stored only: there is no relay to spend
-   * them, so the dashboard stopped asking for them. Kept so nothing a creator
-   * already saved is lost when one exists.
+   * Per-platform RTMP stream keys, spent by the live relay: stream once to
+   * Ensemble's ingest and these decide where the relay pushes it on.
+   * Instagram's key is stored but not pushed to — there is no official
+   * third-party ingest for Instagram Live.
    */
   twitchStreamKey?: string;
+  youtubeStreamKey?: string;
   facebookStreamKey?: string;
   instagramStreamKey?: string;
   /** Creator hit Go Live — the Live section shows the on-air state. */
@@ -119,6 +121,8 @@ export interface Site {
   config: SiteConfig;
   /** Public token external websites use to pull this site's content via the embed. */
   embedToken: string;
+  /** Secret RTMP key the creator streams to the live relay with. */
+  ingestKey: string;
   /** Stripe billing state — empty strings until billing is set up. */
   stripeCustomerId: string;
   stripeSubscriptionId: string;
@@ -262,6 +266,19 @@ export interface SocialAccountAuth {
   refreshToken: string;
   expiresAt: string | null;
   externalId: string;
+}
+
+/** A follower/subscriber count for one platform, true on one date. */
+export interface SocialStat {
+  id: number;
+  siteId: number;
+  platform: string;
+  /** The date the count was observed, "YYYY-MM-DD". */
+  day: string;
+  count: number;
+  /** Optional context — "hit by the algorithm", "collab with X", etc. */
+  note: string;
+  createdAt: string;
 }
 
 export type PostTargetStatus = "queued" | "posted" | "failed";

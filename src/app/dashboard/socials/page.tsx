@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
+import { getSiteByUser, getSocialAccounts, getSocialPosts, getSocialStats } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialsPanel } from "@/components/SocialDashboard";
+import { SocialGrowth } from "@/components/SocialGrowth";
 
 export default async function SocialsPage() {
   const user = await requireUser();
@@ -11,8 +12,12 @@ export default async function SocialsPage() {
   if (!site) redirect("/dashboard");
   const plan = getPlan(site.plan);
 
+  const accounts = getSocialAccounts(site.id);
   const panel = (
-    <SocialsPanel accounts={getSocialAccounts(site.id)} posts={getSocialPosts(site.id)} />
+    <>
+      <SocialsPanel accounts={accounts} posts={getSocialPosts(site.id)} />
+      <SocialGrowth accounts={accounts} stats={getSocialStats(site.id)} />
+    </>
   );
 
   return (

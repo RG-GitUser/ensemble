@@ -101,6 +101,50 @@ sudo -iu ensemble bash -lc 'cd /srv/ensemble && git pull && npm ci && npm run bu
 systemctl restart ensemble
 ```
 
+## 10. Live relay (optional — switches on simulcasting)
+
+Creators stream once to the droplet and MediaMTX + ffmpeg push it to every
+platform they saved a stream key for. Skippable: without it, everything else
+runs and the dashboard shows the "simulcasting is nearly here" state.
+
+```sh
+# as root — the relay's tools
+apt install -y ffmpeg jq
+MTX_V=v1.9.3   # check github.com/bluenviron/mediamtx/releases for current
+curl -fL "https://github.com/bluenviron/mediamtx/releases/download/${MTX_V}/mediamtx_${MTX_V}_linux_amd64.tar.gz" \
+  | tar xz -C /usr/local/bin mediamtx
+chmod +x /srv/ensemble/deploy/live-push.sh
+
+# RTMP in from creators' OBS
+ufw allow 1935/tcp
+```
+
+Add to `/srv/ensemble/.env` (then `systemctl restart ensemble`):
+
+```sh
+LIVE_INGEST_URL=rtmp://ensemble.it.com/live
+LIVE_HOOK_SECRET=$(openssl rand -hex 32)   # paste the value, not the command
+```
+
+Then the unit:
+
+```sh
+cp /srv/ensemble/deploy/mediamtx.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now mediamtx
+```
+
+Smoke test: in the dashboard (Integrations → Social media, Enterprise plan),
+copy the server + stream key into OBS and start streaming. Within a few
+seconds `journalctl -u mediamtx -f` shows the publish, the page's Live section
+shows on-air, and any platform with a saved key starts receiving. Stop the
+stream and the badge drops on its own.
+
+Bandwidth: forwarding one stream to three platforms is roughly 8 GB/hour of
+egress. One regular streamer fits the droplet's included transfer; check
+`vnstat` monthly before inviting more, and move the relay to its own droplet
+when it outgrows this one.
+
 ## Notes
 
 - **PLATFORM_HOSTS matters**: any hostname *not* in that list is treated as a
