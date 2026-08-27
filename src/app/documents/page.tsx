@@ -27,15 +27,16 @@ function GuidesTab() {
     <>
       <DocSection title="Go live everywhere">
         <p>
-          Stream once from OBS and Ensemble&apos;s relay sends it to Twitch, YouTube and Facebook at the same time.
-          The setup is two copy-and-pastes, done once, in opposite directions. Understanding the direction of each
-          one makes the whole thing click.
+          Stream once and Ensemble&apos;s relay sends it to Twitch, YouTube and Facebook at the same time. Any
+          streaming app works — OBS or Streamlabs on desktop, Larix or PRISM on a phone; the examples below say OBS
+          because it&apos;s the most common. The setup is two copy-and-pastes, done once, in opposite directions.
+          Understanding the direction of each one makes the whole thing click.
         </p>
         <p>
-          <span className="font-semibold text-snow">1. Tell OBS where to send your stream.</span> In the dashboard
-          under Integrations, the green panel shows a Server address and a Key. Copy both into OBS under Settings,
-          then Stream, with the service set to Custom. This key is issued by Ensemble and proves to us that the
-          incoming stream is yours.
+          <span className="font-semibold text-snow">1. Tell your streaming app where to send your stream.</span> In
+          the dashboard under Integrations, the green panel shows a Server address and a Key. Copy both into OBS
+          under Settings, then Stream, with the service set to Custom (every other app has the same two fields).
+          This key is issued by Ensemble and proves to us that the incoming stream is yours.
         </p>
         <p>
           <span className="font-semibold text-snow">2. Tell Ensemble where to push it.</span> Each platform gives its
@@ -111,7 +112,9 @@ function InstructionsTab() {
     <>
       <p className="mt-6 text-sm text-mist">
         Exact click-by-click instructions for the common setups. Each one assumes you&apos;re logged in to the
-        dashboard.
+        dashboard. If a step doesn&apos;t match what you see, email{" "}
+        <a href="mailto:onboarding@ensemble.it.com" className="text-brand hover:underline">onboarding@ensemble.it.com</a>{" "}
+        and a person will walk you through it.
       </p>
 
       <DocSection title="Publish your first page">
@@ -139,7 +142,7 @@ function InstructionsTab() {
       <DocSection title="Set up simulcast streaming">
         <Steps
           items={[
-            <>On <span className="text-snow">Integrations</span>, find the green <span className="text-snow">Stream once, reach everywhere</span> panel (Enterprise plan).</>,
+            <>On <span className="text-snow">Integrations</span>, find the green <span className="text-snow">Stream once, reach everywhere</span> panel (Enterprise plan). Any streaming app works — these steps use OBS; on a phone, Larix Broadcaster takes the same server and key.</>,
             <>Open OBS on your computer. Go to File, then Settings, then the <span className="text-snow">Stream</span> tab, and set Service to <span className="text-snow">Custom</span>.</>,
             <>Copy the panel&apos;s <span className="text-snow">Server</span> into OBS&apos;s Server field, and the panel&apos;s <span className="text-snow">Key</span> into OBS&apos;s Stream Key field. Press OK. This part never changes again.</>,
             <>Get each platform&apos;s stream key. Twitch: Creator Dashboard, then Settings, then Stream. YouTube: YouTube Studio, then Go live, then Stream settings. Facebook: Live Producer, under Streaming software.</>,
@@ -234,7 +237,7 @@ function DevTab() {
         <p>
           There is no general REST API for creating posts or editing pages from outside the dashboard, and no
           webhooks for events. If you&apos;d build on either,{" "}
-          <a href="mailto:rileyg0035@gmail.com" className="text-brand hover:underline">tell us what you need</a>.
+          <a href="mailto:support@ensemble.it.com" className="text-brand hover:underline">tell us what you need</a>.
         </p>
       </DocSection>
     </>

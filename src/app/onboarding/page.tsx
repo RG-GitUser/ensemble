@@ -20,7 +20,14 @@ export default async function OnboardingPage({
         <p className="mt-2 text-mist">How do you want to set up {user.businessName}?</p>
       </div>
       <Onboarding initialPath={path} initialPlan={plan} />
-      <form action={logout} className="mt-10">
+      <p className="mt-8 text-sm text-mist">
+        Not sure which way to go?{" "}
+        <a href="mailto:onboarding@ensemble.it.com" className="text-brand hover:underline">
+          onboarding@ensemble.it.com
+        </a>{" "}
+        answers fast while you&apos;re getting set up.
+      </p>
+      <form action={logout} className="mt-6">
         <button className="text-sm text-mist transition hover:text-snow">← Sign out</button>
       </form>
     </div>

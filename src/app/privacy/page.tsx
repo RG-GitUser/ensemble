@@ -79,14 +79,19 @@ export default function PrivacyPage() {
 
       <DocSection title="Deleting your data">
         <p>
-          Email{" "}
-          <a href="mailto:rileyg0035@gmail.com" className="text-brand hover:underline">
-            rileyg0035@gmail.com
+          You can do it yourself, right now: log in and open Dashboard, then Profile. The danger zone at the bottom
+          offers two buttons. <span className="text-snow">Delete collected data</span> wipes analytics, subscriber
+          emails, chat messages, connected social credentials, post history and the growth log while keeping your
+          account and page. <span className="text-snow">Delete account</span> removes everything, permanently.
+        </p>
+        <p>
+          Prefer to ask a person, or lost access to your account? Email{" "}
+          <a href="mailto:support@ensemble.it.com" className="text-brand hover:underline">
+            support@ensemble.it.com
           </a>{" "}
-          from your account address and ask. We delete your account, your page, your connected credentials and your
-          collected subscriber emails. Disconnecting a social account in the dashboard deletes its stored credential
-          immediately, and you can also revoke Ensemble&apos;s access from the platform&apos;s own settings at any
-          time.
+          from your account address and we do it for you. Disconnecting a single social account in the dashboard
+          deletes its stored credential immediately, and you can also revoke Ensemble&apos;s access from the
+          platform&apos;s own settings at any time.
         </p>
       </DocSection>
 

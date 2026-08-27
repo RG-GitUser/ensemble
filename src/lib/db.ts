@@ -635,6 +635,36 @@ export function updateUser(id: number, fields: { name?: string; businessName?: s
     .run(fields.name ?? user.name, fields.businessName ?? user.businessName, id);
 }
 
+/**
+ * Wipe everything a site has collected or accumulated — analytics, subscriber
+ * emails, chat, connected social accounts with their credentials, the posting
+ * history and the growth log. The account, the page and its design survive:
+ * this is "delete my data", not "delete me", and the two are offered apart so
+ * nobody nukes their page wanting only a clean slate.
+ */
+export function deleteSiteData(siteId: number): void {
+  const d = db();
+  const tx = d.transaction(() => {
+    d.prepare("DELETE FROM page_views WHERE site_id = ?").run(siteId);
+    d.prepare("DELETE FROM leads WHERE site_id = ?").run(siteId);
+    d.prepare("DELETE FROM chat_messages WHERE site_id = ?").run(siteId);
+    // Targets go with their posts via ON DELETE CASCADE.
+    d.prepare("DELETE FROM social_posts WHERE site_id = ?").run(siteId);
+    d.prepare("DELETE FROM social_accounts WHERE site_id = ?").run(siteId);
+    d.prepare("DELETE FROM social_stats WHERE site_id = ?").run(siteId);
+  });
+  tx();
+}
+
+/**
+ * The whole account, gone. Every child row — session, site, sections, domain
+ * claim, collected data, credentials, tickets, prefs — follows through the
+ * ON DELETE CASCADE chain, which is the point of having built it that way.
+ */
+export function deleteUserAccount(userId: number): void {
+  db().prepare("DELETE FROM users WHERE id = ?").run(userId);
+}
+
 export function createSession(token: string, userId: number, expiresAt: number): void {
   db().prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)").run(token, userId, expiresAt);
 }

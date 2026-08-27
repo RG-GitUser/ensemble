@@ -156,6 +156,28 @@ export async function logout(): Promise<void> {
   redirect("/");
 }
 
+/** Wipe collected data (Profile → danger zone). The page and account stay. */
+export async function deleteMyData(): Promise<void> {
+  const user = await requireUser();
+  const site = store.getSiteByUser(user.id);
+  if (site) store.deleteSiteData(site.id);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/profile");
+}
+
+/**
+ * Delete the account and everything under it, then end the session. The
+ * admin account is refused: it anchors the seeded pages and the /admin inbox,
+ * and bricking the platform should take more than one dialog.
+ */
+export async function deleteMyAccount(): Promise<void> {
+  const user = await requireUser();
+  if (user.email === ADMIN_EMAIL) return;
+  store.deleteUserAccount(user.id);
+  await endSession();
+  redirect("/");
+}
+
 /* ---------------- onboarding ---------------- */
 
 export async function startFromScratch(fd: FormData): Promise<void> {
