@@ -14,9 +14,65 @@ const FEATURES = [
   { title: "Post everywhere at once", body: "Write once and cross-post to every connected social account, straight from your dashboard on Pro." },
   { title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
   { title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
-  { title: "Live streams & simulcast", body: "Link Twitch, Facebook and Instagram Live, and go live everywhere with one click on Enterprise." },
+  { title: "Live streams on your page", body: "Link Twitch, Facebook and Instagram Live so your page shows the player, and tell every follower at once when you go on air. Enterprise." },
   { title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
 ];
+
+/**
+ * Footer columns. Every href here goes somewhere that exists — a footer full
+ * of dead links is worse than a short one.
+ */
+const FOOTER_LINKS: Array<{ title: string; links: Array<{ label: string; href: string }> }> = [
+  {
+    title: "Product",
+    links: [
+      { label: "How it works", href: "#how" },
+      { label: "Pricing", href: "#pricing" },
+    ],
+  },
+  {
+    title: "See it working",
+    links: [
+      { label: "An example page", href: "/demo" },
+      { label: "The dashboard", href: "/demo/dashboard" },
+      { label: "The embed, live", href: "/embed-demo" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "Documents", href: "/documents" },
+      { label: "Developer docs", href: "/documents?tab=dev" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+    ],
+  },
+];
+
+function FooterColumn({ title, links }: { title: string; links: Array<{ label: string; href: string }> }) {
+  return (
+    <div>
+      <h3 className="text-xs font-bold uppercase tracking-wide text-snow">{title}</h3>
+      <ul className="mt-3 space-y-2">
+        {links.map((l) => (
+          <li key={l.href}>
+            {/* Same-page anchors stay plain <a>, as they are in the header:
+                a Link to a hash would try to route rather than scroll. */}
+            {l.href.startsWith("#") ? (
+              <a href={l.href} className="text-sm text-mist transition hover:text-snow">
+                {l.label}
+              </a>
+            ) : (
+              <Link href={l.href} className="text-sm text-mist transition hover:text-snow">
+                {l.label}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default async function Home() {
   const user = await getCurrentUser();
@@ -33,6 +89,7 @@ export default async function Home() {
           <nav className="flex items-center gap-2 sm:gap-4">
             <a href="#how" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">How it works</a>
             <a href="#pricing" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Pricing</a>
+            <Link href="/documents" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Documents</Link>
             <ThemeToggle />
             {user ? (
               <Link href="/dashboard" className="btn-primary !py-2 text-sm">Open dashboard</Link>
@@ -73,7 +130,7 @@ export default async function Home() {
               tour a live demo dashboard ↗
             </Link>
             <Link
-              href="/s/demo"
+              href="/demo"
               className="font-medium text-mist underline underline-offset-4 transition hover:text-snow"
             >
               see a live example page ↗
@@ -102,7 +159,7 @@ export default async function Home() {
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <Link href="/signup" className="btn-primary">Build my page</Link>
-              <Link href="/s/demo" className="text-sm font-semibold text-brand hover:underline">
+              <Link href="/demo" className="text-sm font-semibold text-brand hover:underline">
                 See an example ↗
               </Link>
               <Link href="/demo/dashboard" className="text-sm font-semibold text-brand hover:underline">
@@ -219,8 +276,63 @@ export default async function Home() {
         </div>
       </section>
 
-      <footer className="border-t border-edge/60 py-10 text-center text-sm text-mist">
-        <p>© {new Date().getFullYear()} Ensemble. Built for creators.</p>
+      <footer className="border-t border-edge/60">
+        <div className="mx-auto max-w-6xl px-6 py-14">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="sm:col-span-2 lg:col-span-1">
+              <Link href="/" className="text-2xl font-extrabold tracking-tight">
+                En<span className="bg-gradient-to-r from-brand to-brand2 bg-clip-text text-transparent">semble</span>
+              </Link>
+              <p className="mt-3 max-w-xs text-sm text-mist">
+                A page for your bonus content, merch and community. Keep the site you have, and keep every cent your
+                audience spends.
+              </p>
+            </div>
+
+            {FOOTER_LINKS.map((c) => (
+              <FooterColumn key={c.title} title={c.title} links={c.links} />
+            ))}
+
+            {/* The last column changes with who is reading it, so it isn't in
+                FOOTER_LINKS with the rest. */}
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wide text-snow">Get started</h3>
+              <ul className="mt-3 space-y-2">
+                <li>
+                  <Link href="/signup" className="text-sm text-mist transition hover:text-snow">
+                    Start from scratch
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/signup?path=integrate" className="text-sm text-mist transition hover:text-snow">
+                    Integrate my website
+                  </Link>
+                </li>
+                <li>
+                  {user ? (
+                    <Link href="/dashboard" className="text-sm font-semibold text-brand transition hover:text-snow">
+                      Open my dashboard
+                    </Link>
+                  ) : (
+                    <Link href="/login" className="text-sm text-mist transition hover:text-snow">
+                      Log in
+                    </Link>
+                  )}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-12 flex flex-col gap-2 border-t border-edge/60 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-mist">
+              © {new Date().getFullYear()} Ensemble. Ensemble and the Ensemble wordmark are trademarks of their
+              owner.
+            </p>
+            <p className="text-sm text-mist">
+              We never take a percentage of your sales.
+            </p>
+          </div>
+        </div>
       </footer>
     </div>
   );

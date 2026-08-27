@@ -3,8 +3,11 @@ import type { CSSProperties } from "react";
 /**
  * Curated page-theme palettes — every plan gets all of them. Values end up in
  * inline styles on the public page, so only values from these lists are ever
- * persisted (updateSettings validates with pickSwatch). All backgrounds are
- * dark so the page's white text and borders stay readable.
+ * persisted (updateSettings validates with pickSwatch).
+ *
+ * This is the dark palette, so every value in it takes pale text. The light
+ * ones live in LIGHT_BACKGROUNDS and are offered by the light-mode controls,
+ * where the ink is dark and they are legible.
  */
 export interface Swatch {
   id: string;
@@ -25,15 +28,25 @@ export const ACCENTS: Swatch[] = [
   { id: "pink", label: "Pink", value: "#ec4899" },
 ];
 
+/**
+ * Ink stays first: DEFAULT_BG is BACKGROUNDS[0], so every page that never
+ * chose a background is sitting on it.
+ *
+ * Dropping a swatch is safe — pickColor falls through to normalizeHex, so a
+ * page still holding a retired value keeps rendering it. Forest, Espresso and
+ * Wine went that way: at these depths they read as the same near-black as Ink,
+ * and a picker of eight indistinguishable darks is a picker of one.
+ */
 export const BACKGROUNDS: Swatch[] = [
+  // Dark
   { id: "ink", label: "Ink", value: "#0a0812" },
   { id: "charcoal", label: "Charcoal", value: "#101014" },
   { id: "midnight", label: "Midnight", value: "#0a1020" },
   { id: "ocean", label: "Deep ocean", value: "#06131c" },
-  { id: "forest", label: "Forest", value: "#081410" },
-  { id: "espresso", label: "Espresso", value: "#160e08" },
   { id: "plum", label: "Plum", value: "#170b1e" },
-  { id: "wine", label: "Wine", value: "#1a0a10" },
+  // Mid — still comfortably white-text territory.
+  { id: "slate", label: "Slate", value: "#1e2230" },
+  { id: "cocoa", label: "Cocoa", value: "#241a16" },
 ];
 
 export const CONTAINERS: Swatch[] = [
@@ -46,17 +59,112 @@ export const CONTAINERS: Swatch[] = [
 ];
 
 /**
+ * Light-mode counterparts to BACKGROUNDS and CONTAINERS. A creator page is
+ * dark by default, so these only come into play once light or visitor-choice
+ * is switched on — but when they do, the same picker UI drives them.
+ */
+export const LIGHT_BACKGROUNDS: Swatch[] = [
+  { id: "paper", label: "Paper", value: "#faf9fc" },
+  { id: "bone", label: "Bone", value: "#f5f3ee" },
+  { id: "mist", label: "Mist", value: "#eef2f7" },
+  { id: "sky", label: "Sky", value: "#eef4fb" },
+  { id: "sage", label: "Sage", value: "#eef5ef" },
+  { id: "linen", label: "Linen", value: "#faf4ec" },
+  { id: "blush", label: "Blush", value: "#fbf0f4" },
+  { id: "lilac", label: "Lilac", value: "#f4f0fb" },
+];
+
+export const LIGHT_CONTAINERS: Swatch[] = [
+  { id: "white", label: "White", value: "rgba(255,255,255,0.72)" },
+  { id: "solid", label: "Solid white", value: "#ffffff" },
+  { id: "tint", label: "Tint", value: "rgba(0,0,0,0.04)" },
+  { id: "shell", label: "Shell", value: "#f3f1ee" },
+  { id: "haze", label: "Haze", value: "#eef1f6" },
+  { id: "cloud", label: "Cloud", value: "#eff4f1" },
+];
+
+/** How many named looks a creator can keep. */
+export const MAX_LOOKS = 8;
+
+export type ColorMode = "dark" | "light" | "auto";
+
+/**
+ * How many looks a page has, and which.
+ *
+ * The first two are one palette: whichever the creator's own design already
+ * is. The third is both, and is the only case where there is a second palette
+ * to design at all.
+ */
+export const COLOR_MODES: Array<{ id: ColorMode; name: string; hint: string }> = [
+  { id: "dark", name: "Dark", hint: "One look. Your page is dark for everyone." },
+  { id: "light", name: "Light", hint: "One look. Your page is light for everyone." },
+  { id: "auto", name: "Both", hint: "Whichever suits the visitor's device, plus a switch on your page." },
+];
+
+export const DEFAULT_COLOR_MODE: ColorMode = "dark";
+export const DEFAULT_LIGHT_BG = LIGHT_BACKGROUNDS[0].value;
+export const DEFAULT_LIGHT_CARD = LIGHT_CONTAINERS[0].value;
+
+export function getColorMode(id: string | undefined | null): ColorMode {
+  return COLOR_MODES.some((m) => m.id === id) ? (id as ColorMode) : DEFAULT_COLOR_MODE;
+}
+
+/**
+ * Container edges are authored for a dark page, so most of them are white at
+ * a low alpha — which is invisible on a light one. Flipping white to black
+ * keeps the creator's chosen weight and leaves accent-coloured edges alone.
+ */
+export function edgeForLight(color: string): string {
+  return color
+    .replace(/rgba\(\s*255\s*,\s*255\s*,\s*255\s*,/gi, "rgba(0, 0, 0,")
+    .replace(/#ffffff([0-9a-f]{2})/gi, "#000000$1")
+    .replace(/^#ffffff$/i, "#000000");
+}
+
+/**
  * How wide the containers on a creator page run. The value multiplies every
  * section's base width, so the page keeps its own proportions — a links list
  * stays narrower than a merch grid at any setting.
  */
-export const CONTAINER_SIZES: Swatch[] = [
-  { id: "snug", label: "Snug", value: "0.75" },
-  { id: "compact", label: "Compact", value: "0.88" },
-  { id: "standard", label: "Standard", value: "1" },
-  { id: "roomy", label: "Roomy", value: "1.15" },
-  { id: "wide", label: "Wide", value: "1.35" },
+/**
+ * Container width is a free multiplier now, not one of five presets.
+ *
+ * The creator drags the edge of a sample container and lands wherever they
+ * like between these bounds. The old named steps sat inside this range, so a
+ * page that stored one keeps rendering at exactly the width it always did.
+ */
+export const SIZE_MIN = 0.6;
+export const SIZE_MAX = 1.6;
+/** Two decimals is finer than the eye can tell at these widths. */
+export function clampSize(raw: string | number | undefined | null): string {
+  const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(n)) return DEFAULT_SIZE;
+  return String(Math.round(Math.min(SIZE_MAX, Math.max(SIZE_MIN, n)) * 100) / 100);
+}
+
+/**
+ * Which way the copy inside a container runs.
+ *
+ * Set per section rather than per page: a creator centring their hero and
+ * left-aligning a long About passage is the normal case, and one page-wide
+ * switch cannot express it.
+ *
+ * Sections are authored centred, so "center" is the default and the no-op.
+ * The other two are applied by `.site-align-*` in globals.css, which retargets
+ * prose elements only. Buttons and badges stay centred whatever is picked.
+ */
+export const TEXT_ALIGNS: Swatch[] = [
+  { id: "left", label: "Left", value: "left" },
+  { id: "center", label: "Center", value: "center" },
+  { id: "right", label: "Right", value: "right" },
 ];
+
+export const DEFAULT_TEXT_ALIGN = TEXT_ALIGNS[1].value;
+
+/** A stored section alignment, or the centred default for "" and anything unknown. */
+export function getTextAlign(value: string | undefined | null): string {
+  return TEXT_ALIGNS.some((a) => a.value === value) ? (value as string) : DEFAULT_TEXT_ALIGN;
+}
 
 /**
  * How the containers are arranged down the page.
@@ -164,7 +272,28 @@ export const BORDER_STYLES: BorderStyleDef[] = [
 export const DEFAULT_ACCENT = ACCENTS[0].value;
 export const DEFAULT_BG = BACKGROUNDS[0].value;
 export const DEFAULT_CARD = CONTAINERS[0].value;
-export const DEFAULT_SIZE = CONTAINER_SIZES[2].value;
+export const DEFAULT_SIZE = "1";
+
+/**
+ * A floor under every container, in rem, with 0 meaning none.
+ *
+ * A floor rather than a fixed height because sections hold wildly different
+ * amounts: a links list is short, a merch grid is tall, a chatroom scrolls.
+ * One exact height would either clip the tall ones or strand the short ones in
+ * whitespace. A minimum lets a thin section fill out while a full one still
+ * grows past it, so nothing is ever hidden.
+ *
+ * rem rather than pixels so it rides the creator's type scale and never
+ * outruns a phone screen the way a literal pixel height would.
+ */
+export const MIN_HEIGHT_MAX = 24;
+export const DEFAULT_MIN_HEIGHT = "0";
+
+export function clampMinHeight(raw: string | number | undefined | null): string {
+  const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(n)) return DEFAULT_MIN_HEIGHT;
+  return String(Math.round(Math.min(MIN_HEIGHT_MAX, Math.max(0, n)) * 2) / 2);
+}
 export const DEFAULT_BORDER = BORDER_STYLES[0].id;
 
 /** The candidate if it's in the palette, otherwise the fallback. */

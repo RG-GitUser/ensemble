@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getLeads, getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
+import { getLeads, getSiteByUser, getSocialAccounts } from "@/lib/db";
+import { liveIngestUrl, relayConfigured } from "@/lib/live";
+import { configuredProviderIds } from "@/lib/oauth";
 import { getPlan } from "@/lib/plans";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
 import { LockedOverlay } from "@/components/LockedOverlay";
@@ -44,27 +46,27 @@ export default async function IntegrationsPage({
           const social = (
             <SocialIntegrations
               accounts={getSocialAccounts(site.id)}
-              posts={getSocialPosts(site.id)}
               twitchChannel={site.config.twitchChannel ?? ""}
               facebookLiveUrl={site.config.facebookLiveUrl ?? ""}
               instagramLiveUser={site.config.instagramLiveUser ?? ""}
+              liveNow={site.config.liveNow === true}
+              oauthReady={configuredProviderIds()}
+              showLive={plan.live}
+              ingestUrl={relayConfigured() ? liveIngestUrl() : ""}
+              ingestKey={site.ingestKey}
               streamKeys={{
                 twitch: site.config.twitchStreamKey ?? "",
+                youtube: site.config.youtubeStreamKey ?? "",
                 facebook: site.config.facebookStreamKey ?? "",
-                instagram: site.config.instagramStreamKey ?? "",
               }}
-              liveNow={site.config.liveNow === true}
-              ingestKey={site.embedToken}
-              threadsOAuthReady={!!process.env.THREADS_APP_ID && !!process.env.THREADS_APP_SECRET}
-              showLive={plan.live}
             />
           );
           return plan.social ? social : <LockedOverlay plan="Pro">{social}</LockedOverlay>;
         })()}
         {!plan.live && (
           <LockedCard
-            title="Live streams & simulcast"
-            body="Link Twitch, Facebook and Instagram Live, show the players on your page, and go live everywhere with one click."
+            title="Live streams"
+            body="Link Twitch, Facebook and Instagram Live, show the players on your page, and announce every stream to your followers in one press."
             plan="Enterprise"
           />
         )}
@@ -72,11 +74,9 @@ export default async function IntegrationsPage({
         <IntegrationsForm
           payments={plan.payments}
           calendar={plan.calendar}
-          chatroom={plan.chatroom}
           newsletter={plan.newsletter}
           stripeKey={site.config.stripeKey ?? ""}
           calendlyUrl={site.config.calendlyUrl ?? ""}
-          chatroomEnabled={site.config.chatroomEnabled ?? true}
           newsletterEnabled={site.config.newsletterEnabled ?? true}
         />
 

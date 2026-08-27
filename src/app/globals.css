@@ -102,6 +102,29 @@ body,
   50% { opacity: 0.45; }
 }
 
+/**
+ * The same twinkle, pitched for a near-white page. Violet specks at the dark
+ * theme's opacities are effectively invisible on #faf8fd — light mode was
+ * technically drawing a star field nobody could see. Higher floor, higher
+ * peak, and the layer itself carries less dimming.
+ */
+@keyframes ens-star-light {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.8; }
+}
+
+.ens-starfield { opacity: 0.45; }
+:root[data-theme="light"] .ens-starfield { opacity: 0.85; }
+:root[data-theme="light"] .ens-star { animation-name: ens-star-light; }
+
+/* Round specks on the dark page, four-pointed glints on the light one. */
+.ens-sparkles { display: none; }
+:root[data-theme="light"] .ens-dots { display: none; }
+:root[data-theme="light"] .ens-sparkles { display: block; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="light"] .ens-star { opacity: 0.45; }
+}
+
 @keyframes ens-sweep {
   to { transform: rotate(360deg); }
 }
@@ -295,6 +318,170 @@ body,
 .site-ink { color: var(--site-ink, #fff); }
 .site-ink-soft { color: color-mix(in srgb, var(--site-ink, #fff) 70%, transparent); }
 .site-ink-faint { color: color-mix(in srgb, var(--site-ink, #fff) 45%, transparent); }
+
+/**
+ * Surfaces and edges drawn from the page's own ink.
+ *
+ * These replace white-alpha tints, which were invisible the moment a backdrop
+ * was pale: an 8%-white panel on a near-white page is nothing at all. Mixing
+ * from the ink means the same declaration reads as a light tint on a dark
+ * page and a dark one on a light page.
+ *
+ * The hover rule is for the one place a link brightens to full ink; Tailwind's
+ * hover: prefix can't reach a custom class.
+ */
+.site-surface { background-color: color-mix(in srgb, var(--site-ink, #fff) 8%, transparent); }
+.site-edge { border-color: color-mix(in srgb, var(--site-ink, #fff) 20%, transparent); }
+a.site-ink-soft:hover { color: var(--site-ink, #fff); }
+
+/**
+ * Text fields on a creator page.
+ *
+ * These were hardcoded white throughout: white text, a 15%-white border, a
+ * 40%-white placeholder. On a light page that is a near-invisible field with
+ * a placeholder nobody can read. They take the page's own ink and accent
+ * instead, so a field is legible in either palette and wears the creator's
+ * colour rather than a generic grey.
+ *
+ * Border longhands, not the shorthand: the CSS optimizer expands `border` at
+ * build time and drops the value when it contains a var(), which would leave
+ * every field with no border at all. Same reason .site-card does it.
+ */
+.site-field {
+  color: var(--site-ink, #fff);
+  background-color: color-mix(in srgb, var(--site-ink, #fff) 6%, transparent);
+  border-style: solid;
+  border-width: 1px;
+  /* Accent mixed into the ink, not faded into transparency. A saturated
+     accent at low alpha can sit at almost the same luminance as the field it
+     is drawn on, which looks like no border at all; mixing toward the ink
+     guarantees the edge is visible whatever colour the creator picked. */
+  border-color: color-mix(in srgb, var(--site-accent, #8b5cf6) 55%, var(--site-ink, #fff));
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.site-field::placeholder {
+  color: color-mix(in srgb, var(--site-ink, #fff) 60%, transparent);
+}
+.site-field:focus {
+  border-color: var(--site-accent, #8b5cf6);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--site-accent, #8b5cf6) 25%, transparent);
+}
+
+/**
+ * A floor under each container (MIN_HEIGHT_MAX in lib/theme.ts).
+ *
+ * On the section wrapper and on a themed band alike, so a section that carries
+ * its own backdrop grows with the rest rather than floating at its natural
+ * height inside a taller box. Zero by default, which is the same as no rule.
+ */
+.site-section,
+.site-section > .site-band {
+  min-height: var(--site-min-h, 0);
+}
+
+/**
+ * Copy alignment, set per section (TEXT_ALIGNS in lib/theme.ts). The class
+ * goes on each section's own wrapper, so a centred hero can sit above a
+ * left-aligned About passage.
+ *
+ * Sections are authored centred and that stays the default, so "center" needs
+ * no rule at all. The other two set text-align on the section box itself
+ * rather than on a list of elements inside it. That matters for buttons: an
+ * inline-block button has no text of its own to align, it is placed by the
+ * text-align of the box it sits in. Aligning only headings and paragraphs
+ * moved the words and left every button stranded in the middle.
+ *
+ * Which means the authored centring has to stand down. Tailwind's text-center
+ * is a single class, so reaching it through the wrapper scores 0,2,0 against
+ * its own 0,1,0 and wins. `inherit` rather than a literal value so one rule
+ * covers both directions.
+ */
+.site-align-left {
+  text-align: left;
+}
+.site-align-right {
+  text-align: right;
+}
+.site-align-left [class~="text-center"],
+.site-align-right [class~="text-center"] {
+  text-align: inherit;
+}
+
+/**
+ * Buttons.
+ *
+ * A button's label is always centred, and there is deliberately no setting
+ * for it. A button is a target rather than a passage of prose, and ragged
+ * text inside a pill reads as a mistake rather than a choice.
+ *
+ * These elements carry no `text-center` class, so the rule above that stands
+ * authored centring down never matches them, and an explicit declaration
+ * beats whatever the section is inheriting.
+ */
+.site-btn {
+  text-align: center;
+}
+
+/**
+ * Where a button sits is a separate choice from where the words sit, made per
+ * section, so a centred button under a left-aligned paragraph is possible.
+ * Centre is the default in every section whatever the text is doing, which is
+ * also what every page looked like before the setting existed.
+ *
+ * Only buttons that size to their own label can move. A full-width one
+ * already spans its container and has nowhere to go.
+ */
+.site-btn-row {
+  text-align: center;
+}
+.site-btn-left .site-btn-row {
+  text-align: left;
+}
+.site-btn-right .site-btn-row {
+  text-align: right;
+}
+
+/**
+ * A button welded to a field, which is the newsletter signup and nothing else
+ * so far. The button alone has nowhere to go: the field beside it is flex-1
+ * and eats the row, so text-align on the wrapper moves nothing. What the
+ * setting moves is the pair, within whatever slack its container has.
+ */
+.site-btn-group {
+  margin-inline: auto;
+}
+.site-btn-left .site-btn-group {
+  margin-inline: 0 auto;
+}
+.site-btn-right .site-btn-group {
+  margin-inline: auto 0;
+}
+
+/**
+ * Flex containers ignore text-align entirely — a flex item is placed by
+ * justify-content, so these two need saying separately.
+ *
+ * .site-align-row is for rows: a heading with a badge beside it, a line of
+ * footer links. .site-align-stack is for the one column-direction flex on the
+ * page, and is scoped under the breakpoint where it is still a column —
+ * above that it becomes a row and align-items governs the vertical, which is
+ * not this setting's business.
+ */
+.site-align-left .site-align-row {
+  justify-content: flex-start;
+}
+.site-align-right .site-align-row {
+  justify-content: flex-end;
+}
+@media (max-width: 639px) {
+  .site-align-left .site-align-stack {
+    align-items: flex-start;
+  }
+  .site-align-right .site-align-stack {
+    align-items: flex-end;
+  }
+}
 
 /**
  * Section arrangement (LAYOUTS in lib/theme.ts). Both alternatives are pure

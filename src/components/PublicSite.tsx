@@ -4,9 +4,10 @@ import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
-import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, DEFAULT_SIZE, FULL_WIDTH_TYPES, getLayout } from "@/lib/theme";
-import { themeCss } from "@/lib/themes";
+import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
+import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout, getTextAlign } from "@/lib/theme";
+import { backdropCss, themeCss } from "@/lib/themes";
+import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import type { PlanDef } from "@/lib/plans";
@@ -37,25 +38,27 @@ function SectionView({
           <h1 className="site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
           {c.subheading && <p className="mx-auto mt-5 max-w-xl text-[1.125em] site-ink-soft">{c.subheading}</p>}
           {c.ctaLabel && (
-            <a
-              href={c.ctaUrl || "#"}
-              className="mt-8 inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-              style={{ background: "var(--site-accent)" }}
-            >
-              {c.ctaLabel}
-            </a>
+            <div className="site-btn-row mt-8">
+              <a
+                href={c.ctaUrl || "#"}
+                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                style={{ background: "var(--site-accent)" }}
+              >
+                {c.ctaLabel}
+              </a>
+            </div>
           )}
         </section>
       );
     case "about":
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start">
+          <div className="site-align-stack flex flex-col items-center gap-8 sm:flex-row sm:items-start">
             {c.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={c.imageUrl} alt={c.heading} className="h-36 w-36 shrink-0 rounded-2xl object-cover" />
             )}
-            <div className="text-center sm:text-left">
+            <div className="text-center">
               <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
               <p className="mt-3 whitespace-pre-line site-ink-soft">{c.body}</p>
             </div>
@@ -81,7 +84,7 @@ function SectionView({
                     {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
                   </div>
                   {c.ctaLabel ? (
-                    <span className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-[0.875em] font-semibold">
+                    <span className="site-edge shrink-0 rounded-lg border px-3 py-1.5 text-[0.875em] font-semibold">
                       {c.ctaLabel}
                     </span>
                   ) : (
@@ -119,7 +122,7 @@ function SectionView({
               <a
                 key={i}
                 href={url || "#"}
-                className="site-card block rounded-xl px-5 py-3.5 text-center font-semibold"
+                className="site-btn site-card block rounded-xl px-5 py-3.5 font-semibold"
                 style={{ background: "var(--site-card)" }}
               >
                 {label}
@@ -143,7 +146,7 @@ function SectionView({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={name} className="aspect-square w-full object-cover" />
                 ) : (
-                  <div className="flex aspect-[5/2] w-full items-center justify-center bg-white/5 text-[0.875em] site-ink-faint sm:aspect-square">{name}</div>
+                  <div className="site-surface flex aspect-[5/2] w-full items-center justify-center text-[0.875em] site-ink-faint sm:aspect-square">{name}</div>
                 )}
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -153,13 +156,13 @@ function SectionView({
                   {plan.payments && buyUrl ? (
                     <a
                       href={buyUrl}
-                      className="mt-3 block rounded-lg py-2 text-center text-[0.875em] font-semibold text-white transition hover:opacity-90"
+                      className="site-btn mt-3 block rounded-lg py-2 text-[0.875em] font-semibold text-white transition hover:opacity-90"
                       style={{ background: "var(--site-accent)" }}
                     >
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="mt-3 rounded-lg border border-white/10 py-2 text-center text-[0.875em] site-ink-faint">
+                    <p className="site-btn site-edge mt-3 rounded-lg border py-2 text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -190,15 +193,17 @@ function SectionView({
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {url ? (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-6 inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-              style={{ background: "var(--site-accent)" }}
-            >
-              Open calendar
-            </a>
+            <div className="site-btn-row mt-6">
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                style={{ background: "var(--site-accent)" }}
+              >
+                Open calendar
+              </a>
+            </div>
           ) : (
             <p className="mt-6 site-ink-faint">Calendar link coming soon.</p>
           )}
@@ -217,7 +222,7 @@ function SectionView({
                 <p className="text-center text-[0.875em] site-ink-faint">No messages yet — say hi.</p>
               )}
               {chat.map((m) => (
-                <div key={m.id} className="w-fit max-w-[80%] rounded-2xl rounded-bl-sm bg-white/10 px-4 py-2 text-[0.875em]">
+                <div key={m.id} className="site-surface w-fit max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2 text-[0.875em]">
                   <span className="mr-2 font-semibold" style={{ color: "var(--site-accent)" }}>
                     {m.author}
                   </span>
@@ -236,7 +241,7 @@ function SectionView({
       const hasAny = twitchChannel || facebookLiveUrl || instagramLiveUser;
       return (
         <section className="site-w-lg mx-auto px-6 py-14">
-          <h2 className="flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
+          <h2 className="site-align-row flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
             {c.heading}
             {site.config.liveNow && (
               <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1 text-[0.75em] font-bold uppercase text-red-400">
@@ -264,12 +269,12 @@ function SectionView({
               />
             )}
             {instagramLiveUser && (
-              <p className="text-center">
+              <p className="site-btn-row">
                 <a
                   href={`https://instagram.com/${encodeURIComponent(instagramLiveUser)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                  className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                   style={{ background: "var(--site-accent)" }}
                 >
                   {c.ctaLabel || "Watch my Instagram Live"}
@@ -286,9 +291,11 @@ function SectionView({
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {c.email && (
-            <a href={`mailto:${c.email}`} className="site-card mt-6 inline-block rounded-xl px-7 py-3 font-semibold">
-              {c.buttonLabel || c.email}
-            </a>
+            <div className="site-btn-row mt-6">
+              <a href={`mailto:${c.email}`} className="site-btn site-card inline-block rounded-xl px-7 py-3 font-semibold">
+                {c.buttonLabel || c.email}
+              </a>
+            </div>
           )}
         </section>
       );
@@ -307,7 +314,7 @@ function SectionView({
           <div className="border-t pt-8" style={{ borderColor: "var(--site-border-color, rgba(255,255,255,0.12))" }}>
             {tagline && <p className="text-[0.95em] site-ink-soft">{tagline}</p>}
             {policies.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-start justify-center gap-x-6 gap-y-3 text-[0.8em]">
+              <div className="site-align-row mt-4 flex flex-wrap items-start justify-center gap-x-6 gap-y-3 text-[0.8em]">
                 {policies.map((p) =>
                   p.url ? (
                     <a
@@ -349,7 +356,7 @@ function SectionView({
 }
 
 /**
- * Full public rendering of a creator page — shared by /s/[slug] and custom
+ * Full public rendering of a creator page — shared by /[slug] and custom
  * domains (/domain/[host]). Owner links and the "Powered by" link use APP_URL
  * so they point back at the platform even when served on a customer domain.
  */
@@ -389,45 +396,139 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : refHost);
   }
 
-  // Backdrop precedence: a chosen theme preset (config.themeId) styles the
-  // whole page; otherwise the custom layers apply — accent glow (unless
-  // switched off) → uploaded/generated image → base color. Either way it's
-  // rendered on a fixed, viewport-sized underlay: `cover` on the page element
-  // itself would scale images to the FULL page height, magnifying them into
-  // an invisible wash on long pages.
+  // One composed stack — accent glow, the creator's image, the preset's own
+  // layers, their base colour — so a preset is a starting point rather than a
+  // mode that switches the other controls off. Rendered on a fixed,
+  // viewport-sized underlay: `cover` on the page element itself would scale
+  // images to the FULL page height, magnifying them into an invisible wash on
+  // long pages.
   const cfg = site.config;
-  const preset = themeCss(cfg.themeId, cfg.themeColor);
-  const bgLayers = [
-    ...(cfg.gradient !== false ? [`radial-gradient(800px 400px at 50% -10%, ${cfg.themeColor}33, transparent 70%)`] : []),
-    ...(cfg.bgImage ? [`url("${cfg.bgImage}") center / cover no-repeat`] : []),
-    cfg.bgColor ?? "#0a0812",
-  ];
-  const underlay: React.CSSProperties = preset ?? { background: bgLayers.join(", ") };
-  const cardBg = `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${cfg.cardColor ?? "rgba(255,255,255,0.05)"}`;
+  const mode = getColorMode(cfg.colorMode);
+  const glow = cfg.gradient !== false;
+  const card = (color: string) =>
+    `${cfg.cardImage ? `url("${cfg.cardImage}") center / cover no-repeat, ` : ""}${color}`;
+
+  // Both palettes are always computed; which one the visitor sees is decided
+  // by the stylesheet below, not here.
+  const darkPalette = {
+    backdrop: backdropCss({
+      themeId: cfg.themeId,
+      accent: cfg.themeColor,
+      bgColor: cfg.bgColor ?? "#0a0812",
+      bgImage: cfg.bgImage,
+      glow,
+    }),
+    card: card(cfg.cardColor ?? "rgba(255,255,255,0.05)"),
+    ink: cfg.textColor || DEFAULT_TEXT_COLOR,
+    edges: false,
+  };
+  const lightPalette = {
+    backdrop: backdropCss({
+      // No falling back to the dark preset. The two pickers now offer
+      // different halves of the catalogue, and borrowing a dark backdrop for
+      // light mode puts dark ink on a dark canvas. With no light preset
+      // chosen, light mode sits on the light background color.
+      themeId: cfg.lightThemeId || "",
+      accent: cfg.themeColor,
+      bgColor: cfg.lightBgColor ?? DEFAULT_LIGHT_BG,
+      bgImage: cfg.bgImage,
+      glow,
+    }),
+    card: card(cfg.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    ink: cfg.lightTextColor || DEFAULT_LIGHT_TEXT_COLOR,
+    edges: true,
+  };
+
+  const border = borderVars(cfg.borderStyle, cfg.themeColor);
+  // Widths and shadow don't change with the mode, so they stay inline. The
+  // colours do, and an inline custom property beats every selector — so they
+  // have to live in the stylesheet or the light rules could never win.
+  const { "--site-border-color": edge, "--site-border-left-color": edgeLeft, "--site-border-hover": edgeHover, ...borderShape } = border;
+
+  const paletteVars = (p: typeof darkPalette) =>
+    [
+      [`--site-bd-color`, p.backdrop.backgroundColor],
+      [`--site-bd-image`, p.backdrop.backgroundImage ?? "none"],
+      [`--site-bd-size`, p.backdrop.backgroundSize ?? "auto"],
+      [`--site-bd-pos`, p.backdrop.backgroundPosition ?? "0% 0%"],
+      [`--site-bd-repeat`, p.backdrop.backgroundRepeat ?? "repeat"],
+      [`--site-card`, p.card],
+      [`--site-ink`, p.ink],
+      [`--site-border-color`, p.edges ? edgeForLight(edge) : edge],
+      [`--site-border-left-color`, p.edges ? edgeForLight(edgeLeft) : edgeLeft],
+      [`--site-border-hover`, p.edges ? edgeForLight(edgeHover) : edgeHover],
+    ]
+      .map(([k, v]) => `${k}:${v}`)
+      .join(";");
+
+  // "light" is a single look, so it is simply the base rule. "auto" ships the
+  // dark palette as the base and switches on either the visitor's explicit
+  // choice or, with no JavaScript at all, their device preference.
+  const base = mode === "light" ? lightPalette : darkPalette;
+  const modeCss = [
+    `.site-root{${paletteVars(base)}}`,
+    ...(mode === "auto"
+      ? [
+          `.site-root[data-site-mode="light"]{${paletteVars(lightPalette)}}`,
+          `@media (prefers-color-scheme: light){.site-root[data-site-mode="auto"]{${paletteVars(lightPalette)}}}`,
+        ]
+      : []),
+  ].join("");
+
+  const underlay: React.CSSProperties = {
+    backgroundColor: "var(--site-bd-color)",
+    backgroundImage: "var(--site-bd-image, none)",
+    backgroundSize: "var(--site-bd-size, auto)",
+    backgroundPosition: "var(--site-bd-pos, 0% 0%)",
+    backgroundRepeat: "var(--site-bd-repeat, repeat)",
+  };
 
   const layout = getLayout(cfg.layout);
 
   return (
     <div
-      className="site-ink relative isolate flex-1"
+      className="site-root site-ink relative isolate flex-1"
+      // The boot script below rewrites data-site-mode from localStorage before
+      // React hydrates, which is the whole point of it: a remembered choice
+      // must be applied before first paint or the other palette flashes. React
+      // then finds an attribute it did not render and warns. Suppressing is
+      // the sanctioned answer, and it reaches this element's own attributes
+      // only, never its children, so a real mismatch further down still shows.
+      suppressHydrationWarning
+      data-site-mode={mode === "auto" ? "auto" : mode}
       style={
         {
           "--site-accent": cfg.themeColor,
-          "--site-card": cardBg,
           // Container width and border style: the .site-w-* / .site-card rules
           // in globals.css read these, so one declaration here restyles every
-          // section on the page.
+          // section on the page. Colours are in the stylesheet above instead,
+          // because they change with the light/dark mode.
           "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
-          // Type: one family, one ink, and a base size every text size on the
-          // page is expressed as a multiple of (see the em values above), so
-          // the scale moves the headline and the fine print together.
-          "--site-ink": cfg.textColor || DEFAULT_TEXT_COLOR,
+          // A floor, never a ceiling: content taller than this still grows.
+          "--site-min-h": `${clampMinHeight(cfg.containerMinHeight)}rem`,
+          // Type: one family and a base size every text size on the page is
+          // expressed as a multiple of (see the em values above), so the scale
+          // moves the headline and the fine print together.
           fontFamily: getFont(cfg.fontId).family,
           fontSize: `calc(1rem * ${cfg.fontScale || DEFAULT_TEXT_SIZE})`,
-          ...borderVars(cfg.borderStyle, cfg.themeColor),
+          ...borderShape,
         } as React.CSSProperties
       }
     >
+      <style dangerouslySetInnerHTML={{ __html: modeCss }} />
+      {/* Runs before paint so a remembered choice doesn't flash the other
+          palette first. Visitors who've chosen nothing keep the server-rendered
+          "auto", which the media query already resolved. */}
+      {mode === "auto" && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var m=localStorage.getItem('ensemble-site-mode');" +
+              "if(m==='light'||m==='dark'){document.currentScript.parentElement.dataset.siteMode=m}}catch(e){}})()",
+          }}
+        />
+      )}
+      {mode === "auto" && <SiteModeToggle />}
       <div aria-hidden className="fixed inset-0 -z-10" style={underlay} />
       {/* Platform chrome, not the creator's page — fixed size and colour so it
           doesn't ride the creator's type scale. */}
@@ -459,7 +560,10 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
                 : "site-right"
               : "";
           return (
-            <div key={s.id} className={`${full ? "site-full" : ""} ${side}`.trim() || undefined}>
+            <div
+              key={s.id}
+              className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
+            >
               {containerTheme ? (
                 <div className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl" style={containerTheme}>
                   <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
@@ -475,12 +579,12 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           section — that section carries the tagline, the policies and the
           Powered by line, so keeping both would print the footer twice. */}
       {!sections.some((s) => s.type === "footer") && (site.config.tagline || !plan.whiteLabel) && (
-        <footer className="border-t border-white/10 px-6 py-10 text-center text-[0.875em] site-ink-faint">
+        <footer className="site-edge border-t px-6 py-10 text-center text-[0.875em] site-ink-faint">
           {site.config.tagline && <p className="mb-2 site-ink-soft">{site.config.tagline}</p>}
           {!plan.whiteLabel && (
             <p>
               Powered by{" "}
-              <a href={appUrl || "/"} className="font-semibold site-ink-soft hover:text-white">
+              <a href={appUrl || "/"} className="font-semibold site-ink-soft">
                 Ensemble
               </a>
             </p>

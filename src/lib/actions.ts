@@ -5,33 +5,53 @@ import { revalidatePath } from "next/cache";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
-import { embedUrl, getTemplate, planAllowsTemplate, RECOMMENDED_ORDER } from "./sections";
+import {
+  embedUrl,
+  getTemplate,
+  planAllowsTemplate,
+  RECOMMENDED_ORDER,
+  STARTER_SECTIONS,
+  starterContent,
+} from "./sections";
 import { getThemeDef } from "./themes";
-import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook } from "./social";
+import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
+import { randomBytes } from "node:crypto";
+import { checkDomainOwnership } from "./domain-verify";
 import { cleanHostname, platformHosts } from "./domains";
+import { isReservedSlug } from "./slugs";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import {
   ACCENTS,
   BACKGROUNDS,
-  CONTAINER_SIZES,
+  clampMinHeight,
+  clampSize,
+  TEXT_ALIGNS,
   CONTAINERS,
   DEFAULT_BG,
   DEFAULT_BORDER,
   DEFAULT_CARD,
   DEFAULT_SIZE,
   DEFAULT_LAYOUT,
+  DEFAULT_LIGHT_BG,
+  DEFAULT_LIGHT_CARD,
   getBorderStyle,
+  getColorMode,
   getLayout,
+  LIGHT_BACKGROUNDS,
+  LIGHT_CONTAINERS,
+  MAX_LOOKS,
   pickColor,
   pickSwatch,
 } from "./theme";
 import {
   DEFAULT_FONT,
+  DEFAULT_LIGHT_TEXT_COLOR,
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_SIZE,
   FONTS,
+  LIGHT_TEXT_COLORS,
   TEXT_COLORS,
   TEXT_SIZES,
 } from "./fonts";
@@ -45,7 +65,8 @@ import {
 } from "./billing";
 import fs from "fs";
 import path from "path";
-import type { Plan, Site, SiteConfig } from "./types";
+import { randomUUID } from "crypto";
+import type { DesignConfig, Plan, Site, SiteConfig } from "./types";
 
 export interface FormState {
   error?: string;
@@ -71,7 +92,9 @@ function slugify(input: string): string {
 function uniqueSlug(base: string): string {
   let slug = slugify(base);
   let n = 1;
-  while (store.slugTaken(slug)) slug = `${slugify(base)}-${++n}`;
+  // Reserved names are unavailable for the same reason taken ones are: the
+  // resulting page would never be reachable at the root.
+  while (store.slugTaken(slug) || isReservedSlug(slug)) slug = `${slugify(base)}-${++n}`;
   return slug;
 }
 
@@ -88,7 +111,7 @@ function revalidateSite(site: Site): void {
   // Publish state and domain status surface on these two as well.
   revalidatePath("/dashboard/connect");
   revalidatePath("/dashboard/settings");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- auth ---------------- */
@@ -144,13 +167,11 @@ export async function startFromScratch(fd: FormData): Promise<void> {
   const config: SiteConfig = { themeColor: "#8b5cf6", tagline: "" };
   const site = store.createSite(user.id, uniqueSlug(user.businessName), planId, config);
 
-  // Seed a starter page so the builder never starts empty.
-  for (const type of ["hero", "about", "bonus", "links"]) {
-    const tpl = getTemplate(type)!;
-    store.addSection(site.id, type, {
-      ...tpl.defaults,
-      ...(type === "hero" ? { heading: user.businessName } : {}),
-    });
+  // Seed a starter page so the builder never starts empty. What goes in comes
+  // from starterContent, which the setup checklist also reads to work out
+  // which sections are still untouched.
+  for (const type of STARTER_SECTIONS) {
+    store.addSection(site.id, type, starterContent(type, user.businessName));
   }
 
   // With Stripe configured, the page needs a subscription before it can go live.
@@ -321,6 +342,26 @@ export async function deleteAllSectionsAction(): Promise<void> {
 /* ---------------- tutorials ---------------- */
 
 /** Records that this person has been through a tour, so it doesn't reappear. */
+/**
+ * Answer the first-sign-in walkthrough offer.
+ *
+ * Revalidates the whole dashboard layout, not just the page: the prompt and
+ * the tour bubbles are both mounted there, so the layout has to re-read prefs
+ * or the dialog stays on screen after it has been answered.
+ */
+export async function completeWelcomeAction(takeTour: boolean): Promise<void> {
+  const user = await requireUser();
+  store.completeWelcome(user.id, takeTour);
+  revalidatePath("/dashboard", "layout");
+}
+
+/** Put the finished setup checklist away. */
+export async function dismissSetupAction(): Promise<void> {
+  const user = await requireUser();
+  store.dismissSetup(user.id);
+  revalidatePath("/dashboard");
+}
+
 export async function dismissTourAction(tourId: string): Promise<void> {
   const user = await requireUser();
   store.markTourSeen(user.id, tourId);
@@ -381,6 +422,34 @@ export async function setSiteTheme(fd: FormData): Promise<void> {
   revalidateSite(site);
 }
 
+/**
+ * Alignment is stored on the section, so it rides with the container it
+ * describes: reordering or deleting a section takes its alignment with it,
+ * and no page-level value has to be kept in step.
+ */
+export async function setSectionAlignAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const align = str(fd, "align");
+  if (!TEXT_ALIGNS.some((a) => a.value === align)) return;
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id) return;
+  store.setSectionAlign(id, align);
+  revalidateSite(site);
+}
+
+/** Where the section's buttons sit. Their labels are always centred. */
+export async function setSectionButtonAlignAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const align = str(fd, "align");
+  if (!TEXT_ALIGNS.some((a) => a.value === align)) return;
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id) return;
+  store.setSectionButtonAlign(id, align);
+  revalidateSite(site);
+}
+
 export async function setSectionThemeAction(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const id = Number(str(fd, "sectionId"));
@@ -397,18 +466,40 @@ export async function setSectionThemeAction(fd: FormData): Promise<void> {
 export async function updateSettings(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
   const slug = slugify(str(fd, "slug"));
-  const tagline = str(fd, "tagline");
   // Length rule only applies to slug changes, so sites with a shorter
   // pre-existing slug can still save their other settings.
   if (slug.length < 3 && slug !== site.slug) return { error: "Your page URL must be at least 3 characters." };
   if (store.slugTaken(slug, site.id)) return { error: "That page URL is taken — try another." };
-  store.updateSite(site.id, { slug, config: { ...site.config, tagline } });
+  // Only checked when it actually changes, so a site that predates the
+  // reserved list can still save its other settings.
+  if (slug !== site.slug && isReservedSlug(slug)) {
+    return { error: "That page URL is reserved by Ensemble — try another." };
+  }
+  // Page settings is the address and nothing else now. Passing no config at
+  // all leaves site.config untouched, which matters because the tagline moved
+  // to the Footer section and this form no longer carries it.
+  store.updateSite(site.id, { slug });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   // The free-address card lives here and shows the slug back to the user.
   revalidatePath("/dashboard/connect");
-  revalidatePath(`/s/${slug}`);
+  revalidatePath(`/${slug}`);
   return {};
+}
+
+/** Profile tab — the creator's own name and business name. */
+export async function updateProfile(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const name = str(fd, "name").slice(0, 80);
+  const businessName = str(fd, "businessName").slice(0, 80);
+  if (!name) return { error: "Your name can't be empty." };
+  if (!businessName) return { error: "Your business name can't be empty — it labels your dashboard and page." };
+  store.updateUser(user.id, { name, businessName });
+  // The business name is printed in the sidebar and on the public page.
+  revalidatePath("/dashboard", "layout");
+  const site = store.getSiteByUser(user.id);
+  if (site) revalidatePath(`/${site.slug}`);
+  return { ok: true };
 }
 
 const THEME_IMAGE_TYPES: Record<string, string> = {
@@ -476,6 +567,86 @@ async function faviconFrom(fd: FormData, siteId: number): Promise<string | { err
   return storeThemeAsset(siteId, "icon", buf, ext);
 }
 
+/**
+ * Run an untrusted design blob through exactly the gates updateTheme uses.
+ *
+ * Saved looks are round-tripped through the browser, so nothing in one may be
+ * trusted on the way back in — every colour is re-normalized and every id is
+ * re-checked against its list. Image URLs are the exception worth noting: they
+ * are only ever accepted if the site already references them, so a look can
+ * never point the page at someone else's upload.
+ */
+function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const text = (k: string) => (typeof r[k] === "string" ? (r[k] as string) : "");
+  const knownImages = [site.config.bgImage, site.config.cardImage].filter(Boolean) as string[];
+  const image = (k: string) => (knownImages.includes(text(k)) ? text(k) : undefined);
+
+  return {
+    themeColor: pickColor(ACCENTS, text("themeColor"), site.config.themeColor),
+    bgColor: pickColor(BACKGROUNDS, text("bgColor"), site.config.bgColor ?? DEFAULT_BG),
+    cardColor: pickColor(CONTAINERS, text("cardColor"), site.config.cardColor ?? DEFAULT_CARD),
+    containerSize: clampSize(text("containerSize") || site.config.containerSize),
+    containerMinHeight: clampMinHeight(text("containerMinHeight")),
+    borderStyle: getBorderStyle(text("borderStyle")) ? text("borderStyle") : DEFAULT_BORDER,
+    bgImage: image("bgImage"),
+    cardImage: image("cardImage"),
+    gradient: r.gradient !== false,
+    themeId: getThemeDef(text("themeId")) ? text("themeId") : "",
+    fontId: FONTS.some((f) => f.id === text("fontId")) ? text("fontId") : DEFAULT_FONT,
+    fontScale: pickSwatch(TEXT_SIZES, text("fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
+    textColor: pickColor(TEXT_COLORS, text("textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
+    layout: getLayout(text("layout")) ? text("layout") : DEFAULT_LAYOUT,
+    colorMode: getColorMode(text("colorMode")),
+    lightThemeId: getThemeDef(text("lightThemeId")) ? text("lightThemeId") : "",
+    lightBgColor: pickColor(LIGHT_BACKGROUNDS, text("lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
+    lightCardColor: pickColor(LIGHT_CONTAINERS, text("lightCardColor"), site.config.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    lightTextColor: pickColor(
+      LIGHT_TEXT_COLORS,
+      text("lightTextColor"),
+      site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR
+    ),
+  };
+}
+
+/** Stores the design currently in the builder under a name. */
+export async function saveLookAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  const name = str(fd, "lookName").trim().slice(0, 40);
+  if (!name) return { error: "Give this look a name first." };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(str(fd, "lookDesign") || "{}");
+  } catch {
+    return { error: "That look couldn't be read — reload the page and try again." };
+  }
+  const design = sanitizeDesign(parsed, site);
+
+  const looks = [...(site.config.looks ?? [])];
+  const existing = looks.findIndex((l) => l.name.toLowerCase() === name.toLowerCase());
+  if (existing >= 0) {
+    // Same name means "update this one" — otherwise saving twice quietly
+    // fills the list with near-identical entries.
+    looks[existing] = { ...looks[existing], design };
+  } else {
+    if (looks.length >= MAX_LOOKS) return { error: `You can keep ${MAX_LOOKS} looks — delete one first.` };
+    looks.push({ id: randomUUID(), name, design });
+  }
+
+  store.updateSite(site.id, { config: { ...site.config, looks } });
+  revalidatePath("/dashboard/builder");
+  return { ok: true };
+}
+
+export async function deleteLookAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = str(fd, "lookId");
+  const looks = (site.config.looks ?? []).filter((l) => l.id !== id);
+  store.updateSite(site.id, { config: { ...site.config, looks } });
+  revalidatePath("/dashboard/builder");
+}
+
 /** Saves the Design tab of the page builder. */
 export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
@@ -490,7 +661,9 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   // isn't one of those two things still can't reach the page.
   const bgColor = pickColor(BACKGROUNDS, str(fd, "bgColor"), site.config.bgColor ?? DEFAULT_BG);
   const cardColor = pickColor(CONTAINERS, str(fd, "cardColor"), site.config.cardColor ?? DEFAULT_CARD);
-  const containerSize = pickSwatch(CONTAINER_SIZES, str(fd, "containerSize"), site.config.containerSize ?? DEFAULT_SIZE);
+  // Free value now, so it is clamped into range rather than matched to a list.
+  const containerSize = clampSize(str(fd, "containerSize") || site.config.containerSize);
+  const containerMinHeight = clampMinHeight(str(fd, "containerMinHeight"));
   const borderRaw = str(fd, "borderStyle");
   const themeIdRaw = str(fd, "themeId");
   const fontIdRaw = str(fd, "fontId");
@@ -501,6 +674,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     bgColor,
     cardColor,
     containerSize,
+    containerMinHeight,
     // Border treatment — only known style ids reach the page's inline CSS.
     borderStyle: getBorderStyle(borderRaw) ? borderRaw : DEFAULT_BORDER,
     gradient: fd.get("gradient") === "on",
@@ -513,6 +687,18 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     // Section arrangement — only known layout ids reach the page.
     layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
+    // Light/dark. The mode is one of three known ids; the light palette goes
+    // through the same pickColor gate as the dark one, against the light
+    // swatch lists.
+    colorMode: getColorMode(str(fd, "colorMode")),
+    lightThemeId: getThemeDef(str(fd, "lightThemeId")) ? str(fd, "lightThemeId") : "",
+    lightBgColor: pickColor(LIGHT_BACKGROUNDS, str(fd, "lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
+    lightCardColor: pickColor(LIGHT_CONTAINERS, str(fd, "lightCardColor"), site.config.lightCardColor ?? DEFAULT_LIGHT_CARD),
+    lightTextColor: pickColor(
+      LIGHT_TEXT_COLORS,
+      str(fd, "lightTextColor"),
+      site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR
+    ),
   };
 
   // Background image: an upload wins, then a client-generated random SVG,
@@ -547,7 +733,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
 
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/builder");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   // The tab icon is served from the page's metadata, so both public routes
   // need re-rendering, not just the section content.
   revalidatePath("/domain", "layout");
@@ -560,8 +746,44 @@ export async function setCustomDomainAction(_prev: FormState, fd: FormData): Pro
   const hostname = cleanHostname(str(fd, "hostname"));
   if (!hostname) return { error: "Enter just your domain, like janedoe.com — no https:// or paths needed." };
   if (platformHosts().has(hostname)) return { error: "That domain is reserved." };
+  // Only a verified claim reserves a name, so this refuses the real owner of
+  // an already-proven domain and nobody else.
   if (store.domainTaken(hostname, site.id)) return { error: "That domain is already connected to another Ensemble page." };
-  store.setCustomDomain(site.id, hostname);
+  store.claimCustomDomain(site.id, hostname, randomBytes(16).toString("hex"));
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/connect");
+  return { ok: true };
+}
+
+/**
+ * Check the TXT record and, if it holds our token, trust the domain.
+ *
+ * Re-checks that nobody proved the same name first: two sites can hold an
+ * unverified claim on one hostname, and the race is settled here rather than
+ * by whoever typed it first.
+ */
+export async function verifyDomainAction(): Promise<FormState> {
+  const { site } = await requireSite();
+  const domain = store.getDomainBySite(site.id);
+  if (!domain) return { error: "Add your domain first." };
+  if (domain.verifiedAt) return { ok: true };
+  if (store.domainTaken(domain.hostname, site.id)) {
+    return { error: "Another Ensemble page proved this domain first. Contact support if that isn't right." };
+  }
+
+  const result = await checkDomainOwnership(domain.hostname, domain.verifyToken);
+  if (!result.ok) {
+    revalidatePath("/dashboard/connect");
+    return {
+      error:
+        result.reason === "no-record"
+          ? "We couldn't find that TXT record yet. DNS changes can take a few minutes to spread, so try again shortly."
+          : "We found a TXT record, but not the value above. Check it was copied whole, then try again.",
+    };
+  }
+
+  store.markDomainVerified(site.id);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/connect");
@@ -628,7 +850,7 @@ export async function changePlan(fd: FormData): Promise<void> {
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/integrations");
   revalidatePath("/dashboard/builder");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /** Restart checkout for a site whose subscription never started or lapsed. */
@@ -673,11 +895,13 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   const config: SiteConfig = { ...site.config };
   if (plan.payments) config.stripeKey = str(fd, "stripeKey");
   if (plan.calendar) config.calendlyUrl = str(fd, "calendlyUrl");
-  if (plan.chatroom) config.chatroomEnabled = fd.get("chatroomEnabled") === "on";
+  // Not read here any more. The chatroom switch lives on its own page, and
+  // an absent checkbox reads as "off", so leaving this in would have turned
+  // the chatroom off on every unrelated save from this form.
   if (plan.newsletter) config.newsletterEnabled = fd.get("newsletterEnabled") === "on";
   store.updateSite(site.id, { config });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return {};
 }
 
@@ -700,7 +924,7 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   if (!body) return { error: "Write a message first." };
 
   store.addChatMessage(siteId, author, body);
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   revalidatePath("/dashboard/chatroom");
   return { ok: true };
 }
@@ -712,7 +936,7 @@ export async function deleteChatMessageAction(fd: FormData): Promise<void> {
   if (!message || message.siteId !== site.id) return;
   store.deleteChatMessage(id);
   revalidatePath("/dashboard/chatroom");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 export async function toggleChatroom(): Promise<void> {
@@ -723,7 +947,7 @@ export async function toggleChatroom(): Promise<void> {
   });
   revalidatePath("/dashboard/chatroom");
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- audience ---------------- */
@@ -897,6 +1121,33 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
   return { ok: true };
 }
 
+/**
+ * Record a follower count for a platform on a date. Counts are typed in by
+ * hand — most connections are handle-only, so there is no API to ask — and
+ * the date is the day the number was true, which is often in the past.
+ */
+export async function addSocialStat(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).social) return { error: "Growth tracking is a Pro feature — upgrade in Settings." };
+  const platform = getPlatform(str(fd, "platform"));
+  if (!platform) return { error: "Pick a platform." };
+  const day = str(fd, "day");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) return { error: "Pick the date the count was true." };
+  const count = parseCount(str(fd, "count"));
+  if (Number.isNaN(count)) return { error: "Enter the count as a number — 10000, 10,000, 10k and 1.2m all work." };
+  const note = str(fd, "note").slice(0, 200);
+  store.upsertSocialStat(site.id, platform.id, day, count, note);
+  revalidatePath("/dashboard/socials");
+  return { ok: true };
+}
+
+export async function removeSocialStat(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "id"));
+  if (id) store.deleteSocialStat(site.id, id);
+  revalidatePath("/dashboard/socials");
+}
+
 /** Re-attempt delivery of a post's queued/failed targets. */
 export async function retrySocialPost(fd: FormData): Promise<void> {
   const { site } = await requireSite();
@@ -920,23 +1171,41 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
   const instagramLiveUser = cleanInstagramUser(rawInstagram);
   if (rawInstagram && !instagramLiveUser) return { error: "That doesn't look like an Instagram username." };
 
+  // The relay exists now, so the key fields are back and mean something:
+  // each saved key is a destination the relay pushes the creator's one
+  // stream to. Blank clears, same as the channel fields above.
+  const twitchStreamKey = str(fd, "twitchStreamKey").slice(0, 200);
+  const youtubeStreamKey = str(fd, "youtubeStreamKey").slice(0, 200);
+  const facebookStreamKey = str(fd, "facebookStreamKey").slice(0, 200);
+
   store.updateSite(site.id, {
     config: {
       ...site.config,
       twitchChannel,
       facebookLiveUrl,
       instagramLiveUser,
-      twitchStreamKey: str(fd, "twitchStreamKey"),
-      facebookStreamKey: str(fd, "facebookStreamKey"),
-      instagramStreamKey: str(fd, "instagramStreamKey"),
+      twitchStreamKey,
+      youtubeStreamKey,
+      facebookStreamKey,
     },
   });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return { ok: true };
 }
 
 /** Flip everything live at once and announce it to every connected platform. */
+/**
+ * A fresh ingest key. The old one stops opening the relay the moment this
+ * runs, which is the point — it's the recovery move for a leaked key.
+ */
+export async function regenerateIngestKeyAction(): Promise<void> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).live) return;
+  store.regenerateIngestKey(site.id);
+  revalidatePath("/dashboard/integrations");
+}
+
 export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
   if (!getPlan(site.plan).live) return { error: "Going live is an Enterprise feature — upgrade in Settings." };
@@ -959,7 +1228,7 @@ export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState
   }
 
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
   return { ok: true };
 }
 
@@ -967,7 +1236,7 @@ export async function endLive(): Promise<void> {
   const { site } = await requireSite();
   store.updateSite(site.id, { config: { ...site.config, liveNow: false } });
   revalidatePath("/dashboard/integrations");
-  revalidatePath(`/s/${site.slug}`);
+  revalidatePath(`/${site.slug}`);
 }
 
 /* ---------------- support ---------------- */

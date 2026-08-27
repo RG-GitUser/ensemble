@@ -4,10 +4,11 @@ import { useActionState, useState } from "react";
 import {
   removeCustomDomainAction,
   setCustomDomainAction,
+  verifyDomainAction,
   togglePublish,
   type FormState,
 } from "@/lib/actions";
-import { domainProgress } from "@/lib/domains";
+import { domainProgress, verifyRecord } from "@/lib/domains";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { CheckIcon } from "@/components/icons";
 
@@ -22,6 +23,8 @@ import { CheckIcon } from "@/components/icons";
  */
 export function DomainSetup({
   hostname,
+  verifyToken,
+  verifiedAt,
   lastSeen,
   published,
   billingReady,
@@ -30,6 +33,10 @@ export function DomainSetup({
   cnameTarget,
 }: {
   hostname: string;
+  /** Value the creator publishes in TXT to prove the domain is theirs. */
+  verifyToken: string;
+  /** When ownership was proved; null while it hasn't been. */
+  verifiedAt: string | null;
   lastSeen: string | null;
   published: boolean;
   /** False when billing is configured but this site has no active subscription. */
@@ -40,11 +47,14 @@ export function DomainSetup({
   cnameTarget: string | null;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(setCustomDomainAction, {});
+  const [verifyState, verifyAction, verifyPending] = useActionState<FormState, FormData>(verifyDomainAction, {});
 
   const hasDomain = !!hostname;
+  const verified = !!verifiedAt;
   const dnsSeen = !!lastSeen;
   const dnsReady = !!aRecord && !!cnameTarget;
-  const { done: doneCount, total, live } = domainProgress({ hostname, dnsSeen, published });
+  const { done: doneCount, total, live } = domainProgress({ hostname, verified, dnsSeen, published });
+  const proof = hasDomain ? verifyRecord(hostname, verifyToken) : null;
 
   // An apex domain (janedoe.com) needs an A record; anything with a
   // subdomain (www., shop.) needs a CNAME. Showing only the record that
@@ -110,15 +120,77 @@ export function DomainSetup({
           )}
         </Step>
 
-        {/* Step 3 — DNS */}
+        {/* Step 3 — prove the domain is theirs, before it is worth anything */}
         <Step
           n={3}
+          done={verified}
+          title="Prove the domain is yours"
+          status={hasDomain && !verified ? "Not proved yet" : undefined}
+        >
+          {!hasDomain ? (
+            <>Tell us your domain first and we&apos;ll generate your record.</>
+          ) : verified ? (
+            <>
+              Proved. <span className="font-mono text-snow">{hostname}</span> is yours, and nobody else can connect it
+              to an Ensemble page.
+            </>
+          ) : (
+            <>
+              <p>
+                Add one more DNS record, at the same registrar. This one proves you own{" "}
+                <span className="font-mono text-snow">{hostname}</span>, so nobody else can claim it. You can do this
+                before pointing the domain at us, and it will not affect a site you already have running there.
+              </p>
+              <div className="mt-3 overflow-x-auto rounded-xl border border-edge">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-panel2 text-xs uppercase tracking-wide text-mist">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Type</th>
+                      <th className="px-4 py-2 font-semibold">Name / Host</th>
+                      <th className="px-4 py-2 font-semibold">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-mono text-xs">
+                    <tr className="border-t border-edge">
+                      <td className="px-4 py-3">TXT</td>
+                      <td className="break-all px-4 py-3">{proof?.name}</td>
+                      <td className="break-all px-4 py-3 text-snow">{proof?.value}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-mist/70">
+                Some registrars want just <span className="font-mono text-snow">_ensemble</span> in the Name box rather
+                than the whole thing. Both mean the same record.
+              </p>
+              <form action={verifyAction} className="mt-3 flex flex-wrap items-center gap-3">
+                <button className="btn-primary !py-2 text-sm" disabled={verifyPending}>
+                  {verifyPending ? "Checking…" : "Check the record"}
+                </button>
+                <span className="text-xs text-mist/70">
+                  DNS changes usually spread within minutes, sometimes longer.
+                </span>
+              </form>
+              {verifyState.error && (
+                <p className="mt-2 rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-sm text-brand2">
+                  {verifyState.error}
+                </p>
+              )}
+            </>
+          )}
+        </Step>
+
+        {/* Step 4 — DNS */}
+        <Step
+          n={4}
           done={dnsSeen}
           title="Point it at Ensemble (one DNS record)"
-          status={hasDomain && !dnsSeen ? "Waiting for your record to reach us — checks run automatically" : undefined}
+          status={verified && !dnsSeen ? "Waiting for your record to reach us — checks run automatically" : undefined}
         >
           {!hasDomain ? (
             <>Complete step 2 first — we&apos;ll show you the exact record to add.</>
+          ) : !verified ? (
+            <>Prove the domain is yours first — step 3 above.</>
           ) : !dnsReady ? (
             <span className="text-warn">
               We can&apos;t show DNS details right now, so don&apos;t change anything at your registrar yet — contact
@@ -260,7 +332,7 @@ export function DomainSetup({
         </Step>
 
         {/* Step 4 — publish */}
-        <Step n={4} done={dnsSeen && published} title="Go live">
+        <Step n={5} done={verified && dnsSeen && published} title="Go live">
           {published ? (
             dnsSeen ? (
               <>

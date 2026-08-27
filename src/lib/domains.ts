@@ -3,7 +3,7 @@
 // must not pull the database (or anything Node-heavy) into its bundle.
 
 /**
- * Hosts that serve the platform itself (marketing site, dashboard, /s/ pages).
+ * Hosts that serve the platform itself (marketing site, dashboard, creator pages).
  * Any other Host header is treated as a creator's custom domain.
  * In production set PLATFORM_HOSTS, e.g. "ensemble.app,www.ensemble.app".
  */
@@ -26,13 +26,20 @@ export function platformHosts(): Set<string> {
  */
 export function domainProgress(o: {
   hostname: string;
+  /** True once the TXT record proving ownership has been read back. */
+  verified: boolean;
   /** True once a request for the hostname has actually reached us. */
   dnsSeen: boolean;
   published: boolean;
 }): { done: number; total: number; live: boolean } {
   const named = !!o.hostname;
-  const steps = [named, named, o.dnsSeen, o.dnsSeen && o.published];
+  const steps = [named, named, o.verified, o.verified && o.dnsSeen, o.verified && o.dnsSeen && o.published];
   return { done: steps.filter(Boolean).length, total: steps.length, live: steps.every(Boolean) };
+}
+
+/** Where the creator puts the proof, and what goes in it. */
+export function verifyRecord(hostname: string, token: string): { name: string; value: string } {
+  return { name: `_ensemble.${hostname}`, value: `ensemble-verify=${token}` };
 }
 
 const HOSTNAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/;

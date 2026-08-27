@@ -24,7 +24,11 @@ export interface PlanDef {
   whiteLabel: boolean;
   /** Connect social accounts and cross-post from the dashboard. */
   social: boolean;
-  /** Live streams on the page, stream linking and one-click simulcast. */
+  /**
+   * Live players on the page, plus the on-air badge and the one-press
+   * announcement. Not simulcast: nothing here rebroadcasts a stream, and the
+   * relay that would needs a media server this project does not deploy.
+   */
   live: boolean;
   /** Daily view charts in Analytics. */
   dailyAnalytics: boolean;

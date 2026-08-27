@@ -1,0 +1,43 @@
+# Ensemble live relay — MediaMTX configuration.
+#
+# Written against MediaMTX v1.9. The auth and hook option names have changed
+# between major versions before; if a newer binary refuses this file, check
+# its README for the renamed keys rather than guessing.
+#
+# The flow: OBS publishes to rtmp://<host>/live/<ingest key>. Every
+# connection is authorized by the app (authHTTPAddress). When a stream
+# starts, live-push.sh fans it out to the platforms and flips the site's
+# on-air badge; when it stops, MediaMTX kills the script and the badge flips
+# back.
+
+logLevel: info
+
+# RTMP in from creators (and back out to the local ffmpeg forwarders).
+rtmp: yes
+rtmpAddress: :1935
+
+# Everything else is off. The relay forwards; it does not serve viewers.
+rtsp: no
+hls: no
+webrtc: no
+srt: no
+api: no
+metrics: no
+pprof: no
+playback: no
+
+# Every connection attempt is judged by the app. Publishing needs a valid
+# ingest key in the path; reading is allowed only from loopback, which is
+# what the ffmpeg forwarders use.
+authMethod: http
+authHTTPAddress: http://127.0.0.1:3000/api/live/auth
+
+pathDefaults:
+  # Started when a stream arrives, killed (SIGTERM) when it ends. The script
+  # reads MTX_PATH from the environment and LIVE_HOOK_SECRET from the
+  # service's EnvironmentFile.
+  runOnReady: /srv/ensemble/deploy/live-push.sh
+  runOnReadyRestart: no
+
+paths:
+  all_others:

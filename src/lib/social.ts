@@ -38,16 +38,18 @@ export interface PlatformDef {
 /** Most popular platforms first — this order drives the connect grid. */
 export const PLATFORMS: PlatformDef[] = [
   { id: "instagram", name: "Instagram", iconPath: siInstagram.path, color: `#${siInstagram.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://instagram.com/${h}`, authType: "oauth" },
+  // TikTok has no OAUTH_PROVIDERS entry yet (its content API needs video
+  // uploads and an audited app), so it stays handle-only until one is added.
   { id: "tiktok", name: "TikTok", iconPath: siTiktok.path, color: `#${siTiktok.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://tiktok.com/@${h}`, authType: "oauth" },
   { id: "youtube", name: "YouTube", iconPath: siYoutube.path, color: `#${siYoutube.hex}`, placeholder: "yourchannel", profileUrl: (h) => `https://youtube.com/@${h}`, authType: "handle" },
   { id: "x", name: "X", iconPath: siX.path, color: `#${siX.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://x.com/${h}`, authType: "handle" },
-  { id: "facebook", name: "Facebook", iconPath: siFacebook.path, color: `#${siFacebook.hex}`, placeholder: "yourpage", profileUrl: (h) => `https://facebook.com/${h}`, authType: "handle" },
+  { id: "facebook", name: "Facebook", iconPath: siFacebook.path, color: `#${siFacebook.hex}`, placeholder: "yourpage", profileUrl: (h) => `https://facebook.com/${h}`, authType: "oauth" },
   { id: "twitch", name: "Twitch", iconPath: siTwitch.path, color: `#${siTwitch.hex}`, placeholder: "yourchannel", profileUrl: (h) => `https://twitch.tv/${h}`, authType: "handle" },
   { id: "threads", name: "Threads", iconPath: siThreads.path, color: `#${siThreads.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://threads.net/@${h}`, authType: "oauth" },
   { id: "snapchat", name: "Snapchat", iconPath: siSnapchat.path, color: `#${siSnapchat.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://snapchat.com/add/${h}`, authType: "handle" },
   { id: "discord", name: "Discord", iconPath: siDiscord.path, color: `#${siDiscord.hex}`, placeholder: "webhook URL", profileUrl: (h) => `https://discord.gg/${h}`, authType: "webhook" },
-  { id: "pinterest", name: "Pinterest", iconPath: siPinterest.path, color: `#${siPinterest.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://pinterest.com/${h}`, authType: "handle" },
-  { id: "reddit", name: "Reddit", iconPath: siReddit.path, color: `#${siReddit.hex}`, placeholder: "u/yourname", profileUrl: (h) => `https://reddit.com/user/${h.replace(/^u\//, "")}`, authType: "handle" },
+  { id: "pinterest", name: "Pinterest", iconPath: siPinterest.path, color: `#${siPinterest.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://pinterest.com/${h}`, authType: "oauth" },
+  { id: "reddit", name: "Reddit", iconPath: siReddit.path, color: `#${siReddit.hex}`, placeholder: "u/yourname", profileUrl: (h) => `https://reddit.com/user/${h.replace(/^u\//, "")}`, authType: "oauth" },
   { id: "bluesky", name: "Bluesky", iconPath: siBluesky.path, color: `#${siBluesky.hex}`, placeholder: "you.bsky.social", profileUrl: (h) => `https://bsky.app/profile/${h}`, authType: "bluesky" },
 ];
 
@@ -60,11 +62,42 @@ export function getPlatform(id: string): PlatformDef | undefined {
   return PLATFORMS.find((p) => p.id === id);
 }
 
-/** Brand marks that are near-black need a light fill on the dark UI. */
+/**
+ * Brand marks that are near-black vanish against the dark UI, so they borrow
+ * the foreground colour instead of their own. This returns the token rather
+ * than a hex: the light theme flips --color-snow to near-black, which is how
+ * these marks are meant to sit on a white card anyway, and a var resolves at
+ * paint time — so Server Components, which can't know the active theme, get
+ * it right too.
+ */
 export function iconFill(color: string): string {
   const n = parseInt(color.slice(1), 16);
   const luminance = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return luminance < 40 ? "#f4f4f5" : color;
+  return luminance < 40 ? "var(--color-snow)" : color;
+}
+
+/**
+ * A follower count the way people actually type one: "10000", "10,000",
+ * "10 000", "10k", "1.2m", "50K". Returns a whole number, or NaN when the
+ * text doesn't read as a count.
+ */
+export function parseCount(raw: string): number {
+  const t = raw.trim().toLowerCase().replace(/[\s,]/g, "");
+  const m = /^(\d+(?:\.\d+)?)([km]?)$/.exec(t);
+  if (!m) return NaN;
+  const mult = m[2] === "k" ? 1_000 : m[2] === "m" ? 1_000_000 : 1;
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
+/** Compact count for headlines: 950 → "950", 12_340 → "12.3k", 1_200_000 → "1.2m". */
+export function formatCount(n: number): string {
+  const compact = (v: number, suffix: string) => {
+    const s = v >= 100 ? Math.round(v).toString() : (Math.round(v * 10) / 10).toString();
+    return `${s}${suffix}`;
+  };
+  if (n >= 1_000_000) return compact(n / 1_000_000, "m");
+  if (n >= 1_000) return compact(n / 1_000, "k");
+  return n.toString();
 }
 
 /** "@name", a pasted profile URL (with or without https://), or plain handle → bare handle. */

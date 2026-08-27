@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CheckIcon } from "@/components/icons";
+import { dismissSetupAction } from "@/lib/actions";
+import { CheckIcon, CloseIcon } from "@/components/icons";
 
 export interface Checkpoint {
   id: string;
@@ -14,10 +15,15 @@ export interface Checkpoint {
 /**
  * The road to a finished page, as checkpoints.
  *
- * Every state here is derived from what's actually in the database — there is
- * no "dismissed" flag and nothing to keep in sync, so the ring can't tell
- * someone they're finished when they aren't. Completed checkpoints collapse
- * to a line; the next unfinished one keeps its explanation and its button.
+ * Every checkpoint is derived from what's actually in the database, so the
+ * ring can't tell someone they're finished when they aren't. Completed ones
+ * collapse to a line; the next unfinished one keeps its explanation and its
+ * button.
+ *
+ * There is one stored flag, and it is deliberately narrow. The dismiss button
+ * only appears on a finished list, and the dashboard puts the card back the
+ * moment a checkpoint stops being done. So it can put away a card that has
+ * nothing left to say, and it can never hide outstanding work.
  */
 export function SetupChecklist({ steps }: { steps: Checkpoint[] }) {
   const done = steps.filter((s) => s.done).length;
@@ -26,7 +32,19 @@ export function SetupChecklist({ steps }: { steps: Checkpoint[] }) {
   const pct = Math.round((done / steps.length) * 100);
 
   return (
-    <div className="card mt-6" data-tour="setup">
+    <div className="card relative mt-6" data-tour="setup">
+      {/* Nothing to put away until there is nothing left to do. */}
+      {complete && (
+        <form action={dismissSetupAction} className="absolute right-3 top-3">
+          <button
+            className="rounded-lg border border-edge px-2 py-1.5 text-mist transition hover:border-brand/60 hover:text-snow"
+            title="Hide this — it comes back if a checkpoint stops being done"
+            aria-label="Hide the setup checklist"
+          >
+            <CloseIcon />
+          </button>
+        </form>
+      )}
       <div className="flex flex-wrap items-center gap-4">
         {/* A ring rather than a bar: it reads as progress at a glance and
             holds the count in the middle without a second label. */}
@@ -43,11 +61,20 @@ export function SetupChecklist({ steps }: { steps: Checkpoint[] }) {
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="font-bold">{complete ? "Your page is set up" : "Finish setting up your page"}</h2>
+          <h2 className="font-bold">{complete ? "Your profile is set up" : "Set up your profile"}</h2>
           <p className="mt-1 text-sm text-mist">
-            {complete
-              ? "Every checkpoint is done. Anything you change from here goes straight to your live page."
-              : (next?.hint ?? "")}
+            {complete ? (
+              "Every checkpoint is done. Anything you change from here goes straight to your live page."
+            ) : (
+              // The count is in the ring already, but the ring is a graphic.
+              // Saying it in words is what a screen reader and a glance both get.
+              <>
+                <span className="font-semibold text-snow">
+                  {done} of {steps.length} done.
+                </span>{" "}
+                {next?.hint ?? ""}
+              </>
+            )}
           </p>
         </div>
         {next && (

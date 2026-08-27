@@ -8,18 +8,15 @@ import { togglePublish, updateSettings, type FormState } from "@/lib/actions";
  * Ensemble. Sits above the custom-domain checklist so nobody thinks buying a
  * domain is required to get online.
  *
- * Slug edits reuse updateSettings, which also owns the tagline — the hidden
- * field carries the current tagline through unchanged.
+ * Slug edits reuse updateSettings, which now touches nothing but the slug.
  */
 export function FreeAddressCard({
   slug,
-  tagline,
   origin,
   published,
   billingReady,
 }: {
   slug: string;
-  tagline: string;
   /** Public base URL of the platform, e.g. https://ensemble.it.com */
   origin: string;
   published: boolean;
@@ -28,7 +25,7 @@ export function FreeAddressCard({
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateSettings, {});
   const [draft, setDraft] = useState(slug);
   const [copied, setCopied] = useState(false);
-  const url = `${origin}/s/${slug}`;
+  const url = `${origin}/${slug}`;
   const pretty = url.replace(/^https?:\/\//, "");
 
   return (
@@ -71,7 +68,7 @@ export function FreeAddressCard({
       <form action={formAction} className="space-y-2">
         <label className="label" htmlFor="free-slug">Choose your address</label>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm text-mist">{origin.replace(/^https?:\/\//, "")}/s/</span>
+          <span className="font-mono text-sm text-mist">{origin.replace(/^https?:\/\//, "")}/</span>
           <input
             id="free-slug"
             name="slug"
@@ -80,7 +77,6 @@ export function FreeAddressCard({
             onChange={(e) => setDraft(e.target.value)}
             required
           />
-          <input type="hidden" name="tagline" value={tagline} />
           <button className="btn-primary !py-2 text-sm" disabled={pending || draft === slug}>
             {pending ? "Saving…" : "Save address"}
           </button>

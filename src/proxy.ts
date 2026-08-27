@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { platformHosts } from "@/lib/domains";
+import { isReservedSlug } from "@/lib/slugs";
 
 /**
  * Custom-domain routing. A request whose Host isn't one of the platform's own
@@ -24,7 +25,24 @@ export function proxy(req: NextRequest): NextResponse {
    */
   if (process.env.WIP_MODE === "1" && !req.cookies.get("fs_session")) {
     const path = req.nextUrl.pathname;
-    const isPublic = path === "/" || path.startsWith("/login") || path === "/s" || path.startsWith("/s/");
+    // Creator pages sit at the root now, so there is no prefix to match on.
+    // A single non-reserved segment is a possible creator page and is let
+    // through — an unknown one simply 404s, which reveals nothing about the
+    // funnel we're hiding. /s/ stays public for the old-address redirect.
+    const segments = path.split("/").filter(Boolean);
+    const maybeCreatorPage = segments.length === 1 && !isReservedSlug(segments[0]);
+    // Privacy, terms and documents stay reachable in WIP mode: platform app
+    // reviewers follow those links signed out, and a privacy page that 404s
+    // fails the review.
+    const isPublic =
+      path === "/" ||
+      path.startsWith("/login") ||
+      path === "/s" ||
+      path.startsWith("/s/") ||
+      path === "/privacy" ||
+      path === "/terms" ||
+      path === "/documents" ||
+      maybeCreatorPage;
     if (!isPublic) {
       return NextResponse.redirect(new URL("/", req.url));
     }

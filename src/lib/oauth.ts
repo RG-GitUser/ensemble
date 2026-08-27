@@ -179,16 +179,15 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
     tokenAuth: "basic",
     prereqs: [
       {
-        need: "Enough account history for the subreddits you want to post to",
+        need: "Nothing — posts go to your own Reddit profile, which every account can post to",
         steps: [
-          "Most subreddits require some account age and karma before they accept posts",
-          "Check the rules of each subreddit you plan to post to",
-          "Posts to subreddits you don't qualify for will be rejected by Reddit, not by us",
+          "Your posts appear on reddit.com/user/yourname, not in a subreddit",
+          "Subreddit posting needs a subreddit picker we haven't built yet",
         ],
       },
     ],
-    can: ["Submit text and link posts on a schedule"],
-    cannot: ["Bypass a subreddit's karma or age rules", "Post to private subreddits you're not in"],
+    can: ["Submit text posts to your Reddit profile on a schedule"],
+    cannot: ["Post into a subreddit (coming when there's somewhere to choose one)", "Bypass a subreddit's karma or age rules"],
     consoleUrl: "https://www.reddit.com/prefs/apps",
   },
 ];
@@ -200,6 +199,14 @@ export function getOAuthProvider(id: string): OAuthProvider | undefined {
 /** Credentials present in the environment? Drives the "not set up yet" state. */
 export function providerConfigured(p: OAuthProvider): boolean {
   return !!process.env[p.idEnv] && !!process.env[p.secretEnv];
+}
+
+/**
+ * Ids of every provider whose credentials are present, for the connect UI.
+ * Server-side only — reads process.env.
+ */
+export function configuredProviderIds(): string[] {
+  return OAUTH_PROVIDERS.filter(providerConfigured).map((p) => p.id);
 }
 
 export function providerCredentials(p: OAuthProvider): { clientId: string; clientSecret: string } | null {
@@ -287,9 +294,14 @@ export type HealthState = "ready" | "expiring" | "expired" | "unknown";
  * point: a creator with posts scheduled a fortnight out needs to reconnect
  * before the token dies, not after their posts have already failed.
  */
+export function parseExpiry(expiresAt: string): number {
+  // SQLite hands back "2026-01-02 03:04:05"; treat a bare timestamp as UTC.
+  return Date.parse(/[TZ]/.test(expiresAt) ? expiresAt : `${expiresAt.replace(" ", "T")}Z`);
+}
+
 export function connectionHealth(expiresAt: string | null): { state: HealthState; daysLeft: number | null; message: string } {
   if (!expiresAt) return { state: "unknown", daysLeft: null, message: "Connected" };
-  const ms = Date.parse(/[TZ]/.test(expiresAt) ? expiresAt : `${expiresAt.replace(" ", "T")}Z`);
+  const ms = parseExpiry(expiresAt);
   if (Number.isNaN(ms)) return { state: "unknown", daysLeft: null, message: "Connected" };
   const daysLeft = Math.floor((ms - Date.now()) / 86_400_000);
   if (daysLeft < 0) return { state: "expired", daysLeft, message: "Reconnect needed — scheduled posts won't send" };

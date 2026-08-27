@@ -10,8 +10,8 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_SIZE } from "@/lib/theme";
-import { DEFAULT_FONT, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
   addSectionAction,
@@ -19,6 +19,8 @@ import {
   deleteSectionAction,
   moveSectionAction,
   organizeSectionsAction,
+  setSectionAlignAction,
+  setSectionButtonAlignAction,
   setSectionThemeAction,
   updateSectionAction,
 } from "@/lib/actions";
@@ -37,10 +39,96 @@ function defaultCss(accent: string): React.CSSProperties {
   };
 }
 
-function SectionThemeRow({ section, accent }: { section: Section; accent: string }) {
-  const options = [{ id: "", name: "Page theme" }, ...THEMES];
+/**
+ * One row of Left / Center / Right. Each option posts its own form, so a
+ * choice lands in a click with no save step, the way the theme swatches do.
+ */
+function AlignPicker({
+  label,
+  hint,
+  sectionId,
+  value,
+  action,
+  icon,
+}: {
+  label: string;
+  hint: string;
+  sectionId: number;
+  value: string;
+  action: (fd: FormData) => Promise<void>;
+  icon: (value: string) => React.ReactNode;
+}) {
   return (
-    <div className="mb-4 border-b border-edge pb-4">
+    <div>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {TEXT_ALIGNS.map((a) => {
+          const selected = value === a.value;
+          return (
+            <form key={a.id} action={action}>
+              <input type="hidden" name="sectionId" value={sectionId} />
+              <input type="hidden" name="align" value={a.value} />
+              <button
+                title={`${label}: ${a.label.toLowerCase()}`}
+                className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium transition ${
+                  selected ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+                }`}
+              >
+                {icon(a.value)}
+                {a.label}
+              </button>
+            </form>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11px] text-mist/70">{hint}</p>
+    </div>
+  );
+}
+
+/** A pill sitting where the setting would put it, on a line of its own. */
+function ButtonAlignIcon({ align }: { align: string }) {
+  const items = align === "left" ? "justify-start" : align === "right" ? "justify-end" : "justify-center";
+  return (
+    <span aria-hidden className={`flex w-3.5 ${items}`}>
+      <span className="h-[6px] w-[7px] rounded-[2px] bg-current" />
+    </span>
+  );
+}
+
+/** Three bars, ragged on whichever edge the setting doesn't line up. */
+function AlignIcon({ align }: { align: string }) {
+  const widths = ["100%", "60%", "80%"];
+  const items = align === "left" ? "items-start" : align === "right" ? "items-end" : "items-center";
+  return (
+    <span aria-hidden className={`flex w-3.5 flex-col gap-[2px] ${items}`}>
+      {widths.map((w, i) => (
+        <span key={i} className="h-[2px] rounded-full bg-current" style={{ width: w }} />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Per-container appearance: the band this section sits in, and which way its
+ * words run.
+ *
+ * Alignment lives here rather than in the Design tab because it is rarely one
+ * answer for a whole page: a centred hero above a left-aligned About passage
+ * is the ordinary case, and a single page-wide switch can't say that. It moves
+ * the section's buttons along with its words, since a button sitting in the
+ * middle of a left-aligned block reads as a mistake.
+ *
+ * Both controls are one click with no save step, each posting its own form,
+ * which is how the theme swatches have always worked.
+ */
+function SectionAppearance({ section, accent }: { section: Section; accent: string }) {
+  const options = [{ id: "", name: "Page theme" }, ...THEMES];
+  const align = getTextAlign(section.align);
+  const buttonAlign = getTextAlign(section.buttonAlign);
+  return (
+    <div className="mb-4 space-y-3 border-b border-edge pb-4">
+      <div>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">Container theme</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((t) => {
@@ -51,7 +139,7 @@ function SectionThemeRow({ section, accent }: { section: Section; accent: string
               <input type="hidden" name="theme" value={t.id} />
               <button
                 className={`block h-8 w-12 overflow-hidden rounded-lg border transition ${
-                  selected ? "border-brand ring-1 ring-brand" : "border-edge hover:border-brand/60"
+                  selected ? "border-brand" : "border-edge hover:border-brand/60"
                 }`}
                 title={t.name}
                 style={themeCss(t.id, accent) ?? defaultCss(accent)}
@@ -62,6 +150,23 @@ function SectionThemeRow({ section, accent }: { section: Section; accent: string
           );
         })}
       </div>
+      </div>
+      <AlignPicker
+        label="Text alignment"
+        hint="Where this section's words sit."
+        sectionId={section.id}
+        value={align}
+        action={setSectionAlignAction}
+        icon={(v) => <AlignIcon align={v} />}
+      />
+      <AlignPicker
+        label="Button position"
+        hint="Where this section's buttons sit. Their labels are always centred."
+        sectionId={section.id}
+        value={buttonAlign}
+        action={setSectionButtonAlignAction}
+        icon={(v) => <ButtonAlignIcon align={v} />}
+      />
     </div>
   );
 }
@@ -154,7 +259,7 @@ function SectionCard({
           </form>
         </div>
       </div>
-      <SectionThemeRow section={section} accent={accent} />
+      <SectionAppearance section={section} accent={accent} />
       <form action={updateSectionAction} className="space-y-4">
         <input type="hidden" name="sectionId" value={section.id} />
         {tpl.fields.map((f) => (
@@ -166,10 +271,27 @@ function SectionCard({
   );
 }
 
-function Tab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+/**
+ * `tour` rides on the link itself rather than a wrapper element. A wrapper is
+ * what a flex child becomes, leaving the <a> inside it inline — and vertical
+ * padding on an inline box doesn't contribute to layout height, so a wrapped
+ * tab's label sits higher than its unwrapped neighbour's.
+ */
+function Tab({
+  href,
+  active,
+  tour,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  tour?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
+      data-tour={tour}
       className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
         active ? "border-brand text-snow" : "border-transparent text-mist hover:text-snow"
       }`}
@@ -202,16 +324,14 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
               : "Copy & paste your content into sections below — changes go live when you save."}
           </p>
         </div>
-        <Link href={`/s/${site.slug}?preview=1`} target="_blank" className="btn-ghost !py-2 text-sm">
+        <Link href={`/${site.slug}?preview=1`} target="_blank" className="btn-ghost !py-2 text-sm">
           Preview page ↗
         </Link>
       </div>
 
       <div className="mt-6 flex border-b border-edge">
         <Tab href="/dashboard/builder" active={!designTab}>Sections</Tab>
-        <span data-tour="design">
-          <Tab href="/dashboard/builder?tab=design" active={designTab}>Design</Tab>
-        </span>
+        <Tab href="/dashboard/builder?tab=design" active={designTab} tour="design">Design</Tab>
       </div>
 
       {designTab ? (
@@ -221,6 +341,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             bgColor={site.config.bgColor ?? DEFAULT_BG}
             cardColor={site.config.cardColor ?? DEFAULT_CARD}
             containerSize={site.config.containerSize ?? DEFAULT_SIZE}
+            containerMinHeight={site.config.containerMinHeight ?? DEFAULT_MIN_HEIGHT}
             borderStyle={site.config.borderStyle ?? DEFAULT_BORDER}
             bgImage={site.config.bgImage ?? ""}
             cardImage={site.config.cardImage ?? ""}
@@ -231,12 +352,59 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
             textColor={site.config.textColor ?? DEFAULT_TEXT_COLOR}
             layout={site.config.layout ?? DEFAULT_LAYOUT}
+            colorMode={getColorMode(site.config.colorMode)}
+            lightBgColor={site.config.lightBgColor ?? DEFAULT_LIGHT_BG}
+            lightCardColor={site.config.lightCardColor ?? DEFAULT_LIGHT_CARD}
+            lightTextColor={site.config.lightTextColor ?? DEFAULT_LIGHT_TEXT_COLOR}
+            lightThemeId={site.config.lightThemeId ?? ""}
+            looks={site.config.looks ?? []}
+            slug={site.slug}
           />
         </div>
       ) : (
         <BuilderSections site={site} plan={plan} sections={sections} atLimit={atLimit} />
       )}
     </div>
+  );
+}
+
+/**
+ * Both gallery tiles are the same box; only what they do differs. `h-full`
+ * plus the grid's `items-stretch` is what keeps a row of them level, since
+ * otherwise each shrink-wraps its own text.
+ */
+const TILE = "flex h-full w-full flex-col rounded-xl border p-3.5 text-left transition";
+
+function TileFace({
+  tpl,
+  allowed,
+  added,
+}: {
+  tpl: (typeof SECTION_TEMPLATES)[number];
+  allowed: boolean;
+  added: boolean;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-semibold">{tpl.name}</span>
+        {!allowed ? (
+          <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
+            {tpl.requires}
+          </span>
+        ) : added ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
+            <CheckIcon />
+            Added
+          </span>
+        ) : null}
+      </div>
+      {/* flex-1 pushes every tile's footer to the same baseline. */}
+      <p className="mt-1.5 flex-1 text-xs text-mist">{tpl.description}</p>
+      <p className={`mt-2.5 text-[11px] font-semibold ${added ? "text-brand/80" : "text-mist/70"}`}>
+        {added ? "On your page. Click to remove it." : "Add to page"}
+      </p>
+    </>
   );
 }
 
@@ -268,8 +436,10 @@ function BuilderSections({
   // How many of each type are already on the page — drives the "Added" state,
   // so the gallery shows what you've used rather than reading identically
   // whether your page is empty or finished.
-  const used = new Map<string, number>();
-  for (const s of sections) used.set(s.type, (used.get(s.type) ?? 0) + 1);
+  // One of each kind per page, so the first match is the section a tile
+  // stands for, and the one its tile removes.
+  const onPage = new Map<string, Section>();
+  for (const s of sections) if (!onPage.has(s.type)) onPage.set(s.type, s);
 
   return (
     <>
@@ -288,45 +458,36 @@ function BuilderSections({
         <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {galleryOrder(SECTION_TEMPLATES).map((tpl) => {
             const allowed = planAllowsTemplate(site.plan, tpl);
-            const added = used.has(tpl.type);
-            // One of each kind per page — an added type is done, not repeatable.
-            const disabled = !allowed || added || atLimit;
+            const existing = onPage.get(tpl.type);
+
+            // A tile that's already on the page is the way off it again.
+            // Clicking asks first, because the section's content goes too.
+            if (existing) {
+              return (
+                <DangerButton
+                  key={tpl.type}
+                  className={`${TILE} border-brand/50 bg-brand/5 hover:border-brand`}
+                  label={<TileFace tpl={tpl} allowed={allowed} added />}
+                  title={`Are you sure you want to delete the "${tpl.name}" section?`}
+                  body="Everything you've typed into it goes with it. Nothing else on your page changes, and you can add a fresh one back any time."
+                  confirmLabel={`Delete ${tpl.name}`}
+                  action={deleteSectionAction}
+                  fields={{ sectionId: String(existing.id) }}
+                />
+              );
+            }
+
             return (
               <form key={tpl.type} action={addSectionAction} className="h-full">
                 <input type="hidden" name="type" value={tpl.type} />
                 <button
-                  disabled={disabled}
-                  className={`flex h-full w-full flex-col rounded-xl border p-3.5 text-left transition disabled:cursor-not-allowed ${
-                    added
-                      ? "border-brand/50 bg-brand/5 opacity-100 disabled:opacity-100"
-                      : "border-edge bg-panel2 hover:border-brand/60 disabled:opacity-40"
-                  }`}
+                  disabled={!allowed || atLimit}
+                  className={`${TILE} border-edge bg-panel2 hover:border-brand/60 disabled:cursor-not-allowed disabled:opacity-40`}
                   title={
-                    !allowed
-                      ? `Requires the ${tpl.requires === "pro" ? "Pro" : "Enterprise"} plan`
-                      : added
-                        ? `${tpl.name} is already on your page — edit it below, or delete it to add a fresh one`
-                        : tpl.description
+                    !allowed ? `Requires the ${tpl.requires === "pro" ? "Pro" : "Enterprise"} plan` : tpl.description
                   }
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold">{tpl.name}</span>
-                    {!allowed ? (
-                      <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warn">
-                        {tpl.requires}
-                      </span>
-                    ) : added ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold uppercase text-brand">
-                        <CheckIcon />
-                        Added
-                      </span>
-                    ) : null}
-                  </div>
-                  {/* flex-1 pushes every tile's footer to the same baseline. */}
-                  <p className="mt-1.5 flex-1 text-xs text-mist">{tpl.description}</p>
-                  <p className={`mt-2.5 text-[11px] font-semibold ${added ? "text-brand/80" : "text-mist/70"}`}>
-                    {added ? "On your page — edit it below" : "Add to page"}
-                  </p>
+                  <TileFace tpl={tpl} allowed={allowed} added={false} />
                 </button>
               </form>
             );
