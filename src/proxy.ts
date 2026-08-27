@@ -31,8 +31,18 @@ export function proxy(req: NextRequest): NextResponse {
     // funnel we're hiding. /s/ stays public for the old-address redirect.
     const segments = path.split("/").filter(Boolean);
     const maybeCreatorPage = segments.length === 1 && !isReservedSlug(segments[0]);
+    // Privacy, terms and documents stay reachable in WIP mode: platform app
+    // reviewers follow those links signed out, and a privacy page that 404s
+    // fails the review.
     const isPublic =
-      path === "/" || path.startsWith("/login") || path === "/s" || path.startsWith("/s/") || maybeCreatorPage;
+      path === "/" ||
+      path.startsWith("/login") ||
+      path === "/s" ||
+      path.startsWith("/s/") ||
+      path === "/privacy" ||
+      path === "/terms" ||
+      path === "/documents" ||
+      maybeCreatorPage;
     if (!isPublic) {
       return NextResponse.redirect(new URL("/", req.url));
     }

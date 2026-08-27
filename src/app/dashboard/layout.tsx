@@ -97,6 +97,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
             ← Sign out
           </button>
         </form>
+        {/* The program's fine print — same destinations as the marketing
+            footer, so the legal pages are reachable from inside the app too. */}
+        <p className="hidden gap-3 px-6 pb-4 text-[11px] text-mist/70 md:flex">
+          <Link href="/documents" className="transition hover:text-snow">Documents</Link>
+          <Link href="/privacy" className="transition hover:text-snow">Privacy</Link>
+          <Link href="/terms" className="transition hover:text-snow">Terms</Link>
+        </p>
       </aside>
       {/* min-w-0: a flex item defaults to min-width:auto, so one long
           unbreakable line (a code snippet, a wide table) propagates its

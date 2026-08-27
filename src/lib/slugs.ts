@@ -25,13 +25,16 @@ const ROUTES = [
   "connect.js",
   "dashboard",
   "demo",
+  "documents",
   "domain",
   "embed-demo",
   "embed.js",
   "login",
   "onboarding",
+  "privacy",
   "s",
   "signup",
+  "terms",
 ];
 
 /** Next.js internals and web-standard files served from the root. */
@@ -86,7 +89,6 @@ const FUTURE = [
   "partners",
   "press",
   "pricing",
-  "privacy",
   "profile",
   "refer",
   "register",
@@ -100,7 +102,6 @@ const FUTURE = [
   "status",
   "support",
   "team",
-  "terms",
   "tour",
   "upgrade",
   "verify",

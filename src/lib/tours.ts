@@ -85,6 +85,42 @@ export const TOURS: TourDef[] = [
     ],
   },
   {
+    id: "integrations",
+    path: "/dashboard/integrations",
+    steps: [
+      {
+        target: "social-connect",
+        title: "Connect your platforms",
+        body: "Tap a platform and add your handle. Bluesky and Discord publish for real straight away; the rest light up as Ensemble's platform credentials come online.",
+      },
+      {
+        target: "live-ingest",
+        title: "Stream to Ensemble, once",
+        body: "Copy this Server and Key into OBS under Settings → Stream → Custom. That's the whole OBS setup — one time, then every stream is just Start Streaming.",
+      },
+      {
+        target: "live-keys",
+        title: "Your platform stream keys",
+        body: "Each platform gives you a private stream key — Twitch under Creator Dashboard → Settings → Stream, YouTube in Studio → Go live, Facebook in Live Producer. Paste them here once and the relay pushes your stream to every one you filled in. Leave a field blank to skip that platform.",
+      },
+      {
+        target: "live-keys-waiting",
+        title: "Stream keys, ready for launch",
+        body: "Paste each platform's stream key here — from Twitch's Creator Dashboard, YouTube Studio and Facebook Live Producer. The relay that fans one stream out to all of them switches on soon, and keys saved now are used from its first day.",
+      },
+      {
+        target: "live-page",
+        title: "The players on your page",
+        body: "These decide what the Live Streams section on your page embeds — your Twitch channel, a Facebook video, your Instagram handle. Separate from the stream keys above, which are about broadcasting.",
+      },
+      {
+        target: "go-live",
+        title: "Announcing is yours to press",
+        body: "Your page flips to on-air by itself when your stream starts. This button is the megaphone: press it and every connected account gets a post saying where to watch. It never fires on its own, so test streams stay quiet.",
+      },
+    ],
+  },
+  {
     id: "settings",
     path: "/dashboard/settings",
     steps: [

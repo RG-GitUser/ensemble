@@ -19,11 +19,8 @@ const FEATURES = [
 ];
 
 /**
- * Footer columns.
- *
- * Every href here goes somewhere that exists. A footer full of dead legal
- * links is worse than a short one, so Privacy and Terms are absent until
- * there are pages behind them.
+ * Footer columns. Every href here goes somewhere that exists — a footer full
+ * of dead links is worse than a short one.
  */
 const FOOTER_LINKS: Array<{ title: string; links: Array<{ label: string; href: string }> }> = [
   {
@@ -39,6 +36,15 @@ const FOOTER_LINKS: Array<{ title: string; links: Array<{ label: string; href: s
       { label: "An example page", href: "/demo" },
       { label: "The dashboard", href: "/demo/dashboard" },
       { label: "The embed, live", href: "/embed-demo" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "Documents", href: "/documents" },
+      { label: "Developer docs", href: "/documents?tab=dev" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
     ],
   },
 ];
@@ -83,6 +89,7 @@ export default async function Home() {
           <nav className="flex items-center gap-2 sm:gap-4">
             <a href="#how" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">How it works</a>
             <a href="#pricing" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Pricing</a>
+            <Link href="/documents" className="hidden px-2 text-sm text-mist hover:text-snow sm:block">Documents</Link>
             <ThemeToggle />
             {user ? (
               <Link href="/dashboard" className="btn-primary !py-2 text-sm">Open dashboard</Link>
@@ -317,7 +324,10 @@ export default async function Home() {
           </div>
 
           <div className="mt-12 flex flex-col gap-2 border-t border-edge/60 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-mist">© {new Date().getFullYear()} Ensemble. Built for creators.</p>
+            <p className="text-sm text-mist">
+              © {new Date().getFullYear()} Ensemble. Ensemble and the Ensemble wordmark are trademarks of their
+              owner.
+            </p>
             <p className="text-sm text-mist">
               We never take a percentage of your sales.
             </p>
