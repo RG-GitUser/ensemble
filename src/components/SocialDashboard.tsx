@@ -211,8 +211,8 @@ function IngestPanel({ ingestUrl, ingestKey }: { ingestUrl: string; ingestKey: s
     <div className="mt-4 rounded-xl border border-good/40 bg-good/5 p-3" data-tour="live-ingest">
       <p className="text-sm font-bold">Stream once, reach everywhere</p>
       <p className="mt-1 text-xs text-mist">
-        In OBS (Settings → Stream → Custom), use this server and key. The relay pushes your stream to every
-        platform you saved a stream key for below.
+        Use this server and key in any streaming app — OBS or Streamlabs on desktop (Settings → Stream → Custom),
+        Larix or PRISM on a phone. The relay pushes your stream to every platform you saved a stream key for below.
       </p>
       <div className="mt-3 space-y-2 text-sm">
         <div className="flex flex-wrap items-center gap-2">
@@ -343,11 +343,12 @@ function LiveStreamsForm({
 
       {ingestUrl ? (
         <p className="mt-4 rounded-xl border border-edge bg-panel2 p-3 text-xs text-mist">
-          <span className="font-semibold text-snow">One stream in, every platform out.</span> Point OBS at the server
-          and key above and the relay forwards your stream to each platform you saved a key for. Your page flips to
-          on-air by itself when the stream starts; the announcement post stays behind the button above, so a test
-          stream never posts to your followers. Instagram Live can&apos;t be pushed to (they offer no way in), but the
-          player on your page still works.
+          <span className="font-semibold text-snow">One stream in, every platform out.</span> Point your streaming
+          app — OBS, Streamlabs, or a mobile app like Larix — at the server and key above and the relay forwards
+          your stream to each platform you saved a key for. Your page flips to on-air by itself when the stream
+          starts; the announcement post stays behind the button above, so a test stream never posts to your
+          followers. Instagram Live can&apos;t be pushed to (they offer no way in), but the player on your page still
+          works.
         </p>
       ) : (
         <p className="mt-4 rounded-xl border border-edge bg-panel2 p-3 text-xs text-mist">

@@ -82,7 +82,7 @@ export default function TermsPage() {
       <DocSection title="Contact">
         <p>
           Questions about these terms go to{" "}
-          <a href="mailto:rileyg0035@gmail.com" className="text-brand hover:underline">rileyg0035@gmail.com</a>.
+          <a href="mailto:support@ensemble.it.com" className="text-brand hover:underline">support@ensemble.it.com</a>.
         </p>
       </DocSection>
     </DocShell>

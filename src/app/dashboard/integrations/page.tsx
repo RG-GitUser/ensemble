@@ -134,7 +134,7 @@ export default async function IntegrationsPage({
             <h2 className="font-bold">Help desk support</h2>
             <p className="mt-1 text-sm text-mist">
               Enterprise includes priority support. Email{" "}
-              <a href="mailto:rileyg0035@gmail.com" className="text-brand hover:underline">rileyg0035@gmail.com</a> and you&apos;ll hear back
+              <a href="mailto:support@ensemble.it.com" className="text-brand hover:underline">support@ensemble.it.com</a> and you&apos;ll hear back
               first.
             </p>
           </div>

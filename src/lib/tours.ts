@@ -96,7 +96,7 @@ export const TOURS: TourDef[] = [
       {
         target: "live-ingest",
         title: "Stream to Ensemble, once",
-        body: "Copy this Server and Key into OBS under Settings → Stream → Custom. That's the whole OBS setup — one time, then every stream is just Start Streaming.",
+        body: "Copy this Server and Key into your streaming app — OBS or Streamlabs on desktop, Larix on a phone. One-time setup; after that, every stream is just pressing Start.",
       },
       {
         target: "live-keys",

@@ -84,6 +84,16 @@ export function SetupChecklist({ steps }: { steps: Checkpoint[] }) {
         )}
       </div>
 
+      {!complete && (
+        <p className="mt-4 text-xs text-mist/80">
+          Stuck on a step? Email{" "}
+          <a href="mailto:onboarding@ensemble.it.com" className="text-brand hover:underline">
+            onboarding@ensemble.it.com
+          </a>{" "}
+          — it exists for exactly this.
+        </p>
+      )}
+
       <ol className="mt-5 grid gap-2 sm:grid-cols-2">
         {steps.map((s) => (
           <li key={s.id}>
