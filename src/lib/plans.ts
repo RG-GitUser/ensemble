@@ -79,7 +79,7 @@ export const PLANS: Record<Plan, PlanDef> = {
   enterprise: {
     id: "enterprise",
     name: "Enterprise",
-    price: 75,
+    price: 65,
     blurb: "The full platform for serious creator businesses.",
     maxSections: Infinity,
     payments: true,
