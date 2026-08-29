@@ -12,9 +12,9 @@ const FEATURES = [
   { title: "Merch storefront", body: "Showcase merchandise on every plan. On Pro, paste Stripe payment links and sell directly." },
   { title: "Your own domain", body: "Connect a domain you own on Pro — your page, your URL, no Ensemble branding anywhere." },
   { title: "Post everywhere at once", body: "Write once and cross-post to every connected social account, straight from your dashboard on Pro." },
-  { title: "Newsletters & memberships", body: "Collect emails and build your inner circle with Enterprise memberships." },
-  { title: "Custom chatrooms", body: "Give your community a clubhouse of their own on Enterprise." },
-  { title: "Live streams on your page", body: "Link Twitch, Facebook and Instagram Live so your page shows the player, and tell every follower at once when you go on air. Enterprise." },
+  { title: "Stream once, go live everywhere", body: "Point OBS at Ensemble and we rebroadcast to every platform you've connected — while your page flips to on-air and every follower gets told. Enterprise." },
+  { title: "Newsletters", body: "Collect emails on your page, then write to your whole list straight from the dashboard — replies land in your inbox. Enterprise." },
+  { title: "Custom chatrooms", body: "Give your community a clubhouse of their own, with your messages wearing the creator badge. Enterprise." },
   { title: "Calendar integrations", body: "Embed Calendly or Cal.com for meet & greets, collabs and bookings." },
 ];
 

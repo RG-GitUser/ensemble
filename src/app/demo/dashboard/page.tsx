@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { countLeads, countSections, getSiteBySlug, getUserById } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 
-const NAV = ["Overview", "Socials", "Page Builder", "My Website", "Analytics", "Audience", "Chatroom", "Integrations", "Support", "Settings", "Profile"];
+const NAV = ["Overview", "Socials", "Page Builder", "My Website", "Shop", "Analytics", "Audience", "Chatroom", "Integrations", "Support", "Settings", "Profile"];
 
 /** Public, read-only tour of the dashboard using the seeded demo creator. */
 export default function DemoDashboardPage() {

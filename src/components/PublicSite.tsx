@@ -5,7 +5,7 @@ import { getChatMessages, getSections, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getLayout, getTextAlign } from "@/lib/theme";
+import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -34,14 +34,14 @@ function SectionView({
   switch (section.type) {
     case "hero":
       return (
-        <section className="px-6 pb-16 pt-24 text-center">
+        <section className="px-6 site-pad-hero text-center">
           <h1 className="site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
           {c.subheading && <p className="mx-auto mt-5 max-w-xl text-[1.125em] site-ink-soft">{c.subheading}</p>}
           {c.ctaLabel && (
             <div className="site-btn-row mt-8">
               <a
                 href={c.ctaUrl || "#"}
-                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                 style={{ background: "var(--site-accent)" }}
               >
                 {c.ctaLabel}
@@ -52,11 +52,11 @@ function SectionView({
       );
     case "about":
       return (
-        <section className="site-w-lg mx-auto px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 site-pad">
           <div className="site-align-stack flex flex-col items-center gap-8 sm:flex-row sm:items-start">
             {c.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.imageUrl} alt={c.heading} className="h-36 w-36 shrink-0 rounded-2xl object-cover" />
+              <img src={c.imageUrl} alt={c.heading} className="h-36 w-36 shrink-0 site-round-2xl object-cover" />
             )}
             <div className="text-center">
               <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
@@ -68,14 +68,14 @@ function SectionView({
     case "bonus": {
       const items = parseLines(c.items ?? "");
       return (
-        <section id="content" className="site-w-lg mx-auto px-6 py-14">
+        <section id="content" className="site-w-lg mx-auto px-6 site-pad">
           <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-4">
             {items.map(([title, desc, url], i) => (
               <a
                 key={i}
                 href={url || "#"}
-                className="site-card block rounded-2xl p-5"
+                className="site-card block site-round-2xl p-5"
                 style={{ background: "var(--site-card)" }}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -84,7 +84,7 @@ function SectionView({
                     {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
                   </div>
                   {c.ctaLabel ? (
-                    <span className="site-edge shrink-0 rounded-lg border px-3 py-1.5 text-[0.875em] font-semibold">
+                    <span className="site-edge shrink-0 site-round-lg border px-3 py-1.5 text-[0.875em] font-semibold">
                       {c.ctaLabel}
                     </span>
                   ) : (
@@ -100,10 +100,10 @@ function SectionView({
     case "video": {
       const src = embedUrl(c.videoUrl ?? "");
       return (
-        <section className="site-w-lg mx-auto px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 site-pad">
           <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           {src ? (
-            <div className="site-card mt-8 overflow-hidden rounded-2xl">
+            <div className="site-card mt-8 overflow-hidden site-round-2xl">
               <iframe src={src} className="aspect-video w-full" allowFullScreen title={c.heading} />
             </div>
           ) : (
@@ -115,14 +115,14 @@ function SectionView({
     case "links": {
       const items = parseLines(c.items ?? "");
       return (
-        <section className="site-w-sm mx-auto px-6 py-14">
+        <section className="site-w-sm mx-auto px-6 site-pad">
           <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           <div className="mt-8 space-y-3">
             {items.map(([label, url], i) => (
               <a
                 key={i}
                 href={url || "#"}
-                className="site-btn site-card block rounded-xl px-5 py-3.5 font-semibold"
+                className="site-btn site-card block site-round-xl px-5 py-3.5 font-semibold"
                 style={{ background: "var(--site-card)" }}
               >
                 {label}
@@ -135,13 +135,13 @@ function SectionView({
     case "merch": {
       const items = parseLines(c.items ?? "");
       return (
-        <section className="site-w-xl mx-auto px-6 py-14">
+        <section className="site-w-xl mx-auto px-6 site-pad">
           <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
           {/* site-grid: lets the container queries in globals.css narrow the
               columns when this section is running in half a page. */}
           <div className="site-grid mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {items.map(([name, price, img, buyUrl], i) => (
-              <div key={i} className="site-card overflow-hidden rounded-2xl" style={{ background: "var(--site-card)" }}>
+              <div key={i} className="site-card overflow-hidden site-round-2xl" style={{ background: "var(--site-card)" }}>
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img} alt={name} className="aspect-square w-full object-cover" />
@@ -156,13 +156,13 @@ function SectionView({
                   {plan.payments && buyUrl ? (
                     <a
                       href={buyUrl}
-                      className="site-btn mt-3 block rounded-lg py-2 text-[0.875em] font-semibold text-white transition hover:opacity-90"
+                      className="site-btn mt-3 block site-round-lg py-2 text-[0.875em] font-semibold text-white transition hover:opacity-90"
                       style={{ background: "var(--site-accent)" }}
                     >
                       {c.buyLabel || "Buy now"}
                     </a>
                   ) : (
-                    <p className="site-btn site-edge mt-3 rounded-lg border py-2 text-[0.875em] site-ink-faint">
+                    <p className="site-btn site-edge mt-3 site-round-lg border py-2 text-[0.875em] site-ink-faint">
                       {c.soonLabel || "Available soon"}
                     </p>
                   )}
@@ -176,8 +176,8 @@ function SectionView({
     case "newsletter": {
       if (!plan.newsletter || site.config.newsletterEnabled === false) return null;
       return (
-        <section className="px-6 py-14">
-          <div className="site-card site-w-md mx-auto rounded-3xl px-6 py-12 text-center" style={{ background: "var(--site-card)" }}>
+        <section className="px-6 site-pad">
+          <div className="site-card site-w-md mx-auto site-round-3xl px-6 py-12 text-center" style={{ background: "var(--site-card)" }}>
             <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
             {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
             <NewsletterSignup siteId={site.id} buttonLabel={c.buttonLabel ?? "Subscribe"} />
@@ -189,7 +189,7 @@ function SectionView({
       if (!plan.calendar) return null;
       const url = c.calendarUrl || site.config.calendlyUrl || "";
       return (
-        <section className="site-w-lg mx-auto px-6 py-14 text-center">
+        <section className="site-w-lg mx-auto px-6 site-pad text-center">
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {url ? (
@@ -198,7 +198,7 @@ function SectionView({
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                 style={{ background: "var(--site-accent)" }}
               >
                 Open calendar
@@ -213,9 +213,9 @@ function SectionView({
     case "chatroom": {
       if (!plan.chatroom || site.config.chatroomEnabled === false) return null;
       return (
-        <section className="site-w-md mx-auto px-6 py-14">
+        <section className="site-w-md mx-auto px-6 site-pad">
           <h2 className="text-center text-[1.5em] font-bold">{c.heading}</h2>
-          <div className="site-card mt-8 rounded-3xl p-6" style={{ background: "var(--site-card)" }}>
+          <div className="site-card mt-8 site-round-3xl p-6" style={{ background: "var(--site-card)" }}>
             <p className="text-center text-[0.875em] site-ink-soft">{c.body}</p>
             <div className="mt-5 max-h-80 space-y-3 overflow-y-auto">
               {chat.length === 0 && (
@@ -225,6 +225,16 @@ function SectionView({
                 <div key={m.id} className="site-surface w-fit max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2 text-[0.875em]">
                   <span className="mr-2 font-semibold" style={{ color: "var(--site-accent)" }}>
                     {m.author}
+                    {/* The host's own messages carry a mark no visitor can type —
+                        it comes from their login, not from the name field. */}
+                    {m.isCreator && (
+                      <span
+                        className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.65em] font-bold uppercase tracking-wide text-white"
+                        style={{ background: "var(--site-accent)" }}
+                      >
+                        Creator
+                      </span>
+                    )}
                   </span>
                   {m.body}
                 </div>
@@ -240,7 +250,7 @@ function SectionView({
       const { twitchChannel, facebookLiveUrl, instagramLiveUser } = site.config;
       const hasAny = twitchChannel || facebookLiveUrl || instagramLiveUser;
       return (
-        <section className="site-w-lg mx-auto px-6 py-14">
+        <section className="site-w-lg mx-auto px-6 site-pad">
           <h2 className="site-align-row flex items-center justify-center gap-3 text-center text-[1.5em] font-bold">
             {c.heading}
             {site.config.liveNow && (
@@ -255,7 +265,7 @@ function SectionView({
             {twitchChannel && (
               <iframe
                 src={`https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=${encodeURIComponent(host)}&muted=true`}
-                className="site-card aspect-video w-full rounded-2xl"
+                className="site-card aspect-video w-full site-round-2xl"
                 allowFullScreen
                 title="Twitch stream"
               />
@@ -263,7 +273,7 @@ function SectionView({
             {facebookLiveUrl && (
               <iframe
                 src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(facebookLiveUrl)}&show_text=false`}
-                className="site-card aspect-video w-full rounded-2xl"
+                className="site-card aspect-video w-full site-round-2xl"
                 allowFullScreen
                 title="Facebook Live"
               />
@@ -274,7 +284,7 @@ function SectionView({
                   href={`https://instagram.com/${encodeURIComponent(instagramLiveUser)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="site-btn inline-block rounded-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
+                  className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
                   style={{ background: "var(--site-accent)" }}
                 >
                   {c.ctaLabel || "Watch my Instagram Live"}
@@ -287,12 +297,12 @@ function SectionView({
     }
     case "contact":
       return (
-        <section className="site-w-md mx-auto px-6 py-14 text-center">
+        <section className="site-w-md mx-auto px-6 site-pad text-center">
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
           {c.email && (
             <div className="site-btn-row mt-6">
-              <a href={`mailto:${c.email}`} className="site-btn site-card inline-block rounded-xl px-7 py-3 font-semibold">
+              <a href={`mailto:${c.email}`} className="site-btn site-card inline-block site-round-xl px-7 py-3 font-semibold">
                 {c.buttonLabel || c.email}
               </a>
             </div>
@@ -310,7 +320,7 @@ function SectionView({
         { label: "Terms & conditions", url: c.termsUrl ?? "", text: c.termsText ?? "" },
       ].filter((p) => p.url || p.text);
       return (
-        <footer className="site-w-lg mx-auto px-6 py-12 text-center">
+        <footer className="site-w-lg mx-auto px-6 site-pad-sm text-center">
           <div className="border-t pt-8" style={{ borderColor: "var(--site-border-color, rgba(255,255,255,0.12))" }}>
             {tagline && <p className="text-[0.95em] site-ink-soft">{tagline}</p>}
             {policies.length > 0 && (
@@ -506,6 +516,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           "--site-size": cfg.containerSize ?? DEFAULT_SIZE,
           // A floor, never a ceiling: content taller than this still grows.
           "--site-min-h": `${clampMinHeight(cfg.containerMinHeight)}rem`,
+          // Page shape: rhythm scales every section's breathing room, round
+          // scales every container and button radius (see .site-pad /
+          // .site-round-* in globals.css). Both default to today's page.
+          "--site-rhythm": getSpacing(cfg.sectionSpacing)?.value ?? "1",
+          "--site-round": getCorner(cfg.cornerStyle)?.value ?? "1",
           // Type: one family and a base size every text size on the page is
           // expressed as a multiple of (see the em values above), so the scale
           // moves the headline and the fine print together.
@@ -565,7 +580,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
               className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
             >
               {containerTheme ? (
-                <div className="site-band site-card mx-auto my-8 overflow-hidden rounded-3xl" style={containerTheme}>
+                <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
                   <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
                 </div>
               ) : (

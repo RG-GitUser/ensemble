@@ -60,6 +60,11 @@ export default async function ChatroomPage() {
                 <div className="min-w-0">
                   <p className="text-sm">
                     <span className="font-semibold">{m.author}</span>{" "}
+                    {m.isCreator && (
+                      <span className="mr-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
+                        Creator
+                      </span>
+                    )}
                     <span className="text-xs text-mist">{m.createdAt.slice(0, 16).replace("T", " ")}</span>
                   </p>
                   <p className="mt-0.5 break-words text-sm text-mist">{m.body}</p>

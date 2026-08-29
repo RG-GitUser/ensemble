@@ -196,9 +196,57 @@ export const LAYOUTS: LayoutDef[] = [
     label: "Staggered",
     description: "Sections alternate left and right down the page, like an editorial spread.",
   },
+  {
+    id: "focus",
+    label: "Focused column",
+    description: "One narrow centred column, link-in-bio style. Your hero stays full width above it.",
+  },
 ];
 
 export const DEFAULT_LAYOUT = LAYOUTS[0].id;
+
+/**
+ * Page-shape scales: how much air between sections, and how round the
+ * containers' corners are.
+ *
+ * Both are stored as an id and rendered as a bare multiplier in a CSS var
+ * (--site-rhythm, --site-round), so every padding and radius on the page
+ * moves together and keeps its own proportions — a hero keeps being taller
+ * than a footer at any density, a big card keeps being rounder than its
+ * button at any corner setting. The middle option of each is the exact page
+ * shipped before the setting existed, so absent config changes nothing.
+ */
+export interface ScaleDef {
+  id: string;
+  label: string;
+  blurb: string;
+  /** Bare multiplier, written into the page's CSS var. */
+  value: string;
+}
+
+export const SPACINGS: ScaleDef[] = [
+  { id: "cozy", label: "Cozy", blurb: "Sections sit close — more page per scroll.", value: "0.6" },
+  { id: "standard", label: "Standard", blurb: "The classic rhythm.", value: "1" },
+  { id: "airy", label: "Airy", blurb: "Every section gets room to breathe.", value: "1.5" },
+];
+
+export const DEFAULT_SPACING = SPACINGS[1].id;
+
+export function getSpacing(id: string | undefined | null): ScaleDef | null {
+  return SPACINGS.find((s) => s.id === id) ?? null;
+}
+
+export const CORNERS: ScaleDef[] = [
+  { id: "sharp", label: "Sharp", blurb: "Square edges — editorial and precise.", value: "0" },
+  { id: "soft", label: "Soft", blurb: "Gently rounded, as pages ship today.", value: "1" },
+  { id: "round", label: "Round", blurb: "Fully rounded cards and pill buttons.", value: "2" },
+];
+
+export const DEFAULT_CORNER = CORNERS[1].id;
+
+export function getCorner(id: string | undefined | null): ScaleDef | null {
+  return CORNERS.find((c) => c.id === id) ?? null;
+}
 
 /**
  * Section types that always span the full width, whatever the layout — the

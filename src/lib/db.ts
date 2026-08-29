@@ -8,7 +8,10 @@ import type {
   CustomDomain,
   ContentItem,
   DailyViews,
+  FollowerReading,
+  FollowerSnapshot,
   Lead,
+  NewsletterPost,
   QuoteRequest,
   ReferrerViews,
   Section,
@@ -74,13 +77,28 @@ function createDb(): Database.Database {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
       email TEXT NOT NULL,
+      -- One-click unsubscribe needs a secret per address: the link in every
+      -- email carries it, so nobody can unsubscribe someone else by guessing.
+      unsub_token TEXT NOT NULL DEFAULT '',
+      unsubscribed_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    -- One row per newsletter actually sent — the Audience tab's history.
+    CREATE TABLE IF NOT EXISTS newsletter_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      recipients INTEGER NOT NULL,
+      sent_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
       author TEXT NOT NULL,
       body TEXT NOT NULL,
+      -- Posted by the site owner from the dashboard — the room shows a badge.
+      is_creator INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS support_tickets (
@@ -182,6 +200,19 @@ function createDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE (site_id, platform, day)
     );
+    -- One dated follower reading per platform. Shaped like page_views: the
+    -- day is the key, not a timestamp, because "how many followers did I have
+    -- on the 3rd" is a question about a date. Re-recording a day corrects that
+    -- day's figure instead of stacking a second reading, so a typo is fixed by
+    -- entering it again.
+    CREATE TABLE IF NOT EXISTS follower_counts (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL,
+      day TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'manual',
+      PRIMARY KEY (site_id, platform, day)
+    );
   `);
 
   // Publisher-pipeline columns arrived after the social tables shipped.
@@ -247,6 +278,20 @@ function createDb(): Database.Database {
   const setToken = db.prepare("UPDATE sites SET embed_token = ? WHERE id = ?");
   for (const row of untokened) setToken.run(newEmbedToken(), row.id);
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_embed_token ON sites(embed_token)");
+
+  // Unsubscribe tokens arrived after leads shipped. Every address gets one,
+  // because the link goes into every email sent from here on.
+  const leadCols = new Set((db.prepare("PRAGMA table_info(leads)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!leadCols.has("unsub_token")) db.exec("ALTER TABLE leads ADD COLUMN unsub_token TEXT NOT NULL DEFAULT ''");
+  if (!leadCols.has("unsubscribed_at")) db.exec("ALTER TABLE leads ADD COLUMN unsubscribed_at TEXT");
+  const untokenedLeads = db.prepare("SELECT id FROM leads WHERE unsub_token = ''").all() as Array<{ id: number }>;
+  const setLeadToken = db.prepare("UPDATE leads SET unsub_token = ? WHERE id = ?");
+  for (const row of untokenedLeads) setLeadToken.run(randomBytes(16).toString("hex"), row.id);
+
+  // The creator badge arrived after chat shipped — messages posted from the
+  // dashboard carry it, so the room can tell the host from the guests.
+  const chatCols = new Set((db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!chatCols.has("is_creator")) db.exec("ALTER TABLE chat_messages ADD COLUMN is_creator INTEGER NOT NULL DEFAULT 0");
 
   // Live-relay ingest keys arrived after the first schema shipped. Same shape
   // as embed tokens: every site gets one, because handing them out lazily
@@ -546,12 +591,27 @@ interface LeadRow {
   id: number;
   site_id: number;
   email: string;
+  unsub_token: string;
+  unsubscribed_at: string | null;
   created_at: string;
 }
 
 function toUser(r: UserRow): User {
   return { id: r.id, email: r.email, name: r.name, businessName: r.business_name, createdAt: r.created_at };
 }
+/**
+ * What every site's config falls back to before its own stored values are laid
+ * over the top. Exported because the setup checklist has to tell "the creator
+ * picked this" from "this is just what ships" — and comparing against these is
+ * the only way to know.
+ */
+export const SITE_CONFIG_DEFAULTS = {
+  themeColor: "#8b5cf6",
+  bgColor: "#0a0812",
+  cardColor: "rgba(255,255,255,0.05)",
+  tagline: "",
+};
+
 function toSite(r: SiteRow): Site {
   return {
     id: r.id,
@@ -560,10 +620,7 @@ function toSite(r: SiteRow): Site {
     plan: (r.plan as Site["plan"]) || "basic",
     published: r.published === 1,
     config: {
-      themeColor: "#8b5cf6",
-      bgColor: "#0a0812",
-      cardColor: "rgba(255,255,255,0.05)",
-      tagline: "",
+      ...SITE_CONFIG_DEFAULTS,
       ...JSON.parse(r.config || "{}"),
     },
     embedToken: r.embed_token ?? "",
@@ -604,7 +661,14 @@ function toQuote(r: QuoteRow): QuoteRequest {
   };
 }
 function toLead(r: LeadRow): Lead {
-  return { id: r.id, siteId: r.site_id, email: r.email, createdAt: r.created_at };
+  return {
+    id: r.id,
+    siteId: r.site_id,
+    email: r.email,
+    unsubToken: r.unsub_token,
+    unsubscribedAt: r.unsubscribed_at ?? null,
+    createdAt: r.created_at,
+  };
 }
 
 /* ---------- users & sessions ---------- */
@@ -998,7 +1062,31 @@ export function updateQuoteStatus(id: number, status: string): void {
 /* ---------- leads ---------- */
 
 export function addLead(siteId: number, email: string): void {
-  db().prepare("INSERT INTO leads (site_id, email) VALUES (?, ?)").run(siteId, email);
+  db()
+    .prepare("INSERT INTO leads (site_id, email, unsub_token) VALUES (?, ?, ?)")
+    .run(siteId, email, randomBytes(16).toString("hex"));
+}
+
+/** The list a newsletter actually goes to — everyone who hasn't opted out. */
+export function getActiveLeads(siteId: number): Lead[] {
+  const rows = db()
+    .prepare("SELECT * FROM leads WHERE site_id = ? AND unsubscribed_at IS NULL ORDER BY id DESC")
+    .all(siteId) as LeadRow[];
+  return rows.map(toLead);
+}
+
+/**
+ * Honour an unsubscribe link. Keyed by the secret token alone — the link in
+ * the email is the proof. Idempotent, and returns whether the token matched
+ * anything so the page can be honest about it.
+ */
+export function unsubscribeLeadByToken(token: string): boolean {
+  const info = db()
+    .prepare("UPDATE leads SET unsubscribed_at = datetime('now') WHERE unsub_token = ? AND unsubscribed_at IS NULL")
+    .run(token);
+  if (info.changes > 0) return true;
+  // Already unsubscribed still counts as success — clicking twice shouldn't scold.
+  return !!db().prepare("SELECT id FROM leads WHERE unsub_token = ?").get(token);
 }
 
 export function getLeads(siteId: number): Lead[] {
@@ -1020,6 +1108,34 @@ export function deleteLead(id: number): void {
   db().prepare("DELETE FROM leads WHERE id = ?").run(id);
 }
 
+/* ---------- newsletter broadcasts ---------- */
+
+interface NewsletterPostRow {
+  id: number;
+  site_id: number;
+  subject: string;
+  body: string;
+  recipients: number;
+  sent_at: string;
+}
+
+function toNewsletterPost(r: NewsletterPostRow): NewsletterPost {
+  return { id: r.id, siteId: r.site_id, subject: r.subject, body: r.body, recipients: r.recipients, sentAt: r.sent_at };
+}
+
+export function recordNewsletterPost(siteId: number, subject: string, body: string, recipients: number): void {
+  db()
+    .prepare("INSERT INTO newsletter_posts (site_id, subject, body, recipients) VALUES (?, ?, ?, ?)")
+    .run(siteId, subject, body, recipients);
+}
+
+export function getNewsletterPosts(siteId: number, limit = 20): NewsletterPost[] {
+  const rows = db()
+    .prepare("SELECT * FROM newsletter_posts WHERE site_id = ? ORDER BY id DESC LIMIT ?")
+    .all(siteId, limit) as NewsletterPostRow[];
+  return rows.map(toNewsletterPost);
+}
+
 /* ---------- chat messages ---------- */
 
 interface ChatRow {
@@ -1027,11 +1143,12 @@ interface ChatRow {
   site_id: number;
   author: string;
   body: string;
+  is_creator: number;
   created_at: string;
 }
 
 function toChatMessage(r: ChatRow): ChatMessage {
-  return { id: r.id, siteId: r.site_id, author: r.author, body: r.body, createdAt: r.created_at };
+  return { id: r.id, siteId: r.site_id, author: r.author, body: r.body, isCreator: !!r.is_creator, createdAt: r.created_at };
 }
 
 /** Latest `limit` messages, oldest first (chat display order). */
@@ -1047,10 +1164,10 @@ export function getChatMessage(id: number): ChatMessage | null {
   return r ? toChatMessage(r) : null;
 }
 
-export function addChatMessage(siteId: number, author: string, body: string): ChatMessage {
+export function addChatMessage(siteId: number, author: string, body: string, isCreator = false): ChatMessage {
   const info = db()
-    .prepare("INSERT INTO chat_messages (site_id, author, body) VALUES (?, ?, ?)")
-    .run(siteId, author, body);
+    .prepare("INSERT INTO chat_messages (site_id, author, body, is_creator) VALUES (?, ?, ?, ?)")
+    .run(siteId, author, body, isCreator ? 1 : 0);
   return getChatMessage(Number(info.lastInsertRowid))!;
 }
 
@@ -1567,6 +1684,76 @@ export function getPostForSite(siteId: number, postId: number): { id: number; bo
 
 export function updateTargetStatus(targetId: number, status: string, detail: string): void {
   db().prepare("UPDATE social_post_targets SET status = ?, detail = ? WHERE id = ?").run(status, detail.slice(0, 500), targetId);
+}
+
+/* ---------- follower counts ---------- */
+
+/**
+ * Record what a platform's follower count was on a given day.
+ *
+ * `source` marks where the number came from. Everything is "manual" today;
+ * when platform APIs are wired up they write the same rows tagged with the
+ * platform, so a creator can tell a figure they typed from one that was
+ * measured — and so an automatic reading can be told apart from a hand
+ * correction to the same day.
+ */
+export function recordFollowerCount(
+  siteId: number,
+  platform: string,
+  day: string,
+  count: number,
+  source = "manual"
+): void {
+  db()
+    .prepare(
+      `INSERT INTO follower_counts (site_id, platform, day, count, source) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(site_id, platform, day) DO UPDATE SET count = excluded.count, source = excluded.source`
+    )
+    .run(siteId, platform, day, count, source);
+}
+
+/** Every reading for a site, oldest first. */
+export function getFollowerHistory(siteId: number): FollowerSnapshot[] {
+  return db()
+    .prepare(
+      `SELECT platform, day, count, source FROM follower_counts
+       WHERE site_id = ? ORDER BY day, platform`
+    )
+    .all(siteId) as FollowerSnapshot[];
+}
+
+/**
+ * What each platform's follower count was on a given date.
+ *
+ * Nobody logs every single day, so an exact hit on the requested date is the
+ * exception rather than the rule. The honest reading of "how many followers
+ * did I have on the 3rd" is the most recent count taken on or before the 3rd,
+ * which is what this returns — carrying `measuredOn` so the UI can be straight
+ * about a figure that was actually read a fortnight earlier.
+ */
+export function getFollowerCountsOn(siteId: number, day: string): FollowerReading[] {
+  return db()
+    .prepare(
+      `SELECT platform, count, day AS measuredOn, source FROM follower_counts f
+       WHERE site_id = ? AND day <= ?
+         AND day = (SELECT MAX(day) FROM follower_counts
+                    WHERE site_id = ? AND platform = f.platform AND day <= ?)
+       ORDER BY count DESC, platform`
+    )
+    .all(siteId, day, siteId, day) as FollowerReading[];
+}
+
+/** The days a site has any reading on, oldest first — drives the date list. */
+export function getFollowerDays(siteId: number): string[] {
+  const rows = db()
+    .prepare("SELECT DISTINCT day FROM follower_counts WHERE site_id = ? ORDER BY day")
+    .all(siteId) as Array<{ day: string }>;
+  return rows.map((r) => r.day);
+}
+
+/** Drop one platform's reading for one day. */
+export function deleteFollowerCount(siteId: number, platform: string, day: string): void {
+  db().prepare("DELETE FROM follower_counts WHERE site_id = ? AND platform = ? AND day = ?").run(siteId, platform, day);
 }
 
 export function countSocialPosts(siteId: number): number {

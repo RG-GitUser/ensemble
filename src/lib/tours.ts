@@ -121,6 +121,27 @@ export const TOURS: TourDef[] = [
     ],
   },
   {
+    id: "shop",
+    path: "/dashboard/shop",
+    steps: [
+      {
+        target: "shop-products",
+        title: "Your products, one per row",
+        body: "Everything here is the Merch section on your page — same products, friendlier controls. Save and the page updates immediately.",
+      },
+      {
+        target: "shop-selling",
+        title: "Selling is one upgrade away",
+        body: "Products show on your page now with an “Available soon” label. On Pro, a pasted Stripe payment link turns that into a real Buy button.",
+      },
+      {
+        target: "shop-snapshot",
+        title: "The money, at a glance",
+        body: "Live numbers from your own Stripe account — sales land there directly, never with us. The full breakdown lives in Analytics.",
+      },
+    ],
+  },
+  {
     id: "settings",
     path: "/dashboard/settings",
     steps: [

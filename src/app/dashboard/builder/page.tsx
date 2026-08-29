@@ -10,7 +10,7 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec,
 } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_CORNER, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -352,6 +352,8 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
             textColor={site.config.textColor ?? DEFAULT_TEXT_COLOR}
             layout={site.config.layout ?? DEFAULT_LAYOUT}
+            sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}
+            cornerStyle={site.config.cornerStyle ?? DEFAULT_CORNER}
             colorMode={getColorMode(site.config.colorMode)}
             lightBgColor={site.config.lightBgColor ?? DEFAULT_LIGHT_BG}
             lightCardColor={site.config.lightCardColor ?? DEFAULT_LIGHT_CARD}

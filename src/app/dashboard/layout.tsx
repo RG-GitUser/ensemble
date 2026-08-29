@@ -15,6 +15,7 @@ const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?
   { href: "/dashboard/socials", label: "Socials", requires: "social", badge: "Pro" },
   { href: "/dashboard/builder", label: "Page Builder" },
   { href: "/dashboard/connect", label: "My Website" },
+  { href: "/dashboard/shop", label: "Shop" },
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/audience", label: "Audience", requires: "newsletter", badge: "Ent" },
   { href: "/dashboard/chatroom", label: "Chatroom", requires: "chatroom", badge: "Ent" },

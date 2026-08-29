@@ -6,7 +6,10 @@ import {
   countLeads,
   countSections,
   getDailyViews,
+  getFollowerCountsOn,
+  getFollowerHistory,
   getSiteByUser,
+  getSocialAccounts,
   getTopReferrers,
   getTotalViews,
 } from "@/lib/db";
@@ -16,6 +19,8 @@ import { LockedOverlay } from "@/components/LockedOverlay";
 import { CardIcon, LedgerIcon } from "@/components/icons";
 import { disconnectFinanceStripe } from "@/lib/actions";
 import { FinanceConnectForm } from "@/components/FinanceConnectForm";
+import { FollowerBreakdown } from "@/components/FollowerBreakdown";
+import { cleanDay, todayISO } from "@/lib/followers";
 import type { Site } from "@/lib/types";
 
 const CHART_DAYS = 30;
@@ -161,14 +166,15 @@ async function FinanceTab({ site }: { site: Site }) {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; on?: string; error?: string }>;
 }) {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
   const plan = getPlan(site.plan);
-  const { tab } = await searchParams;
+  const { tab, on, error } = await searchParams;
   const finance = tab === "finance";
+  const followers = tab === "followers";
 
   const totalViews = getTotalViews(site.id);
   const sections = countSections(site.id);
@@ -190,6 +196,11 @@ export default async function AnalyticsPage({
   const maxViews = Math.max(1, ...days.map((d) => d.views));
 
   const referrers = getTopReferrers(site.id);
+
+  // A date past today would ask the charts about a day that hasn't happened;
+  // an unparseable one falls back the same way rather than throwing.
+  const onDay = (followers && cleanDay(on ?? "") <= todayISO() ? cleanDay(on ?? "") : "") || todayISO();
+  const followerHistory = followers ? getFollowerHistory(site.id) : [];
 
   const chartCard = (
     <div className="card">
@@ -239,7 +250,8 @@ export default async function AnalyticsPage({
 
       <div className="mt-5 flex gap-2 border-b border-edge">
         {[
-          { href: "/dashboard/analytics", label: "Traffic", active: !finance },
+          { href: "/dashboard/analytics", label: "Traffic", active: !finance && !followers },
+          { href: "/dashboard/analytics?tab=followers", label: "Followers", active: followers },
           { href: "/dashboard/analytics?tab=finance", label: "Finance", active: finance },
         ].map((t) => (
           <Link
@@ -254,7 +266,15 @@ export default async function AnalyticsPage({
         ))}
       </div>
 
-      {finance ? (
+      {followers ? (
+        <FollowerBreakdown
+          history={followerHistory}
+          readings={getFollowerCountsOn(site.id, onDay)}
+          accounts={getSocialAccounts(site.id)}
+          on={onDay}
+          error={error}
+        />
+      ) : finance ? (
         <FinanceTab site={site} />
       ) : (
         <>
