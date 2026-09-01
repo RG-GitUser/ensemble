@@ -236,7 +236,7 @@ function SectionView({
                 <p className="text-center text-[0.875em] site-ink-faint">No messages yet — say hi.</p>
               )}
               {chat.map((m) => (
-                <div key={m.id} className="site-surface w-fit max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-2 text-[0.875em]">
+                <div key={m.id} className="site-surface site-round-2xl w-fit max-w-[80%] px-4 py-2 text-[0.875em]">
                   <span className="mr-2 font-semibold" style={{ color: "var(--site-accent)" }}>
                     {m.author}
                     {/* The host's own messages carry a mark no visitor can type —

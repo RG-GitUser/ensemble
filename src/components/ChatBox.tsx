@@ -12,20 +12,20 @@ export function ChatBox({ siteId, sendLabel = "Send" }: { siteId: number; sendLa
       <input type="hidden" name="siteId" value={siteId} />
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
-          className="site-field w-full rounded-xl px-3 py-2.5 text-sm sm:w-36"
+          className="site-field w-full site-round-xl px-3 py-2.5 text-sm sm:w-36"
           name="author"
           placeholder="Name"
           maxLength={40}
         />
         <input
-          className="site-field w-full flex-1 rounded-xl px-3 py-2.5 text-sm"
+          className="site-field w-full flex-1 site-round-xl px-3 py-2.5 text-sm"
           name="body"
           placeholder="Say something…"
           maxLength={500}
           required
         />
         <button
-          className="site-btn rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+          className="site-btn site-round-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           style={{ background: "var(--site-accent)" }}
           disabled={pending}
         >

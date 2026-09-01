@@ -17,6 +17,28 @@
   --hairline: rgba(255, 255, 255, 0.15);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /**
+   * Square corners across the platform UI.
+   *
+   * Zeroing Tailwind's radius scale here sharpens every card, field, button
+   * and panel at once, rather than editing ~135 utility classes and having
+   * the next new component quietly arrive rounded. rounded-full is untouched
+   * because it resolves to an infinite radius rather than one of these
+   * tokens, so avatars, dots and pill badges keep their shape and read as a
+   * deliberate counterpoint instead of an oversight.
+   *
+   * Creator pages do not participate. Their containers use the site-round-*
+   * scale driven by --site-round, which is the creator's own corner setting.
+   */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 }
 
 /**
