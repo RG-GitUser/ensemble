@@ -31,6 +31,13 @@ export interface PlanDef {
   /** Connect social accounts and cross-post from the dashboard. */
   social: boolean;
   /**
+   * How many accounts may be connected at once. Every tier can cross-post;
+   * the entry tier just picks its two biggest platforms. A cap is kinder than
+   * a lockout, because it never interrupts someone mid-post. It only decides
+   * how wide their reach is, and they choose which two that means.
+   */
+  maxSocialAccounts: number;
+  /**
    * Live players and the on-air badge on the page, the one-press
    * announcement, and the relay that pushes one incoming stream out to every
    * platform the creator saved a key for. See live.ts and deploy/mediamtx.yml.
@@ -62,7 +69,8 @@ export const PLANS: Record<Plan, PlanDef> = {
     helpdesk: true,
     customDomain: false,
     whiteLabel: false,
-    social: false,
+    social: true,
+    maxSocialAccounts: 2,
     live: false,
     dailyAnalytics: false,
     referrerAnalytics: false,
@@ -81,6 +89,7 @@ export const PLANS: Record<Plan, PlanDef> = {
     customDomain: true,
     whiteLabel: true,
     social: true,
+    maxSocialAccounts: Infinity,
     live: false,
     dailyAnalytics: true,
     referrerAnalytics: false,
@@ -101,6 +110,7 @@ export const PLANS: Record<Plan, PlanDef> = {
     customDomain: true,
     whiteLabel: true,
     social: true,
+    maxSocialAccounts: Infinity,
     live: true,
     dailyAnalytics: true,
     referrerAnalytics: true,
@@ -123,18 +133,27 @@ export interface TierFeature {
   label: string;
   /** Minimum plan that includes this, or null when every plan has it. */
   requires: Plan | null;
+  /**
+   * Dropped from this plan upward. Lets a line that states a limit disappear
+   * on the tiers that lift it, instead of sitting next to the line that
+   * contradicts it.
+   */
+  supersededFrom?: Plan;
 }
 
 export const TIER_FEATURES: TierFeature[] = [
   // Basic's lines name the section types every plan unlocks. Two generic
-  // bullets made the entry tier look empty when it is not.
+  // bullets made the entry tier look empty when it is not. The account count
+  // is read from the plan so the copy cannot drift from the rule.
   { label: "Landing page builder, with as many sections as you want", requires: null },
   { label: "Bonus content hub for your followers", requires: null },
   { label: "Video, your story, and a link hub for every platform", requires: null },
   { label: "Contact section so people can reach you", requires: null },
+  { label: `Cross-post to ${PLANS.basic.maxSocialAccounts} social accounts at once`, requires: null, supersededFrom: "pro" },
   { label: "Access to the support team", requires: null },
   { label: "Merch store: sell with Stripe and keep every cent", requires: "pro" },
-  { label: "Cross-post to all your socials at once", requires: "pro" },
+  { label: "Cross-post to every social account you have", requires: "pro" },
+  { label: "Follower growth tracking across all your platforms", requires: "pro" },
   { label: "Your own domain, with no Ensemble branding", requires: "pro" },
   { label: "Daily traffic charts", requires: "pro" },
   // Enterprise leads with the relay. It is the one thing here nobody else
@@ -147,6 +166,7 @@ export const TIER_FEATURES: TierFeature[] = [
 ];
 
 export function planIncludes(plan: Plan, f: TierFeature): boolean {
+  if (f.supersededFrom && PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(f.supersededFrom)) return false;
   return !f.requires || PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(f.requires);
 }
 

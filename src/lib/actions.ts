@@ -1207,9 +1207,19 @@ export async function disconnectWebsite(): Promise<void> {
 
 export async function connectSocial(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
-  if (!getPlan(site.plan).social) return { error: "Social accounts are a Pro feature — upgrade in Settings." };
+  const plan = getPlan(site.plan);
+  if (!plan.social) return { error: "Social accounts aren't available on this plan." };
   const platform = getPlatform(str(fd, "platform"));
   if (!platform) return { error: "Unknown platform." };
+
+  // Reconnecting a platform that is already on the list is an update, not a
+  // new seat, so only genuinely new platforms count against the cap.
+  const connected = store.getSocialAccounts(site.id);
+  if (!connected.some((a) => a.platform === platform.id) && connected.length >= plan.maxSocialAccounts) {
+    return {
+      error: `${plan.name} connects ${plan.maxSocialAccounts} social accounts. Disconnect one, or upgrade in Settings to connect every platform.`,
+    };
+  }
 
   if (platform.authType === "bluesky") {
     const handle = cleanHandle(str(fd, "handle"));
@@ -1274,7 +1284,7 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
  */
 export async function addSocialStat(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
-  if (!getPlan(site.plan).social) return { error: "Growth tracking is a Pro feature — upgrade in Settings." };
+  if (!getPlan(site.plan).dailyAnalytics) return { error: "Growth tracking is a Pro feature — upgrade in Settings." };
   const platform = getPlatform(str(fd, "platform"));
   if (!platform) return { error: "Pick a platform." };
   const day = str(fd, "day");
