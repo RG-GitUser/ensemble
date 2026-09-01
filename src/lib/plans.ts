@@ -136,12 +136,32 @@ export function sectionsLabel(p: PlanDef): string {
   return p.maxSections === Infinity ? "Unlimited sections" : `Up to ${p.maxSections} sections`;
 }
 
+/**
+ * Where the section count sits in a plan's bullet list.
+ *
+ * A cap is a real limit and belongs up front, where someone comparing tiers
+ * will look for it. "Unlimited" is not why anyone buys the top tier, so there
+ * it drops to the end and the headline feature leads instead.
+ */
+function sectionsLead(p: PlanDef): boolean {
+  return p.maxSections !== Infinity;
+}
+
+/** Every bullet for a plan's pricing card, in the order they should read. */
+export function planBullets(plan: Plan): string[] {
+  const def = PLANS[plan];
+  const features = TIER_FEATURES.filter((f) => planIncludes(plan, f)).map((f) => f.label);
+  return sectionsLead(def) ? [sectionsLabel(def), ...features] : [...features, sectionsLabel(def)];
+}
+
 /** Compact per-plan lines ("Everything in X" + what this tier adds) for small cards. */
 export function planFeatureLines(plan: Plan): string[] {
   const idx = PLAN_ORDER.indexOf(plan);
+  const def = PLANS[plan];
   const lines = idx > 0 ? [`Everything in ${PLANS[PLAN_ORDER[idx - 1]].name}`] : [];
-  lines.push(sectionsLabel(PLANS[plan]));
+  if (sectionsLead(def)) lines.push(sectionsLabel(def));
   const addedHere = (f: TierFeature) => (f.requires ?? "basic") === plan;
   lines.push(...TIER_FEATURES.filter(addedHere).map((f) => f.label));
+  if (!sectionsLead(def)) lines.push(sectionsLabel(def));
   return lines;
 }

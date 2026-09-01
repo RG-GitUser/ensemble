@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { PLAN_ORDER, PLANS, TIER_FEATURES, planIncludes, sectionsLabel } from "@/lib/plans";
+import { PLAN_ORDER, PLANS, planBullets } from "@/lib/plans";
 import { Starfield } from "@/components/Starfield";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { WipOverlay, wipEnabled } from "@/components/WipOverlay";
@@ -227,6 +227,7 @@ export default async function Home() {
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {PLAN_ORDER.map((id) => {
             const p = PLANS[id];
+            const bullets = planBullets(id);
             return (
               <div
                 key={id}
@@ -244,14 +245,10 @@ export default async function Home() {
                 </div>
                 <p className="mt-2 text-sm text-mist">{p.blurb}</p>
                 <ul className="mt-6 flex-1 space-y-2.5 text-sm">
-                  <li className="flex items-start gap-2.5">
-                    <CheckIcon className="mt-0.5 w-3.5 shrink-0 text-good" />
-                    <span>{sectionsLabel(p)}</span>
-                  </li>
-                  {TIER_FEATURES.filter((f) => planIncludes(id, f)).map((f) => (
-                    <li key={f.label} className="flex items-start gap-2.5">
+                  {bullets.map((label) => (
+                    <li key={label} className="flex items-start gap-2.5">
                       <CheckIcon className="mt-0.5 w-3.5 shrink-0 text-good" />
-                      <span>{f.label}</span>
+                      <span>{label}</span>
                     </li>
                   ))}
                 </ul>
