@@ -448,6 +448,11 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
                 heading: s.content.heading ?? "",
                 sub: s.content.subheading ?? s.content.body ?? "",
                 items: rows.map((r: string[]) => r[0] ?? "").filter(Boolean),
+                sectionMarker: s.content.sectionMarker ?? DEFAULT_MARKER,
+                sectionBulletShape: s.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE,
+                markerMode: s.content.markerMode ?? DEFAULT_MARKER,
+                bulletShape: s.content.bulletShape ?? DEFAULT_BULLET_SHAPE,
+                textScale: s.content.textScale ?? DEFAULT_TEXT_SIZE_ID,
               };
             })}
             sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}

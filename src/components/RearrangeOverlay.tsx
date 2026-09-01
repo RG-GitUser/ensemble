@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { reorderSectionsAction } from "@/lib/actions";
+import { reorderSectionsAction, saveSectionStylesAction } from "@/lib/actions";
 import { getTemplate } from "@/lib/sections";
+import { TEXT_SIZES } from "@/lib/fonts";
+import { BULLET_SHAPES, MARKER_MODES } from "@/lib/theme";
 
 export interface RearrangeSection {
   id: number;
@@ -13,8 +15,68 @@ export interface RearrangeSection {
   sub: string;
   /** First few row labels for the list-shaped sections (links, merch, bonus). */
   items: string[];
+  /** Everything the style rail edits, so a block can be restyled in place. */
+  sectionMarker: string;
+  sectionBulletShape: string;
+  markerMode: string;
+  bulletShape: string;
+  textScale: string;
 }
 
+
+/** Section types whose content is a list, so row markers have rows to mark. */
+const LIST_TYPES = new Set(["bonus", "links"]);
+
+/**
+ * One setting in the rail: the options, and an "all" that applies the current
+ * choice to every section.
+ *
+ * "Apply to all" only makes sense when you can see all of them, which is the
+ * argument for putting these here rather than in a dropdown on a form. It
+ * writes the value you just picked, so the sequence is always pick, then
+ * spread — never spread something you have not looked at.
+ */
+function RailGroup({
+  label,
+  options,
+  value,
+  onPick,
+}: {
+  label: string;
+  options: Array<{ id: string; label: string }>;
+  value: string;
+  onPick: (value: string, all: boolean) => void;
+}) {
+  return (
+    <div className="mt-4 border-t border-edge pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-mist">{label}</span>
+        <button
+          type="button"
+          onClick={() => onPick(value, true)}
+          className="text-[10px] font-semibold text-brand hover:underline"
+        >
+          Apply to all
+        </button>
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            aria-pressed={value === o.id}
+            onClick={() => onPick(o.id, false)}
+            className={`border px-2 py-1 text-[11px] font-medium transition ${
+              value === o.id ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** A faint block standing in for a picture, a player or a field. */
 function Fill({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
@@ -196,6 +258,17 @@ export function RearrangeOverlay({
   const [order, setOrder] = useState<RearrangeSection[]>(sections);
   const [dragId, setDragId] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
+  // Which block the rail is editing. Null means the rail is closed, which is
+  // also the state you land in, so the canvas is the first thing you see.
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selected = order.find((s) => s.id === selectedId) ?? null;
+
+  /** Change one field on the selected section, or on every section. */
+  function setField(field: keyof RearrangeSection, value: string, all = false) {
+    setOrder((prev) =>
+      prev.map((s) => (all || s.id === selectedId ? { ...s, [field]: value } : s))
+    );
+  }
 
   // Escape closes, which is the shortcut people try first on anything modal.
   useEffect(() => {
@@ -248,11 +321,37 @@ export function RearrangeOverlay({
     });
   }
 
-  const dirty = order.some((s, i) => s.id !== sections[i]?.id);
+  const reordered = order.some((s, i) => s.id !== sections[i]?.id);
+  const restyled = order.some((s) => {
+    const was = sections.find((o) => o.id === s.id);
+    return (
+      !was ||
+      was.sectionMarker !== s.sectionMarker ||
+      was.sectionBulletShape !== s.sectionBulletShape ||
+      was.markerMode !== s.markerMode ||
+      was.bulletShape !== s.bulletShape ||
+      was.textScale !== s.textScale
+    );
+  });
+  const dirty = reordered || restyled;
 
   function save() {
     startTransition(async () => {
-      await reorderSectionsAction(order.map((s) => s.id));
+      // Styles first: reordering revalidates the page, so writing styles after
+      // it would show a page that is one save behind.
+      if (restyled) {
+        await saveSectionStylesAction(
+          order.map((s) => ({
+            id: s.id,
+            sectionMarker: s.sectionMarker,
+            sectionBulletShape: s.sectionBulletShape,
+            markerMode: s.markerMode,
+            bulletShape: s.bulletShape,
+            textScale: s.textScale,
+          }))
+        );
+      }
+      if (reordered) await reorderSectionsAction(order.map((s) => s.id));
       onClose();
     });
   }
@@ -285,6 +384,7 @@ export function RearrangeOverlay({
           </div>
         </header>
 
+        <div className="flex min-h-0 flex-1">
         <div className="flex-1 overflow-y-auto p-6" style={{ background: pageBg }}>
           <div className={`mx-auto grid max-w-3xl gap-3 ${twoUp ? "sm:grid-cols-2" : "grid-cols-1"}`}>
             {order.map((s, i) => {
@@ -298,9 +398,14 @@ export function RearrangeOverlay({
                   onDragEnd={() => setDragId(null)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => dropOn(s.id)}
+                  onClick={() => setSelectedId(s.id)}
                   style={{ ...cardStyle, color: ink }}
                   className={`group relative cursor-grab p-5 transition active:cursor-grabbing ${
-                    dragId === s.id ? "opacity-50 ring-2 ring-brand" : "hover:ring-2 hover:ring-brand/50"
+                    dragId === s.id
+                      ? "opacity-50 ring-2 ring-brand"
+                      : selectedId === s.id
+                        ? "ring-2 ring-brand"
+                        : "hover:ring-2 hover:ring-brand/50"
                   } ${full ? "sm:col-span-2" : ""}`}
                 >
                   {/* The section drawn in the shape it actually takes on the
@@ -339,6 +444,67 @@ export function RearrangeOverlay({
               Nothing to arrange yet. Add a section in the Sections tab first.
             </p>
           )}
+        </div>
+
+        {selected && (
+          <aside className="w-72 shrink-0 overflow-y-auto border-l border-edge bg-panel p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{selected.heading || getTemplate(selected.type)?.name}</p>
+                <p className="text-[11px] text-mist">{getTemplate(selected.type)?.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                aria-label="Close styles"
+                className="shrink-0 border border-edge px-2 py-0.5 text-xs text-mist hover:text-snow"
+              >
+                ✕
+              </button>
+            </div>
+
+            <RailGroup
+              label="Section accent"
+              options={MARKER_MODES.map((m) => ({ id: m.id, label: m.label }))}
+              value={selected.sectionMarker}
+              onPick={(v, all) => setField("sectionMarker", v, all)}
+            />
+            {selected.sectionMarker === "bullet" && (
+              <RailGroup
+                label="Accent shape"
+                options={BULLET_SHAPES.map((b) => ({ id: b.id, label: b.label }))}
+                value={selected.sectionBulletShape}
+                onPick={(v, all) => setField("sectionBulletShape", v, all)}
+              />
+            )}
+
+            {LIST_TYPES.has(selected.type) && (
+              <>
+                <RailGroup
+                  label="Row markers"
+                  options={MARKER_MODES.map((m) => ({ id: m.id, label: m.label }))}
+                  value={selected.markerMode}
+                  onPick={(v, all) => setField("markerMode", v, all)}
+                />
+                {selected.markerMode === "bullet" && (
+                  <RailGroup
+                    label="Row shape"
+                    options={BULLET_SHAPES.map((b) => ({ id: b.id, label: b.label }))}
+                    value={selected.bulletShape}
+                    onPick={(v, all) => setField("bulletShape", v, all)}
+                  />
+                )}
+              </>
+            )}
+
+            <RailGroup
+              label="Text size"
+              options={TEXT_SIZES.map((t) => ({ id: t.id, label: t.label }))}
+              value={selected.textScale}
+              onPick={(v, all) => setField("textScale", v, all)}
+            />
+          </aside>
+        )}
         </div>
       </div>
     </div>

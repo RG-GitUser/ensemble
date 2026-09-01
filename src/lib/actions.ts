@@ -410,6 +410,41 @@ export async function moveSectionAction(fd: FormData): Promise<void> {
  * no duplicates. Anything else is a malformed or hostile payload and is
  * dropped rather than partially applied.
  */
+export interface SectionStylePatch {
+  id: number;
+  sectionMarker: string;
+  sectionBulletShape: string;
+  markerMode: string;
+  bulletShape: string;
+  textScale: string;
+}
+
+/**
+ * Save the style rail's changes for several sections at once.
+ *
+ * Every value goes through the same lookup the section form uses, so a
+ * tampered payload writes a known id or nothing. Ids are checked against the
+ * site's own sections, so one creator cannot restyle another's page.
+ */
+export async function saveSectionStylesAction(patches: SectionStylePatch[]): Promise<void> {
+  const { site } = await requireSite();
+  if (!Array.isArray(patches)) return;
+  const own = new Set(store.getSections(site.id).map((s) => s.id));
+
+  for (const p of patches) {
+    const id = Number(p?.id);
+    if (!Number.isInteger(id) || !own.has(id)) continue;
+    store.patchSectionContent(id, {
+      sectionMarker: getMarkerMode(p.sectionMarker)?.id ?? DEFAULT_MARKER,
+      sectionBulletShape: getBulletShape(p.sectionBulletShape)?.id ?? DEFAULT_BULLET_SHAPE,
+      markerMode: getMarkerMode(p.markerMode)?.id ?? DEFAULT_MARKER,
+      bulletShape: getBulletShape(p.bulletShape)?.id ?? DEFAULT_BULLET_SHAPE,
+      textScale: getTextSize(p.textScale)?.id ?? DEFAULT_TEXT_SIZE_ID,
+    });
+  }
+  revalidateSite(site);
+}
+
 export async function reorderSectionsAction(orderedIds: number[]): Promise<void> {
   const { site } = await requireSite();
   if (!Array.isArray(orderedIds)) return;

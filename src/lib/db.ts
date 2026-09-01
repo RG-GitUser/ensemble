@@ -1019,6 +1019,23 @@ export function updateSectionContent(id: number, content: Record<string, string>
   db().prepare("UPDATE sections SET content = ? WHERE id = ?").run(JSON.stringify(content), id);
 }
 
+/**
+ * Merge a few keys into a section's content, leaving the rest alone.
+ *
+ * The style rail writes markers and sizes without knowing anything about the
+ * creator's words, so it must not hand back a whole content object — that is
+ * how an editor open in another tab loses a heading.
+ */
+export function patchSectionContent(id: number, patch: Record<string, string>): void {
+  const row = db().prepare("SELECT content FROM sections WHERE id = ?").get(id) as { content: string } | undefined;
+  if (!row) return;
+  let current: Record<string, string> = {};
+  try {
+    current = JSON.parse(row.content) as Record<string, string>;
+  } catch {}
+  db().prepare("UPDATE sections SET content = ? WHERE id = ?").run(JSON.stringify({ ...current, ...patch }), id);
+}
+
 export function deleteSection(id: number): void {
   db().prepare("DELETE FROM sections WHERE id = ?").run(id);
 }
