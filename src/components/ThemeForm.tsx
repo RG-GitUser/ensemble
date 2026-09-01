@@ -495,7 +495,7 @@ function PreviewSections({
   const Card = ({ title, sub, style }: { title: string; sub: string; style?: React.CSSProperties }) => (
     <div className="rounded-xl p-3" style={{ minHeight: floor, ...cardStyle, ...style }}>
       <p className="text-[0.85em] font-semibold leading-snug">{title}</p>
-      <p className="mt-0.5 text-[0.72em] leading-snug opacity-70">{sub}</p>
+      {sub && <p className="mt-0.5 text-[0.72em] leading-snug opacity-70">{sub}</p>}
     </div>
   );
 
@@ -545,17 +545,28 @@ function PreviewSections({
     // shape of it rather than the thing itself.
     return (
       <div className="mt-5" style={column}>
-        <div className="grid" style={{ gap, gridTemplateColumns: "26% 1fr" }}>
-          <div className="flex flex-col items-center gap-1.5 py-2">
-            <div className="h-9 w-9 rounded-full" style={{ background: "currentColor", opacity: 0.32 }} />
-            <p className="text-[0.8em] font-bold leading-none">Your name</p>
-            <p className="text-[0.68em] leading-none opacity-60">@handle</p>
+        <div className="grid items-start" style={{ gap, gridTemplateColumns: "31% 1fr" }}>
+          <div className="flex flex-col items-center gap-1 py-1">
+            <div className="h-11 w-11 rounded-full" style={{ background: "currentColor", opacity: 0.32 }} />
+            <p className="whitespace-nowrap text-[0.78em] font-bold leading-tight">Your name</p>
+            <p className="whitespace-nowrap text-[0.66em] leading-tight opacity-60">@handle</p>
+            <div className="mt-0.5 flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "currentColor", opacity: 0.32 }}
+                />
+              ))}
+            </div>
           </div>
+          {/* Titles only. At this width a second line wraps on every card and
+              the grid stops reading as a grid, which is the whole point. */}
           <div className="grid grid-cols-2" style={{ gap }}>
-            <Card title="Bonus" sub="Early access" />
-            <Card title="Merch" sub="Sell direct" />
-            <Card title="About" sub="Your story" />
-            <Card title="Links" sub="Find me" />
+            <Card title="Bonus" sub="" />
+            <Card title="Merch" sub="" />
+            <Card title="About" sub="" />
+            <Card title="Links" sub="" />
           </div>
         </div>
         <Card title="Footer" sub="Full width, it closes the page" />
