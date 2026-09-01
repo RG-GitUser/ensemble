@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useActionState } from "react";
 import { addSocialStat, removeSocialStat, type FormState } from "@/lib/actions";
-import { formatCount, getPlatform, iconFill, PLATFORMS, type PlatformDef } from "@/lib/social";
+import { DEFAULT_METRIC, formatCount, getMetric, getPlatform, iconFill, METRICS, PLATFORMS, type PlatformDef } from "@/lib/social";
 import type { SocialAccount, SocialStat } from "@/lib/types";
 
 function PlatformIcon({ platform, size = 16 }: { platform: PlatformDef; size?: number }) {
@@ -109,6 +109,15 @@ function AddForm({ accounts, defaultPlatform }: { accounts: SocialAccount[]; def
             </option>
           ))}
         </select>
+        {/* Which number this is. Followers first, because it is the one
+            everybody tracks and what every reading used to be. */}
+        <select name="metric" defaultValue={DEFAULT_METRIC} className="field w-auto !py-2 text-sm">
+          {METRICS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
         <input name="day" type="date" defaultValue={today} max={today} required className="field w-auto !py-2 text-sm" />
         <input name="count" required className="field w-28 flex-1 !py-2 text-sm" placeholder="10k / 10,000" />
         <input name="note" maxLength={200} className="field flex-[2] !py-2 text-sm" placeholder="Details (optional) — collab, viral post…" />
@@ -136,8 +145,15 @@ export function SocialGrowth({ accounts, stats }: { accounts: SocialAccount[]; s
   // Platforms with data, keeping PLATFORMS' popularity order for the chips.
   const tracked = PLATFORMS.filter((p) => stats.some((s) => s.platform === p.id));
   const [sel, setSel] = useState<string | null>(null);
+  // Which number is on the chart. A platform's follower line and its view line
+  // are different scales entirely, so they are never drawn together.
+  const [metricSel, setMetricSel] = useState<string>(DEFAULT_METRIC);
   const selected = (sel && tracked.find((p) => p.id === sel)) || tracked[0] || null;
-  const series = selected ? stats.filter((s) => s.platform === selected.id) : [];
+  // Metrics this platform actually has readings for, so the chips never offer
+  // an empty chart.
+  const metricsHere = METRICS.filter((m) => stats.some((s) => s.platform === selected?.id && s.metric === m.id));
+  const metric = metricsHere.find((m) => m.id === metricSel) ?? metricsHere[0] ?? null;
+  const series = selected && metric ? stats.filter((s) => s.platform === selected.id && s.metric === metric.id) : [];
   const latest = series[series.length - 1];
   const previous = series[series.length - 2];
 
@@ -175,7 +191,9 @@ export function SocialGrowth({ accounts, stats }: { accounts: SocialAccount[]; s
           <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <p className="text-2xl font-bold">
               {exact(latest.count)}
-              <span className="ml-2 text-sm font-normal text-mist">followers on {selected.name}</span>
+              <span className="ml-2 text-sm font-normal text-mist">
+                {metric?.unit ?? "followers"} on {selected.name}
+              </span>
             </p>
             {previous && (
               <p className="text-sm">
@@ -184,6 +202,23 @@ export function SocialGrowth({ accounts, stats }: { accounts: SocialAccount[]; s
               </p>
             )}
           </div>
+          {metricsHere.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {metricsHere.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={metric?.id === m.id}
+                  onClick={() => setMetricSel(m.id)}
+                  className={`border px-2.5 py-1 text-xs font-semibold transition ${
+                    metric?.id === m.id ? `border-brand bg-brand/10 ${m.tone}` : "border-edge text-mist hover:border-brand/60"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
           <Sparkline stats={series} />
           <ul className="mt-3 divide-y divide-edge text-sm">
             {[...series].reverse().map((s, i, arr) => {

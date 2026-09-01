@@ -342,6 +342,8 @@ export interface SocialStat {
   id: number;
   siteId: number;
   platform: string;
+  /** Which number this is — a METRICS id from lib/social.ts. */
+  metric: string;
   /** The date the count was observed, "YYYY-MM-DD". */
   day: string;
   count: number;

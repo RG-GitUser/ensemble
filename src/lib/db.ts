@@ -192,13 +192,15 @@ function createDb(): Database.Database {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
       platform TEXT NOT NULL,
+      -- Which number this is: followers, likes, views, shares, subscribers.
+      metric TEXT NOT NULL DEFAULT 'followers',
       -- The date the count was true, not the date it was typed in: growth
       -- tracking is exactly the case where people backfill old milestones.
       day TEXT NOT NULL,
       count INTEGER NOT NULL,
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE (site_id, platform, day)
+      UNIQUE (site_id, platform, metric, day)
     );
     -- One dated follower reading per platform. Shaped like page_views: the
     -- day is the key, not a timestamp, because "how many followers did I have
@@ -222,6 +224,31 @@ function createDb(): Database.Database {
   if (!saCols.has("refresh_token")) db.exec("ALTER TABLE social_accounts ADD COLUMN refresh_token TEXT NOT NULL DEFAULT ''");
   if (!saCols.has("expires_at")) db.exec("ALTER TABLE social_accounts ADD COLUMN expires_at TEXT");
   if (!saCols.has("external_id")) db.exec("ALTER TABLE social_accounts ADD COLUMN external_id TEXT NOT NULL DEFAULT ''");
+  // social_stats gained a metric, and its old UNIQUE(site_id, platform, day)
+  // would then allow only one metric per platform per day. SQLite cannot alter
+  // a constraint, so the table is rebuilt once. Every existing row carries in
+  // as a follower reading, which is what all of them were.
+  const ssCols = new Set((db.prepare("PRAGMA table_info(social_stats)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!ssCols.has("metric")) {
+    db.exec(`
+      CREATE TABLE social_stats_rebuilt (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+        platform TEXT NOT NULL,
+        metric TEXT NOT NULL DEFAULT 'followers',
+        day TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (site_id, platform, metric, day)
+      );
+      INSERT INTO social_stats_rebuilt (id, site_id, platform, metric, day, count, note, created_at)
+        SELECT id, site_id, platform, 'followers', day, count, note, created_at FROM social_stats;
+      DROP TABLE social_stats;
+      ALTER TABLE social_stats_rebuilt RENAME TO social_stats;
+    `);
+  }
+
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
   // Domain ownership verification arrived after custom_domains shipped.
@@ -1622,6 +1649,7 @@ interface SocialStatRow {
   id: number;
   site_id: number;
   platform: string;
+  metric: string;
   day: string;
   count: number;
   note: string;
@@ -1629,7 +1657,8 @@ interface SocialStatRow {
 }
 
 function toSocialStat(r: SocialStatRow): SocialStat {
-  return { id: r.id, siteId: r.site_id, platform: r.platform, day: r.day, count: r.count, note: r.note, createdAt: r.created_at };
+  return { id: r.id, siteId: r.site_id, platform: r.platform,
+    metric: r.metric, day: r.day, count: r.count, note: r.note, createdAt: r.created_at };
 }
 
 /** All recorded counts for a site, oldest first (chart and delta order). */
@@ -1645,13 +1674,20 @@ export function getSocialStats(siteId: number): SocialStat[] {
  * date overwrites the first — re-typing a date is how a typo gets corrected,
  * and two competing counts for the same day would mean nothing anyway.
  */
-export function upsertSocialStat(siteId: number, platform: string, day: string, count: number, note: string): void {
+export function upsertSocialStat(
+  siteId: number,
+  platform: string,
+  metric: string,
+  day: string,
+  count: number,
+  note: string
+): void {
   db()
     .prepare(
-      `INSERT INTO social_stats (site_id, platform, day, count, note) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(site_id, platform, day) DO UPDATE SET count = excluded.count, note = excluded.note`
+      `INSERT INTO social_stats (site_id, platform, metric, day, count, note) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(site_id, platform, metric, day) DO UPDATE SET count = excluded.count, note = excluded.note`
     )
-    .run(siteId, platform, day, count, note);
+    .run(siteId, platform, metric, day, count, note);
 }
 
 /** The site_id guard makes ownership part of the delete itself. */
@@ -1794,4 +1830,40 @@ export function getSocialPosts(siteId: number, limit = 20): SocialPost[] {
       .filter((t) => t.post_id === p.id)
       .map((t) => ({ platform: t.platform, status: t.status as SocialPost["targets"][number]["status"], detail: t.detail })),
   }));
+}
+
+export interface LatestStat {
+  platform: string;
+  metric: string;
+  day: string;
+  count: number;
+  /** The reading before this one, for a change figure. Null when it is the first. */
+  previous: number | null;
+}
+
+/**
+ * The most recent reading for every platform-and-metric pair, with the one
+ * before it.
+ *
+ * Grouped here rather than in SQL: readings are sparse and few, a window
+ * function would need SQLite 3.25 features this file otherwise avoids, and the
+ * result is the same handful of rows either way.
+ */
+export function getLatestSocialStats(siteId: number): LatestStat[] {
+  const rows = db()
+    .prepare("SELECT platform, metric, day, count FROM social_stats WHERE site_id = ? ORDER BY platform, metric, day DESC")
+    .all(siteId) as Array<{ platform: string; metric: string; day: string; count: number }>;
+
+  const out: LatestStat[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const key = `${r.platform}:${r.metric}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const next = rows[i + 1];
+    const previous = next && next.platform === r.platform && next.metric === r.metric ? next.count : null;
+    out.push({ platform: r.platform, metric: r.metric, day: r.day, count: r.count, previous });
+  }
+  return out;
 }

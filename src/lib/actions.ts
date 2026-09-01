@@ -15,7 +15,7 @@ import {
   starterContent,
 } from "./sections";
 import { getThemeDef } from "./themes";
-import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook, parseCount } from "./social";
+import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, DEFAULT_METRIC, getMetric, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
 import { mailEnabled, sendNewsletter } from "./mailer";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
@@ -1332,13 +1332,16 @@ export async function addSocialStat(_prev: FormState, fd: FormData): Promise<For
   if (!getPlan(site.plan).dailyAnalytics) return { error: "Growth tracking is a Pro feature — upgrade in Settings." };
   const platform = getPlatform(str(fd, "platform"));
   if (!platform) return { error: "Pick a platform." };
+  // Only known metric ids are stored, so the breakdown can group on them
+  // without guarding against whatever a tampered form sent.
+  const metric = getMetric(str(fd, "metric"))?.id ?? DEFAULT_METRIC;
   const day = str(fd, "day");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) return { error: "Pick the date the count was true." };
   const count = parseCount(str(fd, "count"));
   if (Number.isNaN(count)) return { error: "Enter the count as a number — 10000, 10,000, 10k and 1.2m all work." };
   const note = str(fd, "note").slice(0, 200);
-  store.upsertSocialStat(site.id, platform.id, day, count, note);
-  revalidatePath("/dashboard/socials");
+  store.upsertSocialStat(site.id, platform.id, metric, day, count, note);
+  revalidatePath("/dashboard/analytics");
   return { ok: true };
 }
 

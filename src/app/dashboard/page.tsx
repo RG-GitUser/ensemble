@@ -11,11 +11,13 @@ import {
   getSiteByUser,
   getUserPrefs,
   getSocialAccounts,
+  getLatestSocialStats,
   getSocialPosts,
   SITE_CONFIG_DEFAULTS,
 } from "@/lib/db";
 import { domainProgress } from "@/lib/domains";
 import { getPlan } from "@/lib/plans";
+import { DailyBreakdown } from "@/components/DailyBreakdown";
 import { resumeCheckout, togglePublish } from "@/lib/actions";
 import { SocialOverview } from "@/components/SocialOverview";
 import { isStarterContent } from "@/lib/sections";
@@ -171,6 +173,7 @@ export default async function DashboardPage({
     published: !!site?.published,
   });
   const lastSocialPost = site && plan?.social ? (getSocialPosts(site.id, 1)[0] ?? null) : null;
+  const latestStats = site && plan?.social ? getLatestSocialStats(site.id) : [];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -321,12 +324,7 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <div className="card !p-5">
-              <p className="text-xs font-medium uppercase tracking-wide text-mist">Plan</p>
-              <p className="mt-1.5 text-xl font-bold">{plan.name}</p>
-              <p className="text-sm text-mist">${plan.price}/month</p>
-            </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="card !p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-mist">Sections</p>
               <p className="mt-1.5 text-xl font-bold">
@@ -343,6 +341,8 @@ export default async function DashboardPage({
               <p className="text-sm text-mist">{plan.newsletter ? "newsletter signups" : "Enterprise feature"}</p>
             </div>
           </div>
+
+          {plan.social && <DailyBreakdown stats={latestStats} />}
 
           <SocialOverview
             accounts={socialAccounts}

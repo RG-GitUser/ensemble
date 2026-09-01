@@ -150,3 +150,34 @@ export function cleanFacebookLiveUrl(raw: string): string {
     return "";
   }
 }
+
+/**
+ * The numbers a creator can log against a platform.
+ *
+ * Manual readings, not an API pull: none of the platforms hand these over
+ * without review, and a creator reading them off their own dashboard once a
+ * week is worth more than nothing. Followers is first because it is the one
+ * everybody tracks, and the one every existing row was.
+ */
+export interface MetricDef {
+  id: string;
+  label: string;
+  /** Singular noun for the tile, e.g. "12,400 followers". */
+  unit: string;
+  /** Tailwind text colour, so each metric reads apart at a glance. */
+  tone: string;
+}
+
+export const METRICS: MetricDef[] = [
+  { id: "followers", label: "Followers", unit: "followers", tone: "text-brand" },
+  { id: "likes", label: "Likes", unit: "likes", tone: "text-brand2" },
+  { id: "views", label: "Views", unit: "views", tone: "text-good" },
+  { id: "shares", label: "Shares", unit: "shares", tone: "text-warn" },
+  { id: "subscribers", label: "Subscribers", unit: "subscribers", tone: "text-brand" },
+];
+
+export const DEFAULT_METRIC = METRICS[0].id;
+
+export function getMetric(id: string | undefined | null): MetricDef | null {
+  return METRICS.find((m) => m.id === id) ?? null;
+}

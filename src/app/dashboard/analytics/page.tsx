@@ -10,12 +10,14 @@ import {
   getFollowerHistory,
   getSiteByUser,
   getSocialAccounts,
+  getSocialStats,
   getTopReferrers,
   getTotalViews,
 } from "@/lib/db";
 import { fetchStripeFinance, formatMoney, sampleFinance, type FinanceSummary } from "@/lib/finance";
 import { getPlan } from "@/lib/plans";
 import { LockedOverlay } from "@/components/LockedOverlay";
+import { SocialGrowth } from "@/components/SocialGrowth";
 import { CardIcon, LedgerIcon } from "@/components/icons";
 import { disconnectFinanceStripe } from "@/lib/actions";
 import { FinanceConnectForm } from "@/components/FinanceConnectForm";
@@ -314,6 +316,14 @@ export default async function AnalyticsPage({
         <div className="mt-6">{referrerCard}</div>
       ) : (
         <LockedOverlay plan="Enterprise" className="mt-6">{referrerCard}</LockedOverlay>
+      )}
+
+      {/* Numbers over time, which is what this tab is for. It used to sit in
+          Socials under the publishing tools it has nothing to do with. */}
+      {plan.social && (
+        <div className="mt-6">
+          <SocialGrowth accounts={getSocialAccounts(site.id)} stats={getSocialStats(site.id)} />
+        </div>
       )}
         </>
       )}

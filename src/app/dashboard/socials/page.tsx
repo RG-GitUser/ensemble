@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getSiteByUser, getSocialAccounts, getSocialPosts, getSocialStats } from "@/lib/db";
+import { getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialsPanel } from "@/components/SocialDashboard";
-import { SocialGrowth } from "@/components/SocialGrowth";
 
 export default async function SocialsPage() {
   const user = await requireUser();
@@ -13,12 +12,10 @@ export default async function SocialsPage() {
   const plan = getPlan(site.plan);
 
   const accounts = getSocialAccounts(site.id);
-  const panel = (
-    <>
-      <SocialsPanel accounts={accounts} posts={getSocialPosts(site.id)} />
-      <SocialGrowth accounts={accounts} stats={getSocialStats(site.id)} />
-    </>
-  );
+  // The growth tracker moved to Analytics. It is a record of numbers over
+  // time, which is what that tab is for; here it sat under the publishing
+  // tools it has nothing to do with.
+  const panel = <SocialsPanel accounts={accounts} posts={getSocialPosts(site.id)} />;
 
   return (
     <div className="mx-auto max-w-4xl">
