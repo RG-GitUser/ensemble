@@ -15,6 +15,147 @@ export interface RearrangeSection {
   items: string[];
 }
 
+
+/** A faint block standing in for a picture, a player or a field. */
+function Fill({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={className} style={{ background: "currentColor", opacity: 0.14, ...style }} />;
+}
+
+/**
+ * The shape each section actually takes on the page.
+ *
+ * A single generic card told you nothing about what you were moving, and every
+ * section looked alike. These mirror the real renderers in PublicSite: bonus
+ * stacks cards, merch is a grid of tiles, links stack full-width bars, video
+ * and live are 16:9 frames, chat is bubbles. Not the content pixel for pixel,
+ * but the silhouette, which is what you are actually arranging.
+ */
+function SectionShape({ s, radius }: { s: RearrangeSection; radius: string }) {
+  const r = { borderRadius: radius };
+  const rows = s.items.length ? s.items : ["", "", ""];
+
+  switch (s.type) {
+    case "hero":
+      return (
+        <div className="flex flex-col items-center gap-2 py-2 text-center">
+          <p className="text-lg font-extrabold leading-tight">{s.heading}</p>
+          {s.sub && <p className="line-clamp-2 text-[11px] opacity-70">{s.sub}</p>}
+          <Fill className="mt-1 h-6 w-28" style={r} />
+        </div>
+      );
+
+    case "video":
+    case "live":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          <Fill className="aspect-video w-full" style={r} />
+        </div>
+      );
+
+    case "merch":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {rows.slice(0, 3).map((label, i) => (
+              <div key={i} className="border border-current/25 p-1.5" style={r}>
+                <Fill className="mb-1 h-8 w-full" style={r} />
+                <p className="truncate text-[9px] opacity-70">{label || "Product"}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case "bonus":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          <div className="space-y-1.5">
+            {rows.slice(0, 3).map((label, i) => (
+              <div key={i} className="border border-current/25 px-2 py-1.5" style={r}>
+                <p className="truncate text-[10px] opacity-75">{label || "Drop"}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case "links":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          <div className="space-y-1.5">
+            {rows.slice(0, 3).map((label, i) => (
+              <div key={i} className="border border-current/40 px-2 py-1.5 text-center" style={r}>
+                <p className="truncate text-[10px] font-semibold">{label || "Link"}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case "newsletter":
+      return (
+        <div className="space-y-2 text-center">
+          <p className="text-sm font-bold">{s.heading}</p>
+          {s.sub && <p className="line-clamp-2 text-[11px] opacity-70">{s.sub}</p>}
+          <div className="flex gap-1.5 pt-1">
+            <Fill className="h-6 flex-1" style={r} />
+            <Fill className="h-6 w-14" style={{ ...r, opacity: 0.3 }} />
+          </div>
+        </div>
+      );
+
+    case "chatroom":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          <div className="space-y-1.5">
+            <Fill className="h-5 w-3/5" style={r} />
+            <Fill className="ml-auto h-5 w-2/5" style={r} />
+            <Fill className="h-5 w-1/2" style={r} />
+          </div>
+        </div>
+      );
+
+    case "calendar":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold">{s.heading}</p>
+          {s.sub && <p className="line-clamp-1 text-[11px] opacity-70">{s.sub}</p>}
+          <Fill className="h-16 w-full" style={r} />
+        </div>
+      );
+
+    case "contact":
+      return (
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="text-sm font-bold">{s.heading}</p>
+          {s.sub && <p className="line-clamp-2 text-[11px] opacity-70">{s.sub}</p>}
+          <Fill className="h-6 w-24" style={r} />
+        </div>
+      );
+
+    case "footer":
+      return (
+        <div className="space-y-1 text-center">
+          <p className="text-xs font-semibold opacity-80">{s.heading}</p>
+          {s.sub && <p className="line-clamp-1 text-[10px] opacity-55">{s.sub}</p>}
+        </div>
+      );
+
+    default:
+      return (
+        <div className="space-y-1.5">
+          <p className="text-sm font-bold">{s.heading}</p>
+          {s.sub && <p className="line-clamp-3 text-[11px] opacity-70">{s.sub}</p>}
+        </div>
+      );
+  }
+}
+
 /**
  * The pop-out rearranger: the page at a size you can actually think about.
  *
@@ -77,6 +218,10 @@ export function RearrangeOverlay({
 
   /** Two columns where the real page has two; one everywhere else. */
   const twoUp = layout === "side" || layout === "storefront";
+  // Inner pieces round at roughly half the container's radius, the same
+  // relationship the page keeps between a card and the button inside it.
+  const outer = Number.parseFloat(String(cardStyle.borderRadius ?? "0")) || 0;
+  const innerRadius = `${(outer / 2).toFixed(3)}rem`;
   const spans = (type: string) => type === "hero" || type === "footer";
 
   function move(id: number, delta: number) {
@@ -158,20 +303,10 @@ export function RearrangeOverlay({
                     dragId === s.id ? "opacity-50 ring-2 ring-brand" : "hover:ring-2 hover:ring-brand/50"
                   } ${full ? "sm:col-span-2" : ""}`}
                 >
-                  {/* The section's real content, at the size the page shows it,
-                      so what you are dragging is recognisably your own page and
-                      not a list of type names. */}
-                  <p className="truncate text-base font-bold">{s.heading || tpl?.name || s.type}</p>
-                  {s.sub && <p className="mt-1 line-clamp-2 text-xs opacity-70">{s.sub}</p>}
-                  {s.items.length > 0 && (
-                    <ul className="mt-2.5 space-y-1">
-                      {s.items.map((it, n) => (
-                        <li key={n} className="truncate border-t pt-1 text-xs opacity-70" style={{ borderColor: "currentColor" }}>
-                          {it}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {/* The section drawn in the shape it actually takes on the
+                      page, carrying the creator's own words, so what you drag
+                      is recognisably the thing you are moving. */}
+                  <SectionShape s={{ ...s, heading: s.heading || tpl?.name || s.type }} radius={innerRadius} />
                   <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider opacity-45">
                     {tpl?.name ?? s.type} · {full ? "full width" : `position ${i + 1}`}
                   </p>
