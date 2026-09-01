@@ -7,6 +7,7 @@ import { parseLines } from "@/lib/sections";
 import { fetchStripeFinance, formatMoney, type FinanceSummary } from "@/lib/finance";
 import { addSectionAction } from "@/lib/actions";
 import { ShopManager } from "@/components/ShopManager";
+import { UpgradeGate } from "@/components/UpgradeGate";
 
 /**
  * The Shop tab: one place to run the store.
@@ -23,6 +24,19 @@ export default async function ShopPage() {
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
   const plan = getPlan(site.plan);
+
+  // The merch section itself is Pro and up (sections.ts), and addSectionAction
+  // refuses it below that, so without this the page would offer a button that
+  // silently does nothing.
+  if (!plan.payments) {
+    return (
+      <UpgradeGate
+        title="Shop"
+        requiredPlan="Pro"
+        body="Sell merch straight from your page with Stripe payment links, and keep every cent. Pro also adds your own domain and one-click cross-posting to every social account."
+      />
+    );
+  }
 
   const merch = getSections(site.id).find((s) => s.type === "merch") ?? null;
   const products = merch ? parseLines(merch.content.items ?? "") : [];

@@ -6,7 +6,13 @@ export interface PlanDef {
   /** Monthly price in USD. */
   price: number;
   blurb: string;
-  /** Max sections a site on this plan may have. Infinity = unlimited. */
+  /**
+   * Max sections a site on this plan may have. Unlimited on every tier now:
+   * counting blocks is not what anyone is buying, and a cap punishes exactly
+   * the behaviour we want. Tiers differ by which section TYPES they unlock,
+   * which lives on each template's `requires` in sections.ts. Kept as a field
+   * so a future abuse guard has somewhere to go.
+   */
   maxSections: number;
   /** Stripe payment integrations (buy buttons / payment links on merch). */
   payments: boolean;
@@ -14,7 +20,7 @@ export interface PlanDef {
   calendar: boolean;
   /** Custom chatrooms for followers. */
   chatroom: boolean;
-  /** Newsletters / memberships (email capture). */
+  /** Newsletters / memberships (collect subscribers, then write to them). */
   newsletter: boolean;
   /** Help desk support. */
   helpdesk: boolean;
@@ -25,9 +31,9 @@ export interface PlanDef {
   /** Connect social accounts and cross-post from the dashboard. */
   social: boolean;
   /**
-   * Live players on the page, plus the on-air badge and the one-press
-   * announcement. Not simulcast: nothing here rebroadcasts a stream, and the
-   * relay that would needs a media server this project does not deploy.
+   * Live players and the on-air badge on the page, the one-press
+   * announcement, and the relay that pushes one incoming stream out to every
+   * platform the creator saved a key for. See live.ts and deploy/mediamtx.yml.
    */
   live: boolean;
   /** Daily view charts in Analytics. */
@@ -37,14 +43,18 @@ export interface PlanDef {
   highlight?: boolean;
 }
 
-// NOTE: Enterprise price is a placeholder — change it here and it updates everywhere.
+/**
+ * Each tier has one job a creator would recognise. Basic publishes, Pro sells
+ * and reaches, Enterprise broadcasts and hosts a community. Nobody is limited
+ * by how much page they build.
+ */
 export const PLANS: Record<Plan, PlanDef> = {
   basic: {
     id: "basic",
     name: "Basic",
     price: 25,
-    blurb: "Everything you need to get a page live today.",
-    maxSections: 6,
+    blurb: "Build the page your followers land on, as big as you like.",
+    maxSections: Infinity,
     payments: false,
     calendar: false,
     chatroom: false,
@@ -61,8 +71,8 @@ export const PLANS: Record<Plan, PlanDef> = {
     id: "pro",
     name: "Pro",
     price: 45,
-    blurb: "For creators with a growing, engaged audience.",
-    maxSections: 20,
+    blurb: "Start selling, and reach every platform without doing it twice.",
+    maxSections: Infinity,
     payments: true,
     calendar: false,
     chatroom: false,
@@ -80,7 +90,8 @@ export const PLANS: Record<Plan, PlanDef> = {
     id: "enterprise",
     name: "Enterprise",
     price: 65,
-    blurb: "For creators who go live — stream once and broadcast everywhere, with your community and newsletter along for the ride.",
+    blurb:
+      "For creators who go live. Stream once and broadcast everywhere, with your community and newsletter along for the ride.",
     maxSections: Infinity,
     payments: true,
     calendar: true,
@@ -105,8 +116,8 @@ export function getPlan(id: string | null | undefined): PlanDef {
 
 /**
  * The canonical feature list shown on pricing cards. A card lists only the
- * lines its plan includes, so `requires` here should mirror the capability
- * flags above.
+ * lines its plan includes, so `requires` here should mirror both the
+ * capability flags above and the section templates each tier unlocks.
  */
 export interface TierFeature {
   label: string;
@@ -115,53 +126,40 @@ export interface TierFeature {
 }
 
 export const TIER_FEATURES: TierFeature[] = [
-  { label: "Landing page builder", requires: null },
+  // Basic's lines name the section types every plan unlocks. Two generic
+  // bullets made the entry tier look empty when it is not.
+  { label: "Landing page builder, with as many sections as you want", requires: null },
+  { label: "Bonus content hub for your followers", requires: null },
+  { label: "Video, your story, and a link hub for every platform", requires: null },
+  { label: "Contact section so people can reach you", requires: null },
   { label: "Access to the support team", requires: null },
-  { label: "Stripe payment integrations — directly sell your products", requires: "pro" },
+  { label: "Merch store: sell with Stripe and keep every cent", requires: "pro" },
   { label: "Cross-post to all your socials at once", requires: "pro" },
+  { label: "Your own domain, with no Ensemble branding", requires: "pro" },
   { label: "Daily traffic charts", requires: "pro" },
-  { label: "Your own domain — no Ensemble branding", requires: "pro" },
-  { label: "Go live everywhere — stream once, we broadcast it to every platform", requires: "enterprise" },
-  { label: "Newsletters — collect subscribers, send to your whole list, export any time", requires: "enterprise" },
+  // Enterprise leads with the relay. It is the one thing here nobody else
+  // bundles at this price, and it is what the tier is actually sold on.
+  { label: "Go live everywhere. Stream once, we broadcast it to every platform", requires: "enterprise" },
+  { label: "Newsletters and memberships for your inner circle", requires: "enterprise" },
   { label: "Community chatroom for you and your followers", requires: "enterprise" },
-  { label: "3rd-party calendar integrations for booking", requires: "enterprise" },
-  { label: "Full analytics page", requires: "enterprise" },
+  { label: "Event calendar for bookings and meet-and-greets", requires: "enterprise" },
+  { label: "Full analytics, including where your traffic comes from", requires: "enterprise" },
 ];
 
 export function planIncludes(plan: Plan, f: TierFeature): boolean {
   return !f.requires || PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf(f.requires);
 }
 
-export function sectionsLabel(p: PlanDef): string {
-  return p.maxSections === Infinity ? "Unlimited sections" : `Up to ${p.maxSections} sections`;
-}
-
-/**
- * Where the section count sits in a plan's bullet list.
- *
- * A cap is a real limit and belongs up front, where someone comparing tiers
- * will look for it. "Unlimited" is not why anyone buys the top tier, so there
- * it drops to the end and the headline feature leads instead.
- */
-function sectionsLead(p: PlanDef): boolean {
-  return p.maxSections !== Infinity;
-}
-
 /** Every bullet for a plan's pricing card, in the order they should read. */
 export function planBullets(plan: Plan): string[] {
-  const def = PLANS[plan];
-  const features = TIER_FEATURES.filter((f) => planIncludes(plan, f)).map((f) => f.label);
-  return sectionsLead(def) ? [sectionsLabel(def), ...features] : [...features, sectionsLabel(def)];
+  return TIER_FEATURES.filter((f) => planIncludes(plan, f)).map((f) => f.label);
 }
 
 /** Compact per-plan lines ("Everything in X" + what this tier adds) for small cards. */
 export function planFeatureLines(plan: Plan): string[] {
   const idx = PLAN_ORDER.indexOf(plan);
-  const def = PLANS[plan];
   const lines = idx > 0 ? [`Everything in ${PLANS[PLAN_ORDER[idx - 1]].name}`] : [];
-  if (sectionsLead(def)) lines.push(sectionsLabel(def));
   const addedHere = (f: TierFeature) => (f.requires ?? "basic") === plan;
   lines.push(...TIER_FEATURES.filter(addedHere).map((f) => f.label));
-  if (!sectionsLead(def)) lines.push(sectionsLabel(def));
   return lines;
 }

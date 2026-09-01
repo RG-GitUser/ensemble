@@ -117,8 +117,8 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     type: "merch",
     name: "Merch Store",
-    description: "Showcase merchandise. On Pro & Enterprise, paste Stripe payment links to sell directly.",
-    requires: null,
+    description: "Showcase merchandise and paste Stripe payment links to sell it directly. You keep every cent.",
+    requires: "pro",
     fields: [
       { key: "heading", label: "Heading", kind: "text" },
       {
