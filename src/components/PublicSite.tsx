@@ -504,7 +504,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   const sectionNodes = sections.map((s, i) => {
     // A per-section theme renders the section inside a themed band.
     const containerTheme = themeCss(s.theme, cfg.themeColor);
-    const full = FULL_WIDTH_TYPES.has(s.type);
+    // The storefront's panel is already the page's header: it carries the
+    // portrait, the name and the links. A hero spanning the top would repeat
+    // all three and push every offer below the fold, so here it joins the grid
+    // like any other card and only the footer still spans.
+    const full = storefront ? s.type === "footer" : FULL_WIDTH_TYPES.has(s.type);
     // Staggered sides alternate across the sections that take part,
     // ignoring the full-width ones — counted here rather than in CSS,
     // where a hero mid-page would flip every section beneath it.

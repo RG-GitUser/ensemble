@@ -543,8 +543,12 @@ function PreviewSections({
     // The panel is drawn, not composed from the real one: at preview scale a
     // portrait and three lines of type would be unreadable, so this is the
     // shape of it rather than the thing itself.
+    // Storefront runs on a wider measure than the other layouts (72rem against
+    // site-w-lg's 48rem), so the preview takes the full column here. Drawing it
+    // at the narrow measure made it read as inset and off-centre against the
+    // hero above, which is the opposite of what the layout actually does.
     return (
-      <div className="mt-5" style={column}>
+      <div className="mt-5" style={{ ...column, width: "100%" }}>
         <div className="grid items-start" style={{ gap, gridTemplateColumns: "31% 1fr" }}>
           <div className="flex flex-col items-center gap-1 py-1">
             <div className="h-11 w-11 rounded-full" style={{ background: "currentColor", opacity: 0.32 }} />
