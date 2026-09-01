@@ -372,6 +372,32 @@ export function parseLines(value: string): string[][] {
 }
 
 /** Convert a YouTube/Vimeo watch URL into an embeddable player URL. */
+/**
+ * A booking link turned into something embeddable.
+ *
+ * Only hosts known to embed cleanly get an iframe. Anything else keeps the
+ * button: iframing an arbitrary URL a creator pasted is both a security
+ * question and, more often, a broken layout. Same shape as embedUrl below,
+ * which returns null for video hosts it doesn't recognise.
+ */
+export function calendarEmbedUrl(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:") return null;
+  const host = u.hostname.replace(/^www\./, "");
+  if (host === "calendly.com") {
+    u.searchParams.set("embed_type", "Inline");
+    u.searchParams.set("hide_gdpr_banner", "1");
+    return u.toString();
+  }
+  if (host === "cal.com" || host.endsWith(".cal.com")) return u.toString();
+  return null;
+}
+
 export function embedUrl(url: string): string | null {
   const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}`;

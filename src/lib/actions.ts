@@ -23,6 +23,7 @@ import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
 import { cleanHostname, platformHosts } from "./domains";
 import { isReservedSlug } from "./slugs";
+import { forwardSubscriber, getEmailProvider } from "./email-providers";
 import { clientIp, LIMITS, rateLimit } from "./ratelimit";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import {
@@ -1011,6 +1012,14 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   const config: SiteConfig = { ...site.config };
   if (plan.payments) config.stripeKey = str(fd, "stripeKey");
   if (plan.calendar) config.calendlyUrl = str(fd, "calendlyUrl");
+  // The creator's own email platform. Only known provider ids are stored, so a
+  // tampered form can't make the forwarder fetch somewhere of its choosing.
+  if (plan.newsletter) {
+    const providerRaw = str(fd, "emailProvider");
+    config.emailProvider = getEmailProvider(providerRaw) ? providerRaw : "";
+    config.emailApiKey = config.emailProvider ? str(fd, "emailApiKey") : "";
+    config.emailListId = config.emailProvider ? str(fd, "emailListId") : "";
+  }
   // Not read here any more. The chatroom switch lives on its own page, and
   // an absent checkbox reads as "off", so leaving this in would have turned
   // the chatroom off on every unrelated save from this form.
@@ -1433,6 +1442,17 @@ export async function createTicketAction(_prev: FormState, fd: FormData): Promis
 
 /* ---------------- public site ---------------- */
 
+/**
+ * Copy a new subscriber to the creator's own email platform, if they connected
+ * one. Deliberately not allowed to fail a signup: forwardSubscriber swallows
+ * its own errors, and this exists so both signup paths share one call.
+ */
+async function forwardLead(config: SiteConfig, email: string): Promise<void> {
+  if (!config.emailProvider || !config.emailApiKey) return;
+  await forwardSubscriber(config.emailProvider, config.emailApiKey, config.emailListId ?? "", email);
+}
+
+
 export async function subscribeAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const siteId = Number(str(fd, "siteId"));
   const email = str(fd, "email").toLowerCase();
@@ -1448,6 +1468,10 @@ export async function subscribeAction(_prev: FormState, fd: FormData): Promise<F
   if (!signupLimit.ok) return { error: "Too many signups from this connection. Try again in a few minutes." };
 
   store.addLead(siteId, email);
+  // Their list, not just ours. Awaited so a slow provider is visible in the
+  // logs rather than silently dropped, but its result never reaches the
+  // visitor: the signup already succeeded the moment addLead returned.
+  await forwardLead(site.config, email);
   return { ok: true };
 }
 

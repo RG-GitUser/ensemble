@@ -77,6 +77,9 @@ export default async function IntegrationsPage({
           newsletter={plan.newsletter}
           stripeKey={site.config.stripeKey ?? ""}
           calendlyUrl={site.config.calendlyUrl ?? ""}
+          emailProvider={site.config.emailProvider ?? ""}
+          emailApiKey={site.config.emailApiKey ?? ""}
+          emailListId={site.config.emailListId ?? ""}
           newsletterEnabled={site.config.newsletterEnabled ?? true}
         />
 

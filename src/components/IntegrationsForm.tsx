@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { updateIntegrations, type FormState } from "@/lib/actions";
+import { EMAIL_PROVIDERS, getEmailProvider } from "@/lib/email-providers";
 
 export function IntegrationsForm({
   payments,
@@ -10,6 +11,9 @@ export function IntegrationsForm({
   stripeKey,
   calendlyUrl,
   newsletterEnabled,
+  emailProvider,
+  emailApiKey,
+  emailListId,
 }: {
   payments: boolean;
   calendar: boolean;
@@ -17,8 +21,16 @@ export function IntegrationsForm({
   stripeKey: string;
   calendlyUrl: string;
   newsletterEnabled: boolean;
+  emailProvider: string;
+  emailApiKey: string;
+  emailListId: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(updateIntegrations, {});
+  // Which provider is picked decides what the two fields below are called and
+  // where to tell someone to find them, so it has to be live rather than a
+  // static label.
+  const [provider, setProvider] = useState(emailProvider);
+  const providerDef = getEmailProvider(provider);
   return (
     <form action={formAction} className="space-y-5">
       {payments && (
@@ -43,6 +55,63 @@ export function IntegrationsForm({
             Default calendar link used by Event Calendar sections when they don&apos;t set their own.
           </p>
           <input className="field mt-3" name="calendlyUrl" defaultValue={calendlyUrl} placeholder="https://calendly.com/you" />
+        </div>
+      )}
+      {newsletter && (
+        <div className="card">
+          <h2 className="font-bold">Your email platform</h2>
+          <p className="mt-1 text-sm text-mist">
+            Optional, and additive. Subscribers are always stored here and exportable as CSV. Connect the platform
+            you already run your list on and every new signup is copied across, so Ensemble grows your audience
+            where it already lives instead of holding it hostage.
+          </p>
+          <select
+            className="field mt-3"
+            name="emailProvider"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+          >
+            <option value="">Not connected</option>
+            {EMAIL_PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          {providerDef && (
+            <>
+              <label className="mt-3 block">
+                <span className="label">{providerDef.keyLabel}</span>
+                <input
+                  className="field font-mono text-sm"
+                  name="emailApiKey"
+                  defaultValue={emailApiKey}
+                  placeholder={providerDef.keyLabel}
+                />
+                <span className="mt-1 block text-xs text-mist/70">{providerDef.keyHint}</span>
+              </label>
+              {providerDef.listLabel && (
+                <label className="mt-3 block">
+                  <span className="label">{providerDef.listLabel}</span>
+                  <input
+                    className="field font-mono text-sm"
+                    name="emailListId"
+                    defaultValue={emailListId}
+                    placeholder={providerDef.listLabel}
+                  />
+                  <span className="mt-1 block text-xs text-mist/70">{providerDef.listHint}</span>
+                </label>
+              )}
+              <a
+                href={providerDef.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-block text-xs text-brand underline underline-offset-2"
+              >
+                {providerDef.name} docs ↗
+              </a>
+            </>
+          )}
         </div>
       )}
       {newsletter && (

@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
-import { embedUrl, parseLines } from "@/lib/sections";
+import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
 import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
@@ -189,11 +189,24 @@ function SectionView({
     case "calendar": {
       if (!plan.calendar) return null;
       const url = c.calendarUrl || site.config.calendlyUrl || "";
+      const bookingEmbed = url ? calendarEmbedUrl(url) : null;
       return (
         <section className="site-w-lg mx-auto px-6 site-pad text-center">
           <h2 className="text-[1.5em] font-bold">{c.heading}</h2>
           {c.body && <p className="mx-auto mt-3 max-w-md site-ink-soft">{c.body}</p>}
-          {url ? (
+          {bookingEmbed ? (
+            /* Booked in place rather than sent away. The height is generous
+               because Calendly's inline widget starts scrolling internally
+               below roughly 600px and hides the times, which is the one thing
+               this section exists to show. */
+            <iframe
+              src={bookingEmbed}
+              title={c.heading || "Book a time"}
+              loading="lazy"
+              className="mt-6 w-full site-round-2xl border-0"
+              style={{ height: "660px", background: "#fff", colorScheme: "light" }}
+            />
+          ) : url ? (
             <div className="site-btn-row mt-6">
               <a
                 href={url}

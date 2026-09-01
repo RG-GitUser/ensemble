@@ -72,6 +72,15 @@ export interface SiteConfig {
   /** QuickBooks company shown as connected on the Finance tab. */
   quickbooksCompany?: string;
   calendlyUrl?: string;
+  /**
+   * The creator's own email platform (EMAIL_PROVIDERS in lib/email-providers).
+   * Signups are still stored locally; this forwards a copy to the list they
+   * already run, so Ensemble adds to their audience rather than fencing it.
+   */
+  emailProvider?: string;
+  emailApiKey?: string;
+  /** List, form or publication id, depending on the provider. */
+  emailListId?: string;
   chatroomEnabled?: boolean;
   newsletterEnabled?: boolean;
   /** Live stream sources shown by the Live Streams section. */

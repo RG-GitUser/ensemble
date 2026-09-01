@@ -1,5 +1,6 @@
 import { addLead, getSiteByToken } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
+import { forwardSubscriber } from "@/lib/email-providers";
 import { ipFromHeaders, LIMITS, rateLimit } from "@/lib/ratelimit";
 
 const CORS = {
@@ -45,5 +46,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   }
 
   addLead(site.id, email);
+  // Same forward as the hosted page's signup: someone subscribing through the
+  // embed on the creator's own site belongs on the creator's own list too.
+  const cfg = site.config;
+  if (cfg.emailProvider && cfg.emailApiKey) {
+    await forwardSubscriber(cfg.emailProvider, cfg.emailApiKey, cfg.emailListId ?? "", email);
+  }
   return Response.json({ ok: true }, { headers: CORS });
 }
