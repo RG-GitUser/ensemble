@@ -45,6 +45,8 @@ import {
   DEFAULT_LIGHT_CARD,
   getBorderStyle,
   getColorMode,
+  DEFAULT_FRAME,
+  getFrame,
   getLayout,
   LIGHT_BACKGROUNDS,
   LIGHT_CONTAINERS,
@@ -624,7 +626,7 @@ const FAVICON_TYPES: Record<string, string> = {
 };
 const FAVICON_MAX_BYTES = 512 * 1024;
 
-function storeThemeAsset(siteId: number, kind: "bg" | "card" | "icon", data: Buffer, ext: string): string {
+function storeThemeAsset(siteId: number, kind: "bg" | "card" | "icon" | "profile", data: Buffer, ext: string): string {
   const dir = path.join(process.cwd(), "data", "uploads");
   fs.mkdirSync(dir, { recursive: true });
   const name = `theme-${siteId}-${kind}-${Date.now()}.${ext}`;
@@ -633,7 +635,7 @@ function storeThemeAsset(siteId: number, kind: "bg" | "card" | "icon", data: Buf
 }
 
 /** Uploaded theme image → stored URL, or a form error string. */
-async function themeImageFrom(fd: FormData, field: string, siteId: number, kind: "bg" | "card"): Promise<string | { error: string } | null> {
+async function themeImageFrom(fd: FormData, field: string, siteId: number, kind: "bg" | "card" | "profile"): Promise<string | { error: string } | null> {
   const file = fd.get(field);
   if (!(file instanceof File) || file.size === 0) return null;
   const ext = THEME_IMAGE_TYPES[file.type];
@@ -788,6 +790,12 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     // Light/dark. The mode is one of three known ids; the light palette goes
     // through the same pickColor gate as the dark one, against the light
     // swatch lists.
+    // Storefront profile panel. The frame is an id from a fixed list; the two
+    // lines under the name are trimmed short because they sit in a narrow
+    // column and a long one would wrap into the portrait.
+    profileFrame: getFrame(str(fd, "profileFrame")) ? str(fd, "profileFrame") : DEFAULT_FRAME,
+    profileHandle: str(fd, "profileHandle").slice(0, 40),
+    profileLocation: str(fd, "profileLocation").slice(0, 60),
     colorMode: getColorMode(str(fd, "colorMode")),
     lightThemeId: getThemeDef(str(fd, "lightThemeId")) ? str(fd, "lightThemeId") : "",
     lightBgColor: pickColor(LIGHT_BACKGROUNDS, str(fd, "lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
@@ -821,6 +829,16 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     delete config.cardImage;
   }
 
+
+  // The storefront portrait follows the same rules as the other uploads: a
+  // new file wins, an explicit remove clears it, and otherwise it stays.
+  const portraitUpload = await themeImageFrom(fd, "profileImageFile", site.id, "profile");
+  if (portraitUpload && typeof portraitUpload === "object") return portraitUpload;
+  if (portraitUpload) {
+    config.profileImage = portraitUpload;
+  } else if (str(fd, "clearProfileImage") === "1") {
+    delete config.profileImage;
+  }
   const iconUpload = await faviconFrom(fd, site.id);
   if (iconUpload && typeof iconUpload === "object") return iconUpload;
   if (iconUpload) {

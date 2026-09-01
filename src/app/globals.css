@@ -580,3 +580,122 @@ a.site-card:hover {
 .label {
   @apply mb-1.5 block text-sm font-medium text-mist;
 }
+
+/**
+ * Storefront: a pinned profile column beside a grid of offers.
+ *
+ * The panel sticks while the offers scroll past it, which is the point of the
+ * shape — the portrait and the links stay on screen the whole time someone is
+ * browsing. That needs the sections in their own column wrapper rather than as
+ * siblings of the panel: a sticky element only travels within its containing
+ * block, and a one-row grid cell gives it nowhere to go.
+ *
+ * Below the breakpoint the panel unpins and stacks on top, because a sticky
+ * column on a phone is just a header that will not leave.
+ */
+.site-layout-storefront {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  gap: calc(2rem * var(--site-rhythm, 1));
+  align-items: start;
+}
+
+.site-storefront-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(1.5rem * var(--site-rhythm, 1));
+  align-items: start;
+}
+/* A card in one of these columns is a container, not a viewport, so its own
+   grids size against the room they actually have. Same reasoning as the other
+   multi-column layouts above. */
+.site-storefront-main > .site-section {
+  container-type: inline-size;
+}
+/* The hero and the footer still take the full width of the offer column. */
+.site-storefront-main > .site-full {
+  grid-column: 1 / -1;
+}
+
+.site-profile {
+  position: sticky;
+  top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  padding: 1.5rem 1rem;
+}
+
+@media (max-width: 900px) {
+  .site-layout-storefront { grid-template-columns: minmax(0, 1fr); }
+  .site-profile { position: static; }
+}
+@media (max-width: 640px) {
+  .site-storefront-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+.site-profile-name {
+  font-size: 1.9em;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.site-profile-handle { font-size: 0.95em; opacity: 0.7; }
+.site-profile-where { font-size: 0.85em; opacity: 0.55; }
+
+.site-profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.site-profile-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: calc(0.6rem * var(--site-round, 1));
+  border: 1px solid currentColor;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.site-profile-links a:hover { opacity: 1; transform: translateY(-1px); }
+
+/**
+ * The portrait and its frame (FRAMES in lib/theme.ts).
+ *
+ * The ring is the wrapper's background with the photo inset by padding, not a
+ * border on the image. A border would sit inside the circle and eat into the
+ * photo; this way the band is its own ring and the picture keeps every pixel.
+ */
+.site-portrait {
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.site-portrait img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.site-frame-ring {
+  padding: 5px;
+  background: var(--site-accent, currentColor);
+}
+.site-frame-gradient {
+  padding: 5px;
+  background: linear-gradient(145deg, var(--site-accent, currentColor), transparent 85%);
+}
+.site-frame-glow {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--site-accent, currentColor) 35%, transparent),
+    0 14px 40px color-mix(in srgb, var(--site-accent, currentColor) 30%, transparent);
+}

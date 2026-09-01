@@ -201,7 +201,39 @@ export const LAYOUTS: LayoutDef[] = [
     label: "Focused column",
     description: "One narrow centred column, link-in-bio style. Your hero stays full width above it.",
   },
+  {
+    id: "storefront",
+    label: "Storefront",
+    description: "Your portrait, name and links pin to one side while your offers sit in a grid beside them.",
+  },
 ];
+
+/**
+ * How the storefront portrait is framed.
+ *
+ * Curated treatments rather than a free-form border, so nobody lands on
+ * something that fights their palette. Every ring is drawn from the page's
+ * own accent, which means a frame follows the colours they already chose
+ * instead of introducing a new one.
+ */
+export interface FrameDef {
+  id: string;
+  label: string;
+  blurb: string;
+}
+
+export const FRAMES: FrameDef[] = [
+  { id: "none", label: "None", blurb: "Just the photo, cropped to a circle." },
+  { id: "ring", label: "Ring", blurb: "A clean band in your accent colour." },
+  { id: "gradient", label: "Gradient", blurb: "The band fades across your accent into the light." },
+  { id: "glow", label: "Glow", blurb: "A soft halo with no hard edge." },
+];
+
+export const DEFAULT_FRAME = FRAMES[1].id;
+
+export function getFrame(id: string | undefined | null): FrameDef | null {
+  return FRAMES.find((f) => f.id === id) ?? null;
+}
 
 export const DEFAULT_LAYOUT = LAYOUTS[0].id;
 

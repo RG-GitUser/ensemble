@@ -523,6 +523,30 @@ function PreviewSections({
     );
   }
 
+  if (layout === "storefront") {
+    // The panel is drawn, not composed from the real one: at preview scale a
+    // portrait and three lines of type would be unreadable, so this is the
+    // shape of it rather than the thing itself.
+    return (
+      <div className="mt-5" style={column}>
+        <div className="grid" style={{ gap, gridTemplateColumns: "34% 1fr" }}>
+          <div className="flex flex-col items-center gap-1.5 py-2">
+            <div className="h-9 w-9 rounded-full" style={{ background: "currentColor", opacity: 0.32 }} />
+            <p className="text-[0.8em] font-bold leading-none">Your name</p>
+            <p className="text-[0.68em] leading-none opacity-60">@handle</p>
+          </div>
+          <div className="grid grid-cols-2" style={{ gap }}>
+            <Card title="Bonus content" sub="Early access" />
+            <Card title="Merch" sub="Sell direct" />
+            <Card title="About me" sub="Your story" />
+            <Card title="Links" sub="Everywhere else" />
+          </div>
+        </div>
+        <Card title="Footer" sub="Full width, it closes the page" />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-5" style={column}>
       <Card title="Featured video" sub="Your latest" />

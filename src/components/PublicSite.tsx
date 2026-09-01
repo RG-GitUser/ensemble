@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { billingOk } from "@/lib/billing";
-import { getChatMessages, getSections, recordPageView } from "@/lib/db";
+import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
@@ -10,6 +10,7 @@ import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { ProfilePanel } from "@/components/ProfilePanel";
 import type { PlanDef } from "@/lib/plans";
 import type { ChatMessage, Section, Site } from "@/lib/types";
 
@@ -494,6 +495,40 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   };
 
   const layout = getLayout(cfg.layout);
+  // The storefront layout pins a profile column beside the sections. Both
+  // lookups happen only for that layout, so no other page pays for them.
+  const storefront = layout?.id === "storefront";
+  const owner = storefront ? getUserById(site.userId) : null;
+  const profileAccounts = storefront ? getSocialAccounts(site.id) : [];
+
+  const sectionNodes = sections.map((s, i) => {
+    // A per-section theme renders the section inside a themed band.
+    const containerTheme = themeCss(s.theme, cfg.themeColor);
+    const full = FULL_WIDTH_TYPES.has(s.type);
+    // Staggered sides alternate across the sections that take part,
+    // ignoring the full-width ones — counted here rather than in CSS,
+    // where a hero mid-page would flip every section beneath it.
+    const side =
+      layout?.id === "stagger" && !full
+        ? sections.slice(0, i).filter((p) => !FULL_WIDTH_TYPES.has(p.type)).length % 2 === 0
+          ? "site-left"
+          : "site-right"
+        : "";
+    return (
+      <div
+        key={s.id}
+        className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
+      >
+        {containerTheme ? (
+          <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
+            <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+          </div>
+        ) : (
+          <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+        )}
+      </div>
+    );
+  });
 
   return (
     <div
@@ -561,34 +596,10 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           arrangement is the wrapper's class, never a different rendering of
           the section, so switching layouts can't disturb the content. */}
       <div className={layout ? `site-layout-${layout.id}` : undefined}>
-        {sections.map((s, i) => {
-          // A per-section theme renders the section inside a themed band.
-          const containerTheme = themeCss(s.theme, cfg.themeColor);
-          const full = FULL_WIDTH_TYPES.has(s.type);
-          // Staggered sides alternate across the sections that take part,
-          // ignoring the full-width ones — counted here rather than in CSS,
-          // where a hero mid-page would flip every section beneath it.
-          const side =
-            layout?.id === "stagger" && !full
-              ? sections.slice(0, i).filter((p) => !FULL_WIDTH_TYPES.has(p.type)).length % 2 === 0
-                ? "site-left"
-                : "site-right"
-              : "";
-          return (
-            <div
-              key={s.id}
-              className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
-            >
-              {containerTheme ? (
-                <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
-                  <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
-                </div>
-              ) : (
-                <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
-              )}
-            </div>
-          );
-        })}
+        {storefront && (
+          <ProfilePanel name={owner?.businessName || site.slug} config={cfg} accounts={profileAccounts} />
+        )}
+        {storefront ? <div className="site-storefront-main">{sectionNodes}</div> : sectionNodes}
       </div>
       {/* The automatic footer stands down when the creator has added a Footer
           section — that section carries the tagline, the policies and the

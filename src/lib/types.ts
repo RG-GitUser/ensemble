@@ -40,6 +40,18 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
+  /**
+   * The storefront layout's profile panel. Only the portrait is required for
+   * the panel to be worth showing; the rest fall back to the account's own
+   * details, so a creator gets something sensible before touching any of it.
+   */
+  profileImage?: string;
+  /** Frame treatment around the portrait — a FRAMES id from lib/theme.ts. */
+  profileFrame?: string;
+  /** Shown under the name, e.g. "@yourhandle". */
+  profileHandle?: string;
+  /** A short line under the handle, e.g. where they are. */
+  profileLocation?: string;
   /** Vertical air between sections — a SPACINGS id from lib/theme.ts. */
   sectionSpacing?: string;
   /** Corner roundness of containers and buttons — a CORNERS id from lib/theme.ts. */
