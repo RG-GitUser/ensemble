@@ -104,9 +104,9 @@ body,
 
 /**
  * The same twinkle, pitched for a near-white page. Violet specks at the dark
- * theme's opacities are effectively invisible on #faf8fd — light mode was
- * technically drawing a star field nobody could see. Higher floor, higher
- * peak, and the layer itself carries less dimming.
+ * theme's opacities are effectively invisible on #faf8fd, so the loading
+ * screen gets a higher floor and a higher peak in light mode. The home page's
+ * star field is hidden outright there instead (see .ens-starfield below).
  */
 @keyframes ens-star-light {
   0%, 100% { opacity: 0.12; }
@@ -114,13 +114,14 @@ body,
 }
 
 .ens-starfield { opacity: 0.45; }
-:root[data-theme="light"] .ens-starfield { opacity: 0.85; }
+
+/* No star field on the light page. Violet specks on near-white were always
+   fighting for legibility, and the page reads cleaner without them. This
+   hides only the home page's background layer; the loading screen keeps its
+   stars in both themes, which is why .ens-star rules stay below. */
+:root[data-theme="light"] .ens-starfield { display: none; }
 :root[data-theme="light"] .ens-star { animation-name: ens-star-light; }
 
-/* Round specks on the dark page, four-pointed glints on the light one. */
-.ens-sparkles { display: none; }
-:root[data-theme="light"] .ens-dots { display: none; }
-:root[data-theme="light"] .ens-sparkles { display: block; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme="light"] .ens-star { opacity: 0.45; }
 }
