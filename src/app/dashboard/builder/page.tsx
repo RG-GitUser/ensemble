@@ -356,6 +356,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             profileFrame={site.config.profileFrame ?? DEFAULT_FRAME}
             profileHandle={site.config.profileHandle ?? ""}
             profileLocation={site.config.profileLocation ?? ""}
+            sections={sections.map((s) => ({ id: s.id, type: s.type }))}
             sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}
             cornerStyle={site.config.cornerStyle ?? DEFAULT_CORNER}
             colorMode={getColorMode(site.config.colorMode)}

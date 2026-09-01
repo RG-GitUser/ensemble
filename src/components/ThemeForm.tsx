@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { deleteLookAction, saveLookAction, updateTheme, type FormState } from "@/lib/actions";
 import type { SavedLook } from "@/lib/types";
+import { RearrangeOverlay, type RearrangeSection } from "@/components/RearrangeOverlay";
 import {
   ACCENTS,
   BACKGROUNDS,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/theme";
 import { backdropCss, BRIGHT_GROUP, DARK_THEME_GROUPS, DARK_THEMES, getThemeDef, LIGHT_THEMES, themeCss, type ThemeGroup } from "@/lib/themes";
 import { FONTS, getFont, LIGHT_TEXT_COLORS, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
-import { CloseIcon, ShuffleIcon } from "@/components/icons";
+import { CloseIcon, DragIcon, ShuffleIcon } from "@/components/icons";
 
 /**
  * The Design tab's panes, in the order a page is built up — the backdrop
@@ -870,6 +871,7 @@ export function ThemeForm({
   profileFrame: profileFrameProp,
   profileHandle: profileHandleProp,
   profileLocation: profileLocationProp,
+  sections,
   sectionSpacing: spacingProp,
   cornerStyle: cornerProp,
   colorMode: colorModeProp,
@@ -909,6 +911,8 @@ export function ThemeForm({
   profileFrame: string;
   profileHandle: string;
   profileLocation: string;
+  /** Just id and type — enough to name and reorder them in the pop-out. */
+  sections: RearrangeSection[];
   /** Vertical air between sections (SPACINGS id). */
   sectionSpacing: string;
   /** Corner roundness of containers and buttons (CORNERS id). */
@@ -938,6 +942,7 @@ export function ThemeForm({
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
+  const [rearranging, setRearranging] = useState(false);
   const [profileImg, setProfileImg] = useState<string>(profileImage);
   const [clearProfile, setClearProfile] = useState(false);
   const [frame, setFrame] = useState(profileFrameProp);
@@ -1818,6 +1823,16 @@ export function ThemeForm({
             >
               <ShuffleIcon /> Randomize
             </button>
+            {/* The side preview is big enough to judge colour, too small to
+                judge order. This opens the same page at a size you can think
+                about, and is the only place the order is editable from Design. */}
+            <button
+              type="button"
+              onClick={() => setRearranging(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-mist hover:text-snow"
+            >
+              <DragIcon /> Rearrange
+            </button>
           </div>
           {/* The preview carries the creator's type as well as their colors —
               font, scale and ink all apply here exactly as they do on the
@@ -1924,6 +1939,10 @@ export function ThemeForm({
           up in the group and are associated by id. */}
       <form id="look-save" action={lookAction} className="hidden" />
       <form id="look-delete" action={deleteLookAction} className="hidden" />
+
+      {rearranging && (
+        <RearrangeOverlay sections={sections} layout={layout} onClose={() => setRearranging(false)} />
+      )}
     </>
   );
 }
