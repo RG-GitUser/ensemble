@@ -496,7 +496,12 @@ function PreviewSections({
   // keeps the same feel at preview scale without swallowing the panel.
   const floor = minHeight > 0 ? `${(minHeight * 0.32).toFixed(2)}rem` : undefined;
   const gap = `${(0.75 * rhythm).toFixed(3)}rem`;
-  const column: React.CSSProperties = { display: "flex", flexDirection: "column", gap, width, marginInline: "auto" };
+  const column: React.CSSProperties = { display: "flex", flexDirection: "column", gap, width: "100%", marginInline: "auto" };
+  // Each card takes the width its real section would. `width` arrives as the
+  // site-w-lg proportion, so the others are scaled off it rather than
+  // recomputed — one source for the setting, four honest widths.
+  const lg = Number.parseFloat(width) || 100;
+  const at = (baseRem: number) => ({ width: `${Math.min(100, (lg * baseRem) / 48).toFixed(1)}%`, marginInline: "auto" });
 
   const Card = ({ title, sub, style }: { title: string; sub: string; style?: React.CSSProperties }) => (
     <div className="rounded-xl p-3" style={{ minHeight: floor, ...cardStyle, ...style }}>
@@ -537,9 +542,9 @@ function PreviewSections({
     // 30rem column against the 48rem base — the same ratio the page uses.
     return (
       <div className="mt-5" style={column}>
-        <Card title="Featured video" sub="Your latest" style={{ width: "62%", marginInline: "auto" }} />
-        <Card title="Bonus content" sub="Early access" style={{ width: "62%", marginInline: "auto" }} />
-        <Card title="Links" sub="Find me everywhere" style={{ width: "62%", marginInline: "auto" }} />
+        <Card title="Featured video" sub="Your latest" style={at(30)} />
+        <Card title="Bonus content" sub="Early access" style={at(30)} />
+        <Card title="Links" sub="Find me everywhere" style={at(28)} />
         <Card title="Footer" sub="Full width — it closes the page" />
       </div>
     );
@@ -584,12 +589,15 @@ function PreviewSections({
     );
   }
 
+  // Each card at the width its real section uses: merch is the widest at
+  // 56rem, a link list the narrowest at 28rem, most sit at 48rem. Drawing them
+  // all identically was what made the sizer read as inaccurate.
   return (
     <div className="mt-5" style={column}>
-      <Card title="Featured video" sub="Your latest" />
-      <Card title="Bonus content" sub="Drops, behind the scenes, early access" />
-      <Card title="Merch" sub="Sell straight from the page" />
-      <Card title="Links" sub="Find me everywhere" />
+      <Card title="Featured video" sub="Your latest" style={at(48)} />
+      <Card title="Bonus content" sub="Drops, behind the scenes, early access" style={at(48)} />
+      <Card title="Merch" sub="Sell straight from the page" style={at(56)} />
+      <Card title="Links" sub="Find me everywhere" style={at(28)} />
     </div>
   );
 }
@@ -1216,7 +1224,20 @@ export function ThemeForm({
     backgroundColor: palette.bg,
   };
   /** The preview card apes the chosen width against the widest option. */
-  const previewCardWidth = `${(Number(clampSize(size)) / SIZE_MAX) * 100}%`;
+  /**
+   * The preview modelled the width setting as a straight fraction of the
+   * widest option, which drew every container the same and claimed full width
+   * for all of them at the top of the range. The page does neither: a section
+   * is `min(100%, base * size)` against its own base width, and the bases
+   * differ — 28rem for a link list, 56rem for a merch grid. Measured against a
+   * 1265px viewport at size 1.6 the real widths are 57%, 85%, 97% and 100%.
+   *
+   * So the preview now models the same thing, against an 80rem reference
+   * viewport, which reproduces those four numbers to within a point.
+   */
+  const previewWidthFor = (baseRem: number) =>
+    `${Math.min(100, (baseRem * Number(clampSize(size))) / 80 * 100).toFixed(1)}%`;
+  const previewCardWidth = previewWidthFor(48);
   /** What the text actually sits on, so the ink can be checked against it. */
   const backdropBase = (palette.themeId ? getThemeDef(palette.themeId)?.color : palette.bg) || palette.bg;
 

@@ -46,9 +46,11 @@ import {
   DEFAULT_LIGHT_CARD,
   getBorderStyle,
   getColorMode,
+  DEFAULT_BULLET,
   DEFAULT_BUTTON_STYLE,
   DEFAULT_FRAME,
   DEFAULT_GLOW,
+  getBullet,
   getButtonStyle,
   getFrame,
   getGlow,
@@ -351,6 +353,12 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   if (typeof upload === "string") content.profileImage = upload;
   else if (str(fd, "clearSectionImage") === "1") content.profileImage = "";
   else content.profileImage = section.content.profileImage ?? "";
+
+  // Same reasoning as the portrait: offered on every container, so outside
+  // tpl.fields, so the loop above would drop them. Only known bullet ids are
+  // stored, and numbering is a flag rather than free text.
+  content.bulletStyle = getBullet(str(fd, "bulletStyle")) ? str(fd, "bulletStyle") : DEFAULT_BULLET;
+  content.numbered = fd.get("numbered") === "on" ? "1" : "";
 
   store.updateSectionContent(id, content);
   revalidateSite(site);
