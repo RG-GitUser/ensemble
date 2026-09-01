@@ -1941,7 +1941,14 @@ export function ThemeForm({
       <form id="look-delete" action={deleteLookAction} className="hidden" />
 
       {rearranging && (
-        <RearrangeOverlay sections={sections} layout={layout} onClose={() => setRearranging(false)} />
+        <RearrangeOverlay
+          sections={sections}
+          layout={layout}
+          cardStyle={previewCardStyle}
+          ink={palette.ink}
+          pageBg={palette.bg}
+          onClose={() => setRearranging(false)}
+        />
       )}
     </>
   );

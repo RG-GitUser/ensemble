@@ -7,6 +7,12 @@ import { getTemplate } from "@/lib/sections";
 export interface RearrangeSection {
   id: number;
   type: string;
+  /** The creator's own heading, or the template's name when they cleared it. */
+  heading: string;
+  /** Subheading or body, whichever the template has. */
+  sub: string;
+  /** First few row labels for the list-shaped sections (links, merch, bonus). */
+  items: string[];
 }
 
 /**
@@ -31,10 +37,19 @@ export interface RearrangeSection {
 export function RearrangeOverlay({
   sections,
   layout,
+  cardStyle,
+  ink,
+  pageBg,
   onClose,
 }: {
   sections: RearrangeSection[];
   layout: string;
+  /** The same container styling the side preview uses, so blocks match the page. */
+  cardStyle: React.CSSProperties;
+  /** The creator's ink, so text on those containers reads as it will live. */
+  ink: string;
+  /** The page's own background behind the blocks. */
+  pageBg: string;
   onClose: () => void;
 }) {
   const [order, setOrder] = useState<RearrangeSection[]>(sections);
@@ -125,7 +140,7 @@ export function RearrangeOverlay({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto bg-ink/40 p-6">
+        <div className="flex-1 overflow-y-auto p-6" style={{ background: pageBg }}>
           <div className={`mx-auto grid max-w-3xl gap-3 ${twoUp ? "sm:grid-cols-2" : "grid-cols-1"}`}>
             {order.map((s, i) => {
               const tpl = getTemplate(s.type);
@@ -138,23 +153,35 @@ export function RearrangeOverlay({
                   onDragEnd={() => setDragId(null)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => dropOn(s.id)}
-                  className={`group flex cursor-grab items-center justify-between gap-3 border px-4 py-4 transition active:cursor-grabbing ${
-                    dragId === s.id ? "border-brand bg-brand/10 opacity-60" : "border-edge bg-panel2 hover:border-brand/60"
+                  style={{ ...cardStyle, color: ink }}
+                  className={`group relative cursor-grab p-5 transition active:cursor-grabbing ${
+                    dragId === s.id ? "opacity-50 ring-2 ring-brand" : "hover:ring-2 hover:ring-brand/50"
                   } ${full ? "sm:col-span-2" : ""}`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{tpl?.name ?? s.type}</p>
-                    <p className="text-[11px] text-mist">
-                      {full ? "Full width" : `Position ${i + 1}`}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  {/* The section's real content, at the size the page shows it,
+                      so what you are dragging is recognisably your own page and
+                      not a list of type names. */}
+                  <p className="truncate text-base font-bold">{s.heading || tpl?.name || s.type}</p>
+                  {s.sub && <p className="mt-1 line-clamp-2 text-xs opacity-70">{s.sub}</p>}
+                  {s.items.length > 0 && (
+                    <ul className="mt-2.5 space-y-1">
+                      {s.items.map((it, n) => (
+                        <li key={n} className="truncate border-t pt-1 text-xs opacity-70" style={{ borderColor: "currentColor" }}>
+                          {it}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider opacity-45">
+                    {tpl?.name ?? s.type} · {full ? "full width" : `position ${i + 1}`}
+                  </p>
+                  <div className="absolute right-2 top-2 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
                     <button
                       type="button"
                       aria-label={`Move ${tpl?.name ?? s.type} earlier`}
                       onClick={() => move(s.id, -1)}
                       disabled={i === 0}
-                      className="border border-edge px-2 py-1 text-xs text-mist transition hover:border-brand/60 hover:text-snow disabled:opacity-30"
+                      className="border border-current px-2 py-1 text-xs opacity-70 transition hover:opacity-100 disabled:opacity-20"
                     >
                       ↑
                     </button>
@@ -163,7 +190,7 @@ export function RearrangeOverlay({
                       aria-label={`Move ${tpl?.name ?? s.type} later`}
                       onClick={() => move(s.id, 1)}
                       disabled={i === order.length - 1}
-                      className="border border-edge px-2 py-1 text-xs text-mist transition hover:border-brand/60 hover:text-snow disabled:opacity-30"
+                      className="border border-current px-2 py-1 text-xs opacity-70 transition hover:opacity-100 disabled:opacity-20"
                     >
                       ↓
                     </button>

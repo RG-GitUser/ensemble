@@ -8,8 +8,7 @@ import {
   planAllowsTemplate,
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
-  type FieldSpec,
-} from "@/lib/sections";
+  type FieldSpec, parseLines } from "@/lib/sections";
 import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
@@ -356,7 +355,18 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             profileFrame={site.config.profileFrame ?? DEFAULT_FRAME}
             profileHandle={site.config.profileHandle ?? ""}
             profileLocation={site.config.profileLocation ?? ""}
-            sections={sections.map((s) => ({ id: s.id, type: s.type }))}
+            sections={sections.map((s) => {
+              // The list-shaped sections store rows as "Label | url | …", so the
+              // first field of each row is the label a visitor actually reads.
+              const rows = parseLines(s.content.items ?? "").slice(0, 3);
+              return {
+                id: s.id,
+                type: s.type,
+                heading: s.content.heading ?? "",
+                sub: s.content.subheading ?? s.content.body ?? "",
+                items: rows.map((r: string[]) => r[0] ?? "").filter(Boolean),
+              };
+            })}
             sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}
             cornerStyle={site.config.cornerStyle ?? DEFAULT_CORNER}
             colorMode={getColorMode(site.config.colorMode)}
