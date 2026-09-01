@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -432,14 +432,27 @@ function RowMarker({ mode, shape, index }: { mode?: string; shape?: string; inde
  * how a number looks and a new section type is numbered without knowing it.
  * Zero-padded, because 01 beside 10 lines up and 1 beside 10 does not.
  */
-function SectionMarker({ mode, shape, n }: { mode?: string; shape?: string; n: number }) {
+function SectionMarker({
+  mode,
+  shape,
+  position,
+  n,
+}: {
+  mode?: string;
+  shape?: string;
+  position?: string;
+  n: number;
+}) {
   const m = getMarkerMode(mode)?.id ?? DEFAULT_MARKER;
   if (m === "none") return null;
+  // Bullets resolve to the corner whatever is stored, so a page that predates
+  // the setting cannot end up with a lone dot centred over its heading.
+  const cls = resolveMarkerPosition(mode, position) === "corner" ? "site-step-number site-step-corner" : "site-step-number";
 
   if (m === "bullet") {
     const b = getBulletShape(shape) ?? getBulletShape(DEFAULT_BULLET_SHAPE)!;
     return (
-      <p className="site-step-number" aria-hidden>
+      <p className={cls} aria-hidden>
         <svg viewBox="0 0 24 24" width="1.4em" height="1.4em" className="inline-block">
           <path d={b.path} fill="var(--site-accent)" />
         </svg>
@@ -449,7 +462,7 @@ function SectionMarker({ mode, shape, n }: { mode?: string; shape?: string; n: n
   // Zero-padded, because 01 beside 10 lines up and 1 beside 10 does not.
   const label = m === "letter" ? markerFor("letter", n - 1).text.replace(".", "") : String(n).padStart(2, "0");
   return (
-    <p className="site-step-number" style={{ color: "var(--site-accent)" }}>
+    <p className={cls} style={{ color: "var(--site-accent)" }}>
       {label}
     </p>
   );
@@ -646,13 +659,23 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         {containerTheme ? (
           <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
-            <SectionMarker mode={s.content.sectionMarker} shape={s.content.sectionBulletShape} n={stepNumber} />
+            <SectionMarker
+              mode={s.content.sectionMarker}
+              shape={s.content.sectionBulletShape}
+              position={s.content.markerPosition}
+              n={stepNumber}
+            />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </div>
         ) : (
           <>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
-            <SectionMarker mode={s.content.sectionMarker} shape={s.content.sectionBulletShape} n={stepNumber} />
+            <SectionMarker
+              mode={s.content.sectionMarker}
+              shape={s.content.sectionBulletShape}
+              position={s.content.markerPosition}
+              n={stepNumber}
+            />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </>
         )}

@@ -54,6 +54,7 @@ import {
   getBulletShape,
   getButtonStyle,
   getMarkerMode,
+  getMarkerPosition,
   getFrame,
   getGlow,
   getLayout,
@@ -365,6 +366,7 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   content.bulletShape = getBulletShape(str(fd, "bulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
   content.sectionMarker = getMarkerMode(str(fd, "sectionMarker"))?.id ?? DEFAULT_MARKER;
   content.sectionBulletShape = getBulletShape(str(fd, "sectionBulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
+  content.markerPosition = getMarkerPosition(str(fd, "markerPosition"));
   content.textScale = getTextSize(str(fd, "textScale"))?.id ?? DEFAULT_TEXT_SIZE_ID;
 
   store.updateSectionContent(id, content);
@@ -416,6 +418,7 @@ export interface SectionStylePatch {
   sectionBulletShape: string;
   markerMode: string;
   bulletShape: string;
+  markerPosition: string;
   textScale: string;
 }
 
@@ -439,6 +442,7 @@ export async function saveSectionStylesAction(patches: SectionStylePatch[]): Pro
       sectionBulletShape: getBulletShape(p.sectionBulletShape)?.id ?? DEFAULT_BULLET_SHAPE,
       markerMode: getMarkerMode(p.markerMode)?.id ?? DEFAULT_MARKER,
       bulletShape: getBulletShape(p.bulletShape)?.id ?? DEFAULT_BULLET_SHAPE,
+      markerPosition: getMarkerPosition(p.markerPosition),
       textScale: getTextSize(p.textScale)?.id ?? DEFAULT_TEXT_SIZE_ID,
     });
   }

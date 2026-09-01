@@ -592,6 +592,34 @@ export const MARKER_MODES: MarkerModeDef[] = [
 
 export const DEFAULT_MARKER: MarkerMode = "none";
 
+/**
+ * Where a section's marker sits.
+ *
+ * "above" centres it over the heading, which is where a number or a letter
+ * reads as a step. "corner" pins it outside the container at the top left,
+ * which is the only place a bullet works — centred over a heading a lone dot
+ * or arrow reads as a stray glyph rather than a marker, so bullets are forced
+ * there rather than offered the choice.
+ */
+export type MarkerPosition = "above" | "corner";
+
+export const MARKER_POSITIONS: Array<{ id: MarkerPosition; label: string; blurb: string }> = [
+  { id: "above", label: "Above heading", blurb: "Centred over the section." },
+  { id: "corner", label: "Outer corner", blurb: "Top left, outside the container." },
+];
+
+export const DEFAULT_MARKER_POSITION: MarkerPosition = "above";
+
+export function getMarkerPosition(id: string | undefined | null): MarkerPosition {
+  return id === "corner" ? "corner" : "above";
+}
+
+/** Bullets only ever sit in the corner, whatever is stored. */
+export function resolveMarkerPosition(mode: string | undefined | null, position: string | undefined | null): MarkerPosition {
+  if ((getMarkerMode(mode)?.id ?? DEFAULT_MARKER) === "bullet") return "corner";
+  return getMarkerPosition(position);
+}
+
 export function getMarkerMode(id: string | undefined | null): MarkerModeDef | null {
   return MARKER_MODES.find((m) => m.id === id) ?? null;
 }

@@ -462,6 +462,8 @@ a.site-ink-soft:hover { color: var(--site-ink, #fff); }
  * its own backdrop grows with the rest rather than floating at its natural
  * height inside a taller box. Zero by default, which is the same as no rule.
  */
+.site-section { position: relative; }
+
 .site-section,
 .site-section > .site-band {
   min-height: var(--site-min-h, 0);
@@ -753,6 +755,26 @@ a.site-card:hover {
 
 /* The step number sits above its section, centred with it, sized to read as a
    marker rather than a heading. */
+/* Pinned outside the container at the top left. The wrapper is the positioning
+   context, so the marker sits in the page margin beside the section rather
+   than above it — which is the only placement a lone bullet reads correctly
+   in. Below the breakpoint there is no margin to sit in, so it returns to
+   flowing above the section. */
+.site-step-corner {
+  position: absolute;
+  top: calc(1.6rem * var(--site-rhythm, 1));
+  left: 1.5rem;
+  padding-top: 0;
+  text-align: left;
+}
+@media (max-width: 900px) {
+  .site-step-corner {
+    position: static;
+    padding-top: calc(1.5rem * var(--site-rhythm, 1));
+    text-align: center;
+  }
+}
+
 .site-step-number {
   padding-top: calc(2rem * var(--site-rhythm, 1));
   text-align: center;

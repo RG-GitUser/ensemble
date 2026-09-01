@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BULLET_SHAPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, MARKER_MODES } from "@/lib/theme";
+import { BULLET_SHAPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, MARKER_MODES, MARKER_POSITIONS } from "@/lib/theme";
 
 /**
  * How this section's rows are marked.
@@ -17,10 +17,13 @@ import { BULLET_SHAPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, MARKER_MODES } fro
 export function SectionMarkerField({
   mode: modeProp,
   shape: shapeProp,
+  position: positionProp,
   scope,
 }: {
   mode: string;
   shape: string;
+  /** Only meaningful for the section scope; rows have nowhere else to go. */
+  position?: string;
   /**
    * "rows" marks each row inside a list section; "section" marks the section
    * itself, above its heading. Same four modes and the same three shapes,
@@ -30,6 +33,7 @@ export function SectionMarkerField({
 }) {
   const [mode, setMode] = useState(modeProp || DEFAULT_MARKER);
   const [shape, setShape] = useState(shapeProp || DEFAULT_BULLET_SHAPE);
+  const [position, setPosition] = useState(positionProp || DEFAULT_MARKER_POSITION);
   const nameMode = scope === "rows" ? "markerMode" : "sectionMarker";
   const nameShape = scope === "rows" ? "bulletShape" : "sectionBulletShape";
 
@@ -91,6 +95,35 @@ export function SectionMarkerField({
         </div>
       )}
 
+      {/* Bullets are corner-only: centred over a heading a lone dot reads as a
+          stray glyph. Numbers and letters work either way, so they choose. */}
+      {scope === "section" && mode !== "none" && (
+        <div className="mt-3">
+          <span className="label !mb-1 block">Position</span>
+          {mode === "bullet" ? (
+            <p className="text-xs text-mist/70">Bullets sit in the outer top-left corner.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {MARKER_POSITIONS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={position === p.id}
+                  onClick={() => setPosition(p.id)}
+                  className={`border px-3 py-2 text-left text-xs transition ${
+                    position === p.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                  }`}
+                >
+                  <span className="block font-semibold">{p.label}</span>
+                  <span className="block text-[10px] text-mist">{p.blurb}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {scope === "section" && <input type="hidden" name="markerPosition" value={mode === "bullet" ? "corner" : position} />}
       <input type="hidden" name={nameMode} value={mode} />
       <input type="hidden" name={nameShape} value={shape} />
     </div>

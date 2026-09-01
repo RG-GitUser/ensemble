@@ -10,7 +10,7 @@ import {
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
   type FieldSpec, parseLines } from "@/lib/sections";
-import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_TEXT_SIZE_ID, TEXT_SIZES, DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -343,6 +343,7 @@ function SectionCard({
           scope="section"
           mode={section.content.sectionMarker ?? DEFAULT_MARKER}
           shape={section.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE}
+          position={section.content.markerPosition ?? DEFAULT_MARKER_POSITION}
         />
         <SectionPortraitField current={section.content.profileImage ?? ""} />
         <SaveButton />
@@ -452,6 +453,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
                 sectionBulletShape: s.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE,
                 markerMode: s.content.markerMode ?? DEFAULT_MARKER,
                 bulletShape: s.content.bulletShape ?? DEFAULT_BULLET_SHAPE,
+                markerPosition: s.content.markerPosition ?? DEFAULT_MARKER_POSITION,
                 textScale: s.content.textScale ?? DEFAULT_TEXT_SIZE_ID,
               };
             })}

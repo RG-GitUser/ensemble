@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { reorderSectionsAction, saveSectionStylesAction } from "@/lib/actions";
 import { getTemplate } from "@/lib/sections";
 import { TEXT_SIZES } from "@/lib/fonts";
-import { BULLET_SHAPES, MARKER_MODES } from "@/lib/theme";
+import { BULLET_SHAPES, MARKER_MODES, MARKER_POSITIONS } from "@/lib/theme";
 
 export interface RearrangeSection {
   id: number;
@@ -20,6 +20,7 @@ export interface RearrangeSection {
   sectionBulletShape: string;
   markerMode: string;
   bulletShape: string;
+  markerPosition: string;
   textScale: string;
 }
 
@@ -330,6 +331,7 @@ export function RearrangeOverlay({
       was.sectionBulletShape !== s.sectionBulletShape ||
       was.markerMode !== s.markerMode ||
       was.bulletShape !== s.bulletShape ||
+      was.markerPosition !== s.markerPosition ||
       was.textScale !== s.textScale
     );
   });
@@ -347,6 +349,7 @@ export function RearrangeOverlay({
             sectionBulletShape: s.sectionBulletShape,
             markerMode: s.markerMode,
             bulletShape: s.bulletShape,
+            markerPosition: s.markerPosition,
             textScale: s.textScale,
           }))
         );
@@ -475,6 +478,15 @@ export function RearrangeOverlay({
                 options={BULLET_SHAPES.map((b) => ({ id: b.id, label: b.label }))}
                 value={selected.sectionBulletShape}
                 onPick={(v, all) => setField("sectionBulletShape", v, all)}
+              />
+            )}
+
+            {selected.sectionMarker !== "none" && selected.sectionMarker !== "bullet" && (
+              <RailGroup
+                label="Accent position"
+                options={MARKER_POSITIONS.map((p) => ({ id: p.id, label: p.label }))}
+                value={selected.markerPosition}
+                onPick={(v, all) => setField("markerPosition", v, all)}
               />
             )}
 
