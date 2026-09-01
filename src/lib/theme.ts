@@ -564,3 +564,37 @@ export function borderVars(id: string | undefined | null, accent: string): Recor
   if (b.shadow !== "none") vars["--site-shadow"] = b.shadow;
   return vars;
 }
+
+/**
+ * Row markers for the list-shaped sections.
+ *
+ * Drawn as SVG paths on a 24x24 box rather than typed characters, so a marker
+ * renders identically on every platform — a "•" or a "✓" is at the mercy of
+ * whichever font the creator picked and whichever emoji table the visitor's
+ * device ships. Each takes the page's accent, so a marker never introduces a
+ * colour the creator did not choose.
+ */
+export interface BulletDef {
+  id: string;
+  label: string;
+  /** Path data on a 24x24 viewBox, or "" for no marker at all. */
+  path: string;
+}
+
+export const BULLETS: BulletDef[] = [
+  { id: "none", label: "None", path: "" },
+  { id: "dot", label: "Dot", path: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" },
+  { id: "ring", label: "Ring", path: "M12 6a6 6 0 1 0 0 12A6 6 0 0 0 12 6Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z" },
+  { id: "tick", label: "Tick", path: "M20 6.5 9.5 17 4 11.5l1.5-1.5 4 4 9-9 1.5 1.5Z" },
+  { id: "arrow", label: "Arrow", path: "M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z" },
+  { id: "chevron", label: "Chevron", path: "M9 5l7 7-7 7-1.4-1.4L13.2 12 7.6 6.4 9 5Z" },
+  { id: "star", label: "Star", path: "M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8L12 3.5Z" },
+  { id: "square", label: "Square", path: "M7 7h10v10H7z" },
+  { id: "dash", label: "Dash", path: "M5 11h14v2H5z" },
+];
+
+export const DEFAULT_BULLET = BULLETS[0].id;
+
+export function getBullet(id: string | undefined | null): BulletDef | null {
+  return BULLETS.find((b) => b.id === id) ?? null;
+}

@@ -751,6 +751,17 @@ a.site-card:hover {
   padding-top: calc(3rem * var(--site-rhythm, 1));
 }
 
+/* The step number sits above its section, centred with it, sized to read as a
+   marker rather than a heading. */
+.site-step-number {
+  padding-top: calc(2rem * var(--site-rhythm, 1));
+  text-align: center;
+  font-size: 0.8em;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  opacity: 0.85;
+}
+
 .site-profile-name {
   font-size: 1.9em;
   font-weight: 800;

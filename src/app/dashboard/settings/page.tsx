@@ -5,6 +5,7 @@ import { getDomainBySite, getSiteByUser, getUserPrefs } from "@/lib/db";
 import { domainProgress } from "@/lib/domains";
 import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
 import { changePlan, openBillingPortal, toggleTutorials } from "@/lib/actions";
+import { DangerButton } from "@/components/DangerButton";
 import { SettingsForm } from "@/components/SettingsForm";
 import Link from "next/link";
 
@@ -14,6 +15,11 @@ const BILLING_LABELS: Record<string, { label: string; tone: string }> = {
   unpaid: { label: "Awaiting first payment", tone: "bg-warn/15 text-warn" },
   canceled: { label: "Canceled", tone: "bg-brand2/15 text-brand2" },
 };
+
+/** Is `to` a step up from `from`? Decides whether we warn or reassure. */
+function upgrade(from: string, to: string): boolean {
+  return PLAN_ORDER.indexOf(to as (typeof PLAN_ORDER)[number]) > PLAN_ORDER.indexOf(from as (typeof PLAN_ORDER)[number]);
+}
 
 export default async function SettingsPage() {
   const user = await requireUser();
@@ -101,24 +107,35 @@ export default async function SettingsPage() {
               const p = PLANS[id];
               const current = site.plan === id;
               return (
-                <form key={id} action={changePlan} className={`rounded-xl border p-4 ${current ? "border-brand bg-brand/5" : "border-edge bg-panel2"}`}>
-                  <input type="hidden" name="plan" value={id} />
+                <div key={id} className={`rounded-xl border p-4 ${current ? "border-brand bg-brand/5" : "border-edge bg-panel2"}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-bold">{p.name}</span>
                     <span className="text-lg font-extrabold">${p.price}<span className="text-xs font-normal text-mist">/mo</span></span>
                   </div>
                   <p className="mt-1 text-xs text-mist">{p.blurb}</p>
-                  <button
-                    disabled={current}
-                    className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                      current
-                        ? "cursor-default bg-brand/20 text-brand"
-                        : "border border-edge text-snow hover:border-brand/60"
-                    }`}
-                  >
-                    {current ? "Current plan" : "Switch"}
-                  </button>
-                </form>
+                  {current ? (
+                    <p className="mt-3 w-full cursor-default rounded-lg bg-brand/20 px-3 py-2 text-center text-sm font-semibold text-brand">
+                      Current plan
+                    </p>
+                  ) : (
+                    /* Switching plans moves money and can unpublish sections, so
+                       it asks first and says which way it is going. It was a
+                       single unguarded click. */
+                    <DangerButton
+                      label="Switch"
+                      title={upgrade(site.plan, id) ? `Upgrade to ${p.name}?` : `Move down to ${p.name}?`}
+                      body={
+                        upgrade(site.plan, id)
+                          ? `You'll be charged $${p.price} a month. On an active subscription the change is prorated straight away; without one, you'll go through checkout.`
+                          : `You'll drop to $${p.price} a month and lose everything ${PLANS[site.plan].name} adds. Your content stays, but sections above the ${p.name} limit unpublish until you upgrade again.`
+                      }
+                      confirmLabel={upgrade(site.plan, id) ? `Upgrade to ${p.name}` : `Switch to ${p.name}`}
+                      action={changePlan}
+                      fields={{ plan: id }}
+                      className="mt-3 w-full rounded-lg border border-edge px-3 py-2 text-sm font-semibold text-snow transition hover:border-brand/60"
+                    />
+                  )}
+                </div>
               );
             })}
           </div>

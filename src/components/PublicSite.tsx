@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getBullet, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -80,9 +80,12 @@ function SectionView({
                 style={{ background: "var(--site-card)" }}
               >
                 <div className="flex items-center justify-between gap-4">
-                  <div>
+                  <div className="flex min-w-0 items-start gap-2">
+                    <Bullet style={c.bulletStyle} />
+                    <div className="min-w-0">
                     <p className="font-semibold">{title}</p>
                     {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
+                    </div>
                   </div>
                   {c.ctaLabel ? (
                     <span className="site-edge shrink-0 site-round-lg border px-3 py-1.5 text-[0.875em] font-semibold">
@@ -126,7 +129,10 @@ function SectionView({
                 className="site-btn site-card block site-round-xl px-5 py-3.5 font-semibold"
                 style={{ background: "var(--site-card)" }}
               >
-                {label}
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Bullet style={c.bulletStyle} />
+                  {label}
+                </span>
               </a>
             ))}
           </div>
@@ -393,6 +399,40 @@ function SectionView({
  * portrait and frame styles that panel uses, at a size that sits over a
  * section rather than beside a page.
  */
+/**
+ * The row marker for a list section.
+ *
+ * An SVG rather than a typed character, so the shape is the same on every
+ * device instead of at the mercy of the creator's font and the visitor's emoji
+ * table. It takes the page accent, so a marker never introduces a colour
+ * nobody chose.
+ */
+function Bullet({ style }: { style?: string }) {
+  const b = getBullet(style);
+  if (!b || !b.path) return null;
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden className="mt-[0.15em] shrink-0">
+      <path d={b.path} fill="var(--site-accent)" />
+    </svg>
+  );
+}
+
+/**
+ * The step number above a section that opted into numbering.
+ *
+ * Sits in the wrapper rather than inside each renderer, so one place decides
+ * how a number looks and a new section type is numbered without knowing it.
+ * Zero-padded, because 01 beside 10 lines up and 1 beside 10 does not.
+ */
+function StepNumber({ n }: { n: number | null }) {
+  if (n === null) return null;
+  return (
+    <p className="site-step-number" style={{ color: "var(--site-accent)" }}>
+      {String(n).padStart(2, "0")}
+    </p>
+  );
+}
+
 function SectionPortrait({ src, frame }: { src?: string; frame: string }) {
   if (!src) return null;
   return (
@@ -550,6 +590,12 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   const sectionNodes = sections.map((s, i) => {
     // A per-section theme renders the section inside a themed band.
     const containerTheme = themeCss(s.theme, cfg.themeColor);
+    // Numbering counts only the sections opted into it, so turning it on for
+    // three sections out of nine gives 01, 02, 03 rather than 02, 05, 08.
+    const stepNumber =
+      s.content.numbered === "1"
+        ? sections.slice(0, i).filter((p) => p.content.numbered === "1").length + 1
+        : null;
     // The storefront's panel is already the page's header: it carries the
     // portrait, the name and the links. A hero spanning the top would repeat
     // all three and push every offer below the fold, so here it joins the grid
@@ -572,11 +618,13 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         {containerTheme ? (
           <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
+            <StepNumber n={stepNumber} />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </div>
         ) : (
           <>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
+            <StepNumber n={stepNumber} />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </>
         )}
