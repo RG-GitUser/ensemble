@@ -23,6 +23,7 @@ import {
   getCorner,
   getSpacing,
   isLight,
+  FRAMES,
   LAYOUTS,
   type ScaleDef,
   SPACINGS,
@@ -371,6 +372,21 @@ function LayoutRow({ value, onPick }: { value: string; onPick: (v: string) => vo
                     <span className={`${bar} mx-auto h-2.5 w-1/2`} />
                   </>
                 )}
+                {l.id === "storefront" && (
+                  <span className="flex h-full items-center gap-1.5">
+                    <span className="h-6 w-6 shrink-0 rounded-full bg-mist/35" />
+                    <span className="flex flex-1 flex-col gap-1.5">
+                      <span className="flex gap-1.5">
+                        <span className={`${bar} h-2.5 w-1/2`} />
+                        <span className={`${bar} h-2.5 w-1/2`} />
+                      </span>
+                      <span className="flex gap-1.5">
+                        <span className={`${bar} h-2.5 w-1/2`} />
+                        <span className={`${bar} h-2.5 w-1/2`} />
+                      </span>
+                    </span>
+                  </span>
+                )}
               </span>
               <span className="mt-2 block text-xs font-semibold">{l.label}</span>
               <span className="mt-0.5 block text-[10px] leading-snug text-mist">{l.description}</span>
@@ -529,17 +545,17 @@ function PreviewSections({
     // shape of it rather than the thing itself.
     return (
       <div className="mt-5" style={column}>
-        <div className="grid" style={{ gap, gridTemplateColumns: "34% 1fr" }}>
+        <div className="grid" style={{ gap, gridTemplateColumns: "26% 1fr" }}>
           <div className="flex flex-col items-center gap-1.5 py-2">
             <div className="h-9 w-9 rounded-full" style={{ background: "currentColor", opacity: 0.32 }} />
             <p className="text-[0.8em] font-bold leading-none">Your name</p>
             <p className="text-[0.68em] leading-none opacity-60">@handle</p>
           </div>
           <div className="grid grid-cols-2" style={{ gap }}>
-            <Card title="Bonus content" sub="Early access" />
+            <Card title="Bonus" sub="Early access" />
             <Card title="Merch" sub="Sell direct" />
-            <Card title="About me" sub="Your story" />
-            <Card title="Links" sub="Everywhere else" />
+            <Card title="About" sub="Your story" />
+            <Card title="Links" sub="Find me" />
           </div>
         </div>
         <Card title="Footer" sub="Full width, it closes the page" />
@@ -835,6 +851,10 @@ export function ThemeForm({
   fontScale: fontScaleProp,
   textColor: textColorProp,
   layout: layoutProp,
+  profileImage,
+  profileFrame: profileFrameProp,
+  profileHandle: profileHandleProp,
+  profileLocation: profileLocationProp,
   sectionSpacing: spacingProp,
   cornerStyle: cornerProp,
   colorMode: colorModeProp,
@@ -869,6 +889,11 @@ export function ThemeForm({
   textColor: string;
   /** Section arrangement (LAYOUTS id). */
   layout: string;
+  /** Storefront profile panel. All optional; the panel copes without them. */
+  profileImage: string;
+  profileFrame: string;
+  profileHandle: string;
+  profileLocation: string;
   /** Vertical air between sections (SPACINGS id). */
   sectionSpacing: string;
   /** Corner roundness of containers and buttons (CORNERS id). */
@@ -898,6 +923,11 @@ export function ThemeForm({
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
+  const [profileImg, setProfileImg] = useState<string>(profileImage);
+  const [clearProfile, setClearProfile] = useState(false);
+  const [frame, setFrame] = useState(profileFrameProp);
+  const [handle, setHandle] = useState(profileHandleProp);
+  const [where, setWhere] = useState(profileLocationProp);
   const [spacing, setSpacing] = useState(spacingProp);
   const [corner, setCorner] = useState(cornerProp);
   const [colorMode, setColorMode] = useState<ColorMode>(colorModeProp);
@@ -925,6 +955,7 @@ export function ThemeForm({
   const [clearCard, setClearCard] = useState(false);
   const [clearIcon, setClearIcon] = useState(false);
   const bgFileRef = useRef<HTMLInputElement>(null);
+  const profileFileRef = useRef<HTMLInputElement>(null);
   const cardFileRef = useRef<HTMLInputElement>(null);
   const iconFileRef = useRef<HTMLInputElement>(null);
 
@@ -934,11 +965,14 @@ export function ThemeForm({
     if (state.ok) setBgSvg("");
   }, [state]);
 
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>, which: "bg" | "card") {
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>, which: "bg" | "card" | "profile") {
     const f = e.target.files?.[0];
     if (!f) return;
     const url = URL.createObjectURL(f);
-    if (which === "bg") {
+    if (which === "profile") {
+      setProfileImg(url);
+      setClearProfile(false);
+    } else if (which === "bg") {
       setBgImg(url);
       setBgSvg("");
       setClearBg(false);
@@ -991,7 +1025,13 @@ export function ThemeForm({
     if (bgFileRef.current) bgFileRef.current.value = "";
   }
 
-  function removeImage(which: "bg" | "card") {
+  function removeImage(which: "bg" | "card" | "profile") {
+    if (which === "profile") {
+      setProfileImg("");
+      setClearProfile(true);
+      if (profileFileRef.current) profileFileRef.current.value = "";
+      return;
+    }
     if (which === "bg") {
       setBgImg("");
       setBgSvg("");
@@ -1167,6 +1207,7 @@ export function ThemeForm({
       <input type="hidden" name="lightThemeId" value={lightThemeId} />
       <input type="hidden" name="bgSvg" value={bgSvg} />
       <input type="hidden" name="clearBgImage" value={clearBg ? "1" : ""} />
+      <input type="hidden" name="clearProfileImage" value={clearProfile ? "1" : ""} />
       <input type="hidden" name="clearCardImage" value={clearCard ? "1" : ""} />
       <input type="hidden" name="clearFavicon" value={clearIcon ? "1" : ""} />
 
@@ -1577,6 +1618,86 @@ export function ThemeForm({
           hint="Where your sections sit. Your content doesn't move — only the arrangement does, so you can switch back any time."
         >
           <LayoutRow value={layout} onPick={setLayout} />
+          {layout === "storefront" && (
+            <div className="mt-4 rounded-xl border border-edge p-4">
+              <span className="label !mb-0">Your profile panel</span>
+              <p className="mt-0.5 text-xs text-mist/70">
+                Pinned beside your offers. Only the portrait is worth uploading, since your name comes from your
+                account and the icon row from the socials you have already connected.
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="btn-ghost cursor-pointer !py-2 text-sm">
+                  {profileImg ? "Replace portrait" : "Upload portrait"}
+                  <input
+                    ref={profileFileRef}
+                    type="file"
+                    name="profileImageFile"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg"
+                    className="hidden"
+                    onChange={(e) => onPickFile(e, "profile")}
+                  />
+                </label>
+                {profileImg && (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={profileImg} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage("profile")}
+                      className="btn-ghost !py-2 text-sm !text-brand2"
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <span className="label mt-4 !mb-1 block">Frame</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {FRAMES.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={frame === f.id}
+                    onClick={() => setFrame(f.id)}
+                    className={`rounded-xl border p-2.5 text-left transition ${
+                      frame === f.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                    }`}
+                  >
+                    <span className="block text-xs font-semibold">{f.label}</span>
+                    <span className="mt-0.5 block text-[0.7rem] text-mist/70">{f.blurb}</span>
+                  </button>
+                ))}
+              </div>
+              <input type="hidden" name="profileFrame" value={frame} />
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="label">Handle</span>
+                  <input
+                    className="field"
+                    name="profileHandle"
+                    value={handle}
+                    maxLength={40}
+                    placeholder="@yourhandle"
+                    onChange={(e) => setHandle(e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="label">Under that</span>
+                  <input
+                    className="field"
+                    name="profileLocation"
+                    value={where}
+                    maxLength={60}
+                    placeholder="Brooklyn, NY"
+                    onChange={(e) => setWhere(e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
           {layout !== "scroll" && layout !== "focus" && (
             <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
               Your hero, merch grid and video always run full width — they don&apos;t read well in half a column. On
