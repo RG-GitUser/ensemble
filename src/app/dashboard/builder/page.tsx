@@ -3,13 +3,14 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getSections, getSiteByUser } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
+import { SectionMarkerField } from "@/components/SectionMarkerField";
 import {
   getTemplate,
   planAllowsTemplate,
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
   type FieldSpec, parseLines } from "@/lib/sections";
-import { BULLETS, DEFAULT_BULLET, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -203,36 +204,17 @@ function Field({ spec, value }: { spec: FieldSpec; value: string }) {
 const LIST_TYPES = new Set(["bonus", "links"]);
 
 /**
- * The accents a container can carry: a marker on each of its rows, and a step
- * number above it. Offered on every section rather than declared per template,
- * for the same reason the portrait is — there is no type where numbering a
- * step would be wrong, and the marker simply has nothing to mark on the types
- * that are not lists, so it is only offered where it does something.
+ * Sections without rows still get the step number, which is a page-level
+ * accent rather than a list one.
  */
-function SectionAccentFields({ type, bullet, numbered }: { type: string; bullet: string; numbered: boolean }) {
-  const isList = LIST_TYPES.has(type);
+function SectionNumberField({ numbered }: { numbered: boolean }) {
   return (
     <div className="border-t border-edge pt-4">
       <span className="label !mb-0">Accents</span>
-      <div className="mt-2 flex flex-wrap items-center gap-4">
-        {isList && (
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-mist">Row marker</span>
-            <select name="bulletStyle" defaultValue={bullet} className="field w-auto !py-1.5 text-sm">
-              {BULLETS.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-          <input type="checkbox" name="numbered" defaultChecked={numbered} className="h-4 w-4 accent-brand" />
-          <span className="text-mist">Number this section</span>
-        </label>
-      </div>
-      {!isList && <input type="hidden" name="bulletStyle" value={bullet} />}
+      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" name="numbered" defaultChecked={numbered} className="h-4 w-4 accent-brand" />
+        <span className="text-mist">Number this section on the page</span>
+      </label>
       <p className="mt-1.5 text-xs text-mist/70">
         Numbered sections count only each other, so three of nine read 01, 02, 03.
       </p>
@@ -342,11 +324,15 @@ function SectionCard({
         {tpl.fields.map((f) => (
           <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
         ))}
-        <SectionAccentFields
-          type={section.type}
-          bullet={section.content.bulletStyle ?? DEFAULT_BULLET}
-          numbered={section.content.numbered === "1"}
-        />
+        {LIST_TYPES.has(section.type) ? (
+          <SectionMarkerField
+            mode={section.content.markerMode ?? DEFAULT_MARKER}
+            shape={section.content.bulletShape ?? DEFAULT_BULLET_SHAPE}
+            numbered={section.content.numbered === "1"}
+          />
+        ) : (
+          <SectionNumberField numbered={section.content.numbered === "1"} />
+        )}
         <SectionPortraitField current={section.content.profileImage ?? ""} />
         <SaveButton />
       </form>

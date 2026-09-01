@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getBullet, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign, markerFor } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -81,7 +81,7 @@ function SectionView({
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 items-start gap-2">
-                    <Bullet style={c.bulletStyle} />
+                    <RowMarker mode={c.markerMode} shape={c.bulletShape} index={i} />
                     <div className="min-w-0">
                     <p className="font-semibold">{title}</p>
                     {desc && <p className="mt-1 text-[0.875em] site-ink-soft">{desc}</p>}
@@ -130,7 +130,7 @@ function SectionView({
                 style={{ background: "var(--site-card)" }}
               >
                 <span className="inline-flex items-center justify-center gap-2">
-                  <Bullet style={c.bulletStyle} />
+                  <RowMarker mode={c.markerMode} shape={c.bulletShape} index={i} />
                   {label}
                 </span>
               </a>
@@ -407,13 +407,21 @@ function SectionView({
  * table. It takes the page accent, so a marker never introduces a colour
  * nobody chose.
  */
-function Bullet({ style }: { style?: string }) {
-  const b = getBullet(style);
-  if (!b || !b.path) return null;
+function RowMarker({ mode, shape, index }: { mode?: string; shape?: string; index: number }) {
+  const m = markerFor(mode, index);
+  if (m.shape) {
+    const b = getBulletShape(shape) ?? getBulletShape(DEFAULT_BULLET_SHAPE)!;
+    return (
+      <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden className="mt-[0.15em] shrink-0">
+        <path d={b.path} fill="var(--site-accent)" />
+      </svg>
+    );
+  }
+  if (!m.text) return null;
   return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden className="mt-[0.15em] shrink-0">
-      <path d={b.path} fill="var(--site-accent)" />
-    </svg>
+    <span aria-hidden className="shrink-0 font-bold tabular-nums" style={{ color: "var(--site-accent)" }}>
+      {m.text}
+    </span>
   );
 }
 

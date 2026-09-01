@@ -566,35 +566,72 @@ export function borderVars(id: string | undefined | null, accent: string): Recor
 }
 
 /**
- * Row markers for the list-shaped sections.
+ * How the rows of a list section are marked.
  *
- * Drawn as SVG paths on a 24x24 box rather than typed characters, so a marker
- * renders identically on every platform — a "•" or a "✓" is at the mercy of
- * whichever font the creator picked and whichever emoji table the visitor's
- * device ships. Each takes the page's accent, so a marker never introduces a
- * colour the creator did not choose.
+ * One setting with four modes rather than a bullet picker beside a numbering
+ * switch, because they are the same decision: what sits to the left of each
+ * row. A list is numbered, lettered, bulleted or bare, and it cannot be two of
+ * those at once — which a separate picker and switch quietly allowed.
  */
-export interface BulletDef {
+export type MarkerMode = "none" | "number" | "letter" | "bullet";
+
+export interface MarkerModeDef {
+  id: MarkerMode;
+  label: string;
+  blurb: string;
+  /** What the first three rows would show, for the picker tiles. */
+  sample: [string, string, string];
+}
+
+export const MARKER_MODES: MarkerModeDef[] = [
+  { id: "none", label: "None", blurb: "Rows stand on their own.", sample: ["", "", ""] },
+  { id: "number", label: "Numbered", blurb: "For steps and rankings.", sample: ["1", "2", "3"] },
+  { id: "letter", label: "Lettered", blurb: "For options and tiers.", sample: ["A", "B", "C"] },
+  { id: "bullet", label: "Bullet", blurb: "For plain lists.", sample: ["•", "•", "•"] },
+];
+
+export const DEFAULT_MARKER: MarkerMode = "none";
+
+export function getMarkerMode(id: string | undefined | null): MarkerModeDef | null {
+  return MARKER_MODES.find((m) => m.id === id) ?? null;
+}
+
+/**
+ * The three bullet shapes, drawn as SVG paths on a 24x24 box.
+ *
+ * Paths rather than typed characters, so a marker is the same shape on every
+ * device instead of at the mercy of the creator's font and the visitor's emoji
+ * table. Three deliberately distinct jobs: a dot is neutral, a tick reads as
+ * something gained, an arrow points onward to what the row links to. Each
+ * takes the page accent, so a marker never introduces a colour nobody chose.
+ */
+export interface BulletShapeDef {
   id: string;
   label: string;
-  /** Path data on a 24x24 viewBox, or "" for no marker at all. */
   path: string;
 }
 
-export const BULLETS: BulletDef[] = [
-  { id: "none", label: "None", path: "" },
+export const BULLET_SHAPES: BulletShapeDef[] = [
   { id: "dot", label: "Dot", path: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" },
-  { id: "ring", label: "Ring", path: "M12 6a6 6 0 1 0 0 12A6 6 0 0 0 12 6Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z" },
   { id: "tick", label: "Tick", path: "M20 6.5 9.5 17 4 11.5l1.5-1.5 4 4 9-9 1.5 1.5Z" },
   { id: "arrow", label: "Arrow", path: "M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z" },
-  { id: "chevron", label: "Chevron", path: "M9 5l7 7-7 7-1.4-1.4L13.2 12 7.6 6.4 9 5Z" },
-  { id: "star", label: "Star", path: "M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8L12 3.5Z" },
-  { id: "square", label: "Square", path: "M7 7h10v10H7z" },
-  { id: "dash", label: "Dash", path: "M5 11h14v2H5z" },
 ];
 
-export const DEFAULT_BULLET = BULLETS[0].id;
+export const DEFAULT_BULLET_SHAPE = BULLET_SHAPES[0].id;
 
-export function getBullet(id: string | undefined | null): BulletDef | null {
-  return BULLETS.find((b) => b.id === id) ?? null;
+export function getBulletShape(id: string | undefined | null): BulletShapeDef | null {
+  return BULLET_SHAPES.find((b) => b.id === id) ?? null;
+}
+
+/** The marker for row `i` (zero-based): "1.", "C.", a shape id, or "". */
+export function markerFor(mode: string | undefined | null, i: number): { text: string; shape: boolean } {
+  const m = getMarkerMode(mode)?.id ?? DEFAULT_MARKER;
+  if (m === "number") return { text: `${i + 1}.`, shape: false };
+  // Past Z it wraps to AA, BB, CC rather than running out or repeating A.
+  if (m === "letter") {
+    const letter = String.fromCharCode(65 + (i % 26));
+    return { text: `${letter.repeat(Math.floor(i / 26) + 1)}.`, shape: false };
+  }
+  if (m === "bullet") return { text: "", shape: true };
+  return { text: "", shape: false };
 }
