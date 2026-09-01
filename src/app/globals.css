@@ -168,6 +168,20 @@ body,
   animation: ens-sweep 3.2s linear infinite;
 }
 
+/**
+ * The wash behind the loading wordmark.
+ *
+ * Two strengths: what reads as a soft glow against near-black is a heavy
+ * purple bruise on a near-white page, so the light theme drops the alpha by
+ * half and pulls both stops onto the same hue.
+ */
+.ens-wash {
+  background: radial-gradient(closest-side, rgba(167, 0, 204, 0.28), rgba(106, 18, 171, 0.12) 55%, transparent 75%);
+}
+:root[data-theme="light"] .ens-wash {
+  background: radial-gradient(closest-side, rgba(124, 58, 237, 0.13), rgba(124, 58, 237, 0.05) 55%, transparent 75%);
+}
+
 .ens-label {
   animation: ens-label 3.2s ease-in-out infinite;
 }

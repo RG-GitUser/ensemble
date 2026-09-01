@@ -51,12 +51,23 @@ const ARC = CIRCUMFERENCE * 0.18;
  * more magenta gradient. Painting its own dark sky underneath means the
  * values below are the dark-mode ones in both themes, and stay legible.
  */
-const SKY = "#0b0714";
-const SNOW = "#f4f1fb";
-const MIST = "#a89dcb";
-const EDGE = "#2b2148";
-const BRAND = "#8b5cf6";
-const BRAND2 = "#ec4899";
+/**
+ * Every colour comes from the platform's own tokens rather than a hex, so the
+ * screen follows the theme. It used to paint a near-black panel with white
+ * stars and a dark ring, which on a light dashboard was a black flash between
+ * two pale pages. The tokens already invert (--color-snow goes from near-white
+ * to near-black), so one substitution fixes both themes at once.
+ *
+ * They are applied through `style` rather than as SVG presentation attributes,
+ * because `fill="var(--x)"` is not valid as an attribute; only the CSS
+ * property accepts a var().
+ */
+const SKY = "var(--color-ink)";
+const SNOW = "var(--color-snow)";
+const MIST = "var(--color-mist)";
+const EDGE = "var(--color-edge)";
+const BRAND = "var(--color-brand)";
+const BRAND2 = "var(--color-brand2)";
 
 
 export function LoadingScreen({ label = "Loading" }: { label?: string }) {
@@ -69,25 +80,22 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
     >
       <div className="relative">
         {/* Soft wash behind the mark, matching the primary-button gradient.
-            A CSS radial is cheaper than an SVG blur filter at this size. */}
+            A CSS radial is cheaper than an SVG blur filter at this size. The
+            two themes need different strengths, so it lives in globals.css. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -m-12 rounded-full blur-2xl"
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(167,0,204,0.28), rgba(106,18,171,0.12) 55%, transparent 75%)",
-          }}
+          className="ens-wash pointer-events-none absolute inset-0 -m-12 rounded-full blur-2xl"
         />
 
         <svg viewBox="0 0 200 200" className="relative h-56 w-56 sm:h-72 sm:w-72" aria-hidden>
           <defs>
             <linearGradient id="ens-line" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={BRAND} />
-              <stop offset="100%" stopColor={BRAND2} />
+              <stop offset="0%" style={{ stopColor: BRAND }} />
+              <stop offset="100%" style={{ stopColor: BRAND2 }} />
             </linearGradient>
             <linearGradient id="ens-arc" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={BRAND2} stopOpacity="0" />
-              <stop offset="100%" stopColor={BRAND2} />
+              <stop offset="0%" style={{ stopColor: BRAND2, stopOpacity: 0 }} />
+              <stop offset="100%" style={{ stopColor: BRAND2 }} />
             </linearGradient>
           </defs>
 
@@ -97,7 +105,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
             cy="100"
             r={RING}
             fill="none"
-            stroke={EDGE}
+            style={{ stroke: EDGE }}
             strokeWidth="1"
             opacity="0.5"
           />
@@ -120,8 +128,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
               cx={x}
               cy={y}
               r={r}
-              fill={SNOW}
-              style={{ animationDuration: `${dur}s`, animationDelay: `${-i * 0.7}s` }}
+              style={{ fill: SNOW, animationDuration: `${dur}s`, animationDelay: `${-i * 0.7}s` }}
             />
           ))}
 
@@ -135,7 +142,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
             letterSpacing="-0.5"
             style={{ fontFamily: "var(--font-sans)" }}
           >
-            <tspan fill={SNOW}>En</tspan>
+            <tspan style={{ fill: SNOW }}>En</tspan>
             <tspan fill="url(#ens-line)">semble</tspan>
           </text>
         </svg>
