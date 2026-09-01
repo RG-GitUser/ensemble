@@ -9,7 +9,7 @@ import {
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
   type FieldSpec, parseLines } from "@/lib/sections";
-import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+import { DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -384,6 +384,8 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             cardImage={site.config.cardImage ?? ""}
             faviconUrl={site.config.faviconUrl ?? ""}
             gradient={site.config.gradient !== false}
+            glowStrength={site.config.glowStrength ?? DEFAULT_GLOW}
+            buttonStyle={site.config.buttonStyle ?? DEFAULT_BUTTON_STYLE}
             themeId={site.config.themeId ?? ""}
             fontId={site.config.fontId ?? DEFAULT_FONT}
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}

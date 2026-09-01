@@ -9,6 +9,9 @@ import {
   BACKGROUNDS,
   BORDER_STYLES,
   borderCss,
+  BUTTON_STYLES,
+  buttonVars,
+  GLOWS,
   clampMinHeight,
   clampSize,
   MIN_HEIGHT_MAX,
@@ -862,6 +865,8 @@ export function ThemeForm({
   cardImage,
   faviconUrl,
   gradient: gradientProp,
+  glowStrength: glowStrengthProp,
+  buttonStyle: buttonStyleProp,
   themeId: themeIdProp,
   fontId: fontIdProp,
   fontScale: fontScaleProp,
@@ -896,6 +901,9 @@ export function ThemeForm({
   /** Current browser tab icon for the public page ("" = Ensemble default). */
   faviconUrl: string;
   gradient: boolean;
+  /** Accent wash strength (GLOWS id) and button treatment (BUTTON_STYLES id). */
+  glowStrength: string;
+  buttonStyle: string;
   /** Active preset backdrop id ("" = custom/Midnight). */
   themeId: string;
   /** Typeface id from lib/fonts.ts ("" = Geist). */
@@ -937,6 +945,8 @@ export function ThemeForm({
   const [minH, setMinH] = useState(containerMinHeight);
   const [border, setBorder] = useState(borderStyle);
   const [gradient, setGradient] = useState(gradientProp);
+  const [glowStrength, setGlowStrength] = useState(glowStrengthProp);
+  const [buttonStyle, setButtonStyle] = useState(buttonStyleProp);
   const [themeId, setThemeId] = useState(themeIdProp);
   const [fontId, setFontId] = useState(fontIdProp);
   const [scale, setScale] = useState(fontScaleProp);
@@ -1502,66 +1512,6 @@ export function ThemeForm({
             )}
           </div>
 
-          {/* The glow is a layer we add on top, so it's stated as one: a
-              choice between the flat color and the color with a wash over it.
-              Typing your own color turns it off, because "my color" means
-              that color — this row is how you put it back. */}
-          <div>
-            <span className="label !mb-0">Overlay</span>
-            <p className="mt-0.5 text-xs text-mist/70">
-              An optional wash of your accent color over the top of your background.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {[
-                { on: false, label: "None", sub: bgImg ? "Color and image only" : "Just your color" },
-                { on: true, label: "Accent glow", sub: "Tinted at the top" },
-              ].map((o) => (
-                <button
-                  key={o.label}
-                  type="button"
-                  aria-pressed={gradient === o.on}
-                  onClick={() => setGradient(o.on)}
-                  className={`w-[8.5rem] overflow-hidden rounded-xl border text-left transition ${
-                    gradient === o.on ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
-                  }`}
-                >
-                  {/* Both tiles carry every layer the page will actually draw —
-                      image included — so the only difference between them is
-                      the one thing they're choosing between. Drawing "None" as
-                      a flat colour promised a page nobody was going to get. */}
-                  <span
-                    className="block h-10 w-full"
-                    style={{
-                      background: `${
-                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}88, transparent 70%), ` : ""
-                      }${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`,
-                    }}
-                  />
-                  <span className="block px-2 py-1.5">
-                    <span className="block text-[11px] font-semibold">{o.label}</span>
-                    <span className="block text-[10px] text-mist">{o.sub}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            {/* The image is set further down the page, but this is where people
-                look when the backdrop isn't the flat colour they chose. */}
-            {bgImg && (
-              <p className="mt-2 text-xs text-mist">
-                A background image is also covering your color.{" "}
-                <button
-                  type="button"
-                  onClick={() => removeImage("bg")}
-                  className="font-semibold text-brand2 underline underline-offset-2"
-                >
-                  Remove the image
-                </button>{" "}
-                to see <span className="font-mono text-snow">{normalizeHex(bg) || bg}</span> on its own.
-              </p>
-            )}
-          </div>
-          {/* The form still submits the same field the action reads. */}
-          <input type="hidden" name="gradient" value={gradient ? "on" : ""} />
         </Group>
 
         {/* 2 — The boxes your content lives in. */}
@@ -1629,6 +1579,137 @@ export function ThemeForm({
             containers it draws the borders on, so the pair is chosen together. */}
         <Group pane="accent" active={pane} title="Accent" hint="Buttons, links, highlights and the accent border styles above.">
           <SwatchRow label="Accent color" swatches={ACCENTS} value={accent} onPick={setAccent} custom />
+          {/* The glow is a layer we add on top, so it's stated as one: a
+              choice between the flat color and the color with a wash over it.
+              Typing your own color turns it off, because "my color" means
+              that color — this row is how you put it back. */}
+          <div>
+            <span className="label !mb-0">Overlay</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              An optional wash of your accent color over the top of your background.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { on: false, label: "None", sub: bgImg ? "Color and image only" : "Just your color" },
+                { on: true, label: "Accent glow", sub: "Tinted at the top" },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  aria-pressed={gradient === o.on}
+                  onClick={() => setGradient(o.on)}
+                  className={`w-[8.5rem] overflow-hidden rounded-xl border text-left transition ${
+                    gradient === o.on ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                  }`}
+                >
+                  {/* Both tiles carry every layer the page will actually draw —
+                      image included — so the only difference between them is
+                      the one thing they're choosing between. Drawing "None" as
+                      a flat colour promised a page nobody was going to get. */}
+                  <span
+                    className="block h-10 w-full"
+                    style={{
+                      background: `${
+                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}88, transparent 70%), ` : ""
+                      }${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`,
+                    }}
+                  />
+                  <span className="block px-2 py-1.5">
+                    <span className="block text-[11px] font-semibold">{o.label}</span>
+                    <span className="block text-[10px] text-mist">{o.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {/* The image is set further down the page, but this is where people
+                look when the backdrop isn't the flat colour they chose. */}
+            {bgImg && (
+              <p className="mt-2 text-xs text-mist">
+                A background image is also covering your color.{" "}
+                <button
+                  type="button"
+                  onClick={() => removeImage("bg")}
+                  className="font-semibold text-brand2 underline underline-offset-2"
+                >
+                  Remove the image
+                </button>{" "}
+                to see <span className="font-mono text-snow">{normalizeHex(bg) || bg}</span> on its own.
+              </p>
+            )}
+          </div>
+          {/* The form still submits the same field the action reads. */}
+          <input type="hidden" name="gradient" value={gradient ? "on" : ""} />
+
+          {/* Only worth choosing once there is a wash to size. */}
+          {gradient && (
+            <div>
+              <span className="label !mb-0">Glow strength</span>
+              <p className="mt-0.5 text-xs text-mist/70">How much of your accent washes over the top of the page.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {GLOWS.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-pressed={glowStrength === g.id}
+                    onClick={() => setGlowStrength(g.id)}
+                    className={`w-[8.5rem] overflow-hidden border text-left transition ${
+                      glowStrength === g.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                    }`}
+                  >
+                    <span
+                      className="block h-10 w-full"
+                      style={{ background: `radial-gradient(70px 34px at 50% -10%, ${accent}${g.alpha}, transparent 70%), ${bg}` }}
+                    />
+                    <span className="block px-2 py-1.5">
+                      <span className="block text-[11px] font-semibold">{g.label}</span>
+                      <span className="block text-[10px] text-mist">{g.blurb}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <span className="label !mb-0">Buttons</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              How your accent paints every button on the page, from the hero down to the footer.
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {BUTTON_STYLES.map((b) => {
+                const vars = buttonVars(b.id, accent);
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    aria-pressed={buttonStyle === b.id}
+                    onClick={() => setButtonStyle(b.id)}
+                    className={`flex items-center gap-3 border p-2.5 text-left transition ${
+                      buttonStyle === b.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                    }`}
+                  >
+                    <span
+                      className="inline-flex h-7 shrink-0 items-center px-3 text-[11px] font-semibold"
+                      style={{
+                        background: vars["--site-btn-bg"],
+                        color: vars["--site-btn-ink"],
+                        border: `1px solid ${vars["--site-btn-border"]}`,
+                        borderRadius: `${0.5 * Number(getCorner(corner)?.value ?? 1)}rem`,
+                      }}
+                    >
+                      Button
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[11px] font-semibold">{b.label}</span>
+                      <span className="block text-[10px] text-mist">{b.blurb}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <input type="hidden" name="glowStrength" value={glowStrength} />
+          <input type="hidden" name="buttonStyle" value={buttonStyle} />
         </Group>
 
         {/* 4 — How the containers are arranged on the page. */}

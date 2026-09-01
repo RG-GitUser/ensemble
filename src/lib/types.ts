@@ -29,6 +29,10 @@ export interface SiteConfig {
   faviconUrl?: string;
   /** Accent glow gradient at the top of the page (default on). */
   gradient?: boolean;
+  /** How strong that glow is — a GLOWS id from lib/theme.ts. */
+  glowStrength?: string;
+  /** How the accent paints buttons — a BUTTON_STYLES id from lib/theme.ts. */
+  buttonStyle?: string;
   tagline: string;
   /** Site-wide visual theme id from lib/themes.ts ("" = classic midnight). */
   themeId?: string;

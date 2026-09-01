@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getFrame, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -43,7 +43,7 @@ function SectionView({
               <a
                 href={c.ctaUrl || "#"}
                 className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-                style={{ background: "var(--site-accent)" }}
+                style={{ background: "var(--site-btn-bg, var(--site-accent))", color: "var(--site-btn-ink, #fff)", borderColor: "var(--site-btn-border, transparent)", borderWidth: 1, borderStyle: "solid" }}
               >
                 {c.ctaLabel}
               </a>
@@ -158,7 +158,7 @@ function SectionView({
                     <a
                       href={buyUrl}
                       className="site-btn mt-3 block site-round-lg py-2 text-[0.875em] font-semibold text-white transition hover:opacity-90"
-                      style={{ background: "var(--site-accent)" }}
+                      style={{ background: "var(--site-btn-bg, var(--site-accent))", color: "var(--site-btn-ink, #fff)", borderColor: "var(--site-btn-border, transparent)", borderWidth: 1, borderStyle: "solid" }}
                     >
                       {c.buyLabel || "Buy now"}
                     </a>
@@ -213,7 +213,7 @@ function SectionView({
                 target="_blank"
                 rel="noreferrer"
                 className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-                style={{ background: "var(--site-accent)" }}
+                style={{ background: "var(--site-btn-bg, var(--site-accent))", color: "var(--site-btn-ink, #fff)", borderColor: "var(--site-btn-border, transparent)", borderWidth: 1, borderStyle: "solid" }}
               >
                 Open calendar
               </a>
@@ -244,7 +244,7 @@ function SectionView({
                     {m.isCreator && (
                       <span
                         className="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[0.65em] font-bold uppercase tracking-wide text-white"
-                        style={{ background: "var(--site-accent)" }}
+                        style={{ background: "var(--site-btn-bg, var(--site-accent))", color: "var(--site-btn-ink, #fff)", borderColor: "var(--site-btn-border, transparent)", borderWidth: 1, borderStyle: "solid" }}
                       >
                         Creator
                       </span>
@@ -299,7 +299,7 @@ function SectionView({
                   target="_blank"
                   rel="noreferrer"
                   className="site-btn inline-block site-round-xl px-7 py-3 font-semibold text-white transition hover:opacity-90"
-                  style={{ background: "var(--site-accent)" }}
+                  style={{ background: "var(--site-btn-bg, var(--site-accent))", color: "var(--site-btn-ink, #fff)", borderColor: "var(--site-btn-border, transparent)", borderWidth: 1, borderStyle: "solid" }}
                 >
                   {c.ctaLabel || "Watch my Instagram Live"}
                 </a>
@@ -462,6 +462,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       bgColor: cfg.bgColor ?? "#0a0812",
       bgImage: cfg.bgImage,
       glow,
+      glowAlpha: getGlow(cfg.glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha,
     }),
     card: card(cfg.cardColor ?? "rgba(255,255,255,0.05)"),
     ink: cfg.textColor || DEFAULT_TEXT_COLOR,
@@ -478,6 +479,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       bgColor: cfg.lightBgColor ?? DEFAULT_LIGHT_BG,
       bgImage: cfg.bgImage,
       glow,
+      glowAlpha: getGlow(cfg.glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha,
     }),
     card: card(cfg.lightCardColor ?? DEFAULT_LIGHT_CARD),
     ink: cfg.lightTextColor || DEFAULT_LIGHT_TEXT_COLOR,
@@ -537,6 +539,9 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   // Any container may carry its own portrait, so the frame treatment is
   // resolved once here rather than per section.
   const frameId = getFrame(cfg.profileFrame)?.id ?? DEFAULT_FRAME;
+  // One place decides how every button on the page is painted, so a button in
+  // any section gets the treatment without knowing which style is set.
+  const btnVars = buttonVars(cfg.buttonStyle, cfg.themeColor);
 
   const sectionNodes = sections.map((s, i) => {
     // A per-section theme renders the section inside a themed band.
@@ -607,6 +612,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
           fontFamily: getFont(cfg.fontId).family,
           fontSize: `calc(1rem * ${cfg.fontScale || DEFAULT_TEXT_SIZE})`,
           ...borderShape,
+          ...btnVars,
         } as React.CSSProperties
       }
     >

@@ -614,6 +614,8 @@ export interface BackdropOpts {
   glow?: boolean;
   /** Glow geometry — the page uses pixels, the small preview percentages. */
   glowSize?: string;
+  /** Hex alpha suffix for the glow (GLOWS in theme.ts). Defaults to the original. */
+  glowAlpha?: string;
 }
 
 /**
@@ -643,7 +645,7 @@ export function backdropCss(opts: BackdropOpts): CSSProperties {
   };
 
   if (opts.glow !== false) {
-    push(`radial-gradient(${opts.glowSize ?? "800px 400px"} at 50% -10%, ${opts.accent}33, transparent 70%)`);
+    push(`radial-gradient(${opts.glowSize ?? "800px 400px"} at 50% -10%, ${opts.accent}${opts.glowAlpha ?? "33"}, transparent 70%)`);
   }
   if (opts.bgImage) push(`url("${opts.bgImage}")`, "cover", "center");
 

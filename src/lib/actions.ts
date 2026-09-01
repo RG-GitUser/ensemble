@@ -46,8 +46,12 @@ import {
   DEFAULT_LIGHT_CARD,
   getBorderStyle,
   getColorMode,
+  DEFAULT_BUTTON_STYLE,
   DEFAULT_FRAME,
+  DEFAULT_GLOW,
+  getButtonStyle,
   getFrame,
+  getGlow,
   getLayout,
   LIGHT_BACKGROUNDS,
   LIGHT_CONTAINERS,
@@ -787,6 +791,9 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     // Border treatment — only known style ids reach the page's inline CSS.
     borderStyle: getBorderStyle(borderRaw) ? borderRaw : DEFAULT_BORDER,
     gradient: fd.get("gradient") === "on",
+    // Both are ids from fixed lists, so only known values reach the page.
+    glowStrength: getGlow(str(fd, "glowStrength")) ? str(fd, "glowStrength") : DEFAULT_GLOW,
+    buttonStyle: getButtonStyle(str(fd, "buttonStyle")) ? str(fd, "buttonStyle") : DEFAULT_BUTTON_STYLE,
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
     // Type. Family and size are ids from a fixed list; the ink is a color, so

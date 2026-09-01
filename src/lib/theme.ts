@@ -374,6 +374,94 @@ export function clampMinHeight(raw: string | number | undefined | null): string 
   if (!Number.isFinite(n)) return DEFAULT_MIN_HEIGHT;
   return String(Math.round(Math.min(MIN_HEIGHT_MAX, Math.max(0, n)) * 2) / 2);
 }
+/**
+ * How strong the accent wash over the backdrop is.
+ *
+ * Stored as the hex alpha suffix the page concatenates onto the accent, the
+ * same trick the border styles use, so the strength travels as part of the
+ * colour rather than as a second value to keep in step.
+ */
+export interface GlowDef {
+  id: string;
+  label: string;
+  blurb: string;
+  /** Two hex digits appended to the accent. */
+  alpha: string;
+}
+
+export const GLOWS: GlowDef[] = [
+  { id: "soft", label: "Soft", blurb: "A hint of colour at the top.", alpha: "33" },
+  { id: "medium", label: "Medium", blurb: "The wash pages shipped with.", alpha: "55" },
+  { id: "strong", label: "Strong", blurb: "Unmistakably your colour.", alpha: "88" },
+];
+
+export const DEFAULT_GLOW = GLOWS[1].id;
+
+export function getGlow(id: string | undefined | null): GlowDef | null {
+  return GLOWS.find((g) => g.id === id) ?? null;
+}
+
+/**
+ * How the accent paints a button.
+ *
+ * Each writes the three custom properties the page's buttons read, so a button
+ * anywhere gets the treatment without knowing which one is set. Solid is what
+ * every page had before this existed, so an absent setting changes nothing.
+ */
+export interface ButtonStyleDef {
+  id: string;
+  label: string;
+  blurb: string;
+  /** Background, text colour and border, as CSS values. ACCENT is substituted. */
+  bg: string;
+  ink: string;
+  border: string;
+}
+
+export const BUTTON_STYLES: ButtonStyleDef[] = [
+  { id: "solid", label: "Solid", blurb: "Filled with your accent.", bg: "ACCENT", ink: "#fff", border: "transparent" },
+  {
+    id: "gradient",
+    label: "Gradient",
+    blurb: "Your accent fading into itself.",
+    bg: "linear-gradient(135deg, ACCENT, ACCENTaa)",
+    ink: "#fff",
+    border: "transparent",
+  },
+  {
+    id: "outline",
+    label: "Outline",
+    blurb: "Just the edge, in your accent.",
+    bg: "transparent",
+    ink: "ACCENT",
+    border: "ACCENT",
+  },
+  {
+    id: "soft",
+    label: "Soft",
+    blurb: "A tint of your accent behind the words.",
+    bg: "ACCENT2e",
+    ink: "ACCENT",
+    border: "ACCENT55",
+  },
+];
+
+export const DEFAULT_BUTTON_STYLE = BUTTON_STYLES[0].id;
+
+export function getButtonStyle(id: string | undefined | null): ButtonStyleDef | null {
+  return BUTTON_STYLES.find((b) => b.id === id) ?? null;
+}
+
+/** The button style as the custom properties the public page reads. */
+export function buttonVars(id: string | undefined | null, accent: string): Record<string, string> {
+  const b = getButtonStyle(id) ?? BUTTON_STYLES[0];
+  return {
+    "--site-btn-bg": withAccent(b.bg, accent),
+    "--site-btn-ink": withAccent(b.ink, accent),
+    "--site-btn-border": withAccent(b.border, accent),
+  };
+}
+
 export const DEFAULT_BORDER = BORDER_STYLES[0].id;
 
 /** The candidate if it's in the palette, otherwise the fallback. */
