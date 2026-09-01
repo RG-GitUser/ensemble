@@ -742,6 +742,15 @@ a.site-card:hover {
   .site-storefront-main { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* The header variant: same content, centred above the page. Nothing to pin it
+   to outside the storefront's two-column grid, so it does not try. */
+.site-profile-header {
+  position: static;
+  width: min(100% - 2rem, calc(72rem * var(--site-size, 1)));
+  margin-inline: auto;
+  padding-top: calc(3rem * var(--site-rhythm, 1));
+}
+
 .site-profile-name {
   font-size: 1.9em;
   font-weight: 800;

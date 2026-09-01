@@ -18,10 +18,18 @@ export function ProfilePanel({
   name,
   config,
   accounts,
+  variant = "panel",
 }: {
   name: string;
   config: SiteConfig;
   accounts: SocialAccount[];
+  /**
+   * "panel" is the storefront's pinned column. "header" is the same content
+   * centred above the page, which is how every other layout shows it: those
+   * arrange sections down or across the page and have no side column to pin
+   * anything to.
+   */
+  variant?: "panel" | "header";
 }) {
   const frame = getFrame(config.profileFrame)?.id ?? DEFAULT_FRAME;
   const links = accounts
@@ -29,7 +37,7 @@ export function ProfilePanel({
     .filter((l): l is { account: SocialAccount; platform: NonNullable<ReturnType<typeof getPlatform>> } => !!l.platform);
 
   return (
-    <aside className="site-profile">
+    <aside className={variant === "header" ? "site-profile site-profile-header" : "site-profile"}>
       {config.profileImage && (
         <div className={`site-portrait site-frame-${frame}`}>
           {/* A plain img, not next/image: this URL is a creator upload served

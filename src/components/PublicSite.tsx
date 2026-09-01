@@ -534,8 +534,12 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   // The storefront layout pins a profile column beside the sections. Both
   // lookups happen only for that layout, so no other page pays for them.
   const storefront = layout?.id === "storefront";
-  const owner = storefront ? getUserById(site.userId) : null;
-  const profileAccounts = storefront ? getSocialAccounts(site.id) : [];
+  // A page-level portrait is offered on every layout. Storefront pins it beside
+  // the sections; the others centre it above them. Only the layouts that will
+  // actually show something pay for the two lookups.
+  const showProfile = storefront || !!cfg.profileImage;
+  const owner = showProfile ? getUserById(site.userId) : null;
+  const profileAccounts = showProfile ? getSocialAccounts(site.id) : [];
   // Any container may carry its own portrait, so the frame treatment is
   // resolved once here rather than per section.
   const frameId = getFrame(cfg.profileFrame)?.id ?? DEFAULT_FRAME;
@@ -646,6 +650,14 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       {/* Every section is wrapped the same way in every layout — the
           arrangement is the wrapper's class, never a different rendering of
           the section, so switching layouts can't disturb the content. */}
+      {!storefront && showProfile && (
+        <ProfilePanel
+          name={owner?.businessName || site.slug}
+          config={cfg}
+          accounts={profileAccounts}
+          variant="header"
+        />
+      )}
       <div className={layout ? `site-layout-${layout.id}` : undefined}>
         {storefront && (
           <ProfilePanel name={owner?.businessName || site.slug} config={cfg} accounts={profileAccounts} />

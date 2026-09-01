@@ -11,6 +11,8 @@ import {
   borderCss,
   BUTTON_STYLES,
   buttonVars,
+  DEFAULT_GLOW,
+  getGlow,
   GLOWS,
   clampMinHeight,
   clampSize,
@@ -1187,6 +1189,10 @@ export function ThemeForm({
   }
 
   const previewInk = palette.ink;
+  // The preview drew a fixed 55 wash regardless of the strength picked, so
+  // the control looked broken. One value, read by the page preview and the
+  // overlay tiles both.
+  const glowAlpha = getGlow(glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha;
   const previewCardStyle = {
     background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${palette.card}`,
     // The preview cards' natural radius is 0.75rem — scaled by the corner
@@ -1204,7 +1210,7 @@ export function ThemeForm({
   };
   /** Thumbnail for the "Custom" preset tile — reflects the current custom picks. */
   const customTileStyle = {
-    backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}55, transparent 70%), ` : ""}${
+    backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}${glowAlpha}, transparent 70%), ` : ""}${
       bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
     }`,
     backgroundColor: palette.bg,
@@ -1610,7 +1616,7 @@ export function ThemeForm({
                     className="block h-10 w-full"
                     style={{
                       background: `${
-                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}88, transparent 70%), ` : ""
+                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}${glowAlpha}, transparent 70%), ` : ""
                       }${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`,
                     }}
                   />
@@ -1719,12 +1725,12 @@ export function ThemeForm({
           hint="Where your sections sit. Your content doesn't move — only the arrangement does, so you can switch back any time."
         >
           <LayoutRow value={layout} onPick={setLayout} />
-          {layout === "storefront" && (
-            <div className="mt-4 rounded-xl border border-edge p-4">
+          <div className="mt-4 rounded-xl border border-edge p-4">
               <span className="label !mb-0">Your profile panel</span>
               <p className="mt-0.5 text-xs text-mist/70">
-                Pinned beside your offers. Only the portrait is worth uploading, since your name comes from your
-                account and the icon row from the socials you have already connected.
+                Shown on every layout: pinned beside your offers on Storefront, centred above the page on the
+                rest. Only the portrait is worth uploading, since your name comes from your account and the
+                icon row from the socials you have already connected.
               </p>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1798,7 +1804,6 @@ export function ThemeForm({
                 </label>
               </div>
             </div>
-          )}
           {layout !== "scroll" && layout !== "focus" && (
             <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
               Your hero, merch grid and video always run full width — they don&apos;t read well in half a column. On
