@@ -65,6 +65,8 @@ import {
 } from "./theme";
 import {
   DEFAULT_FONT,
+  DEFAULT_TEXT_SIZE_ID,
+  getTextSize,
   DEFAULT_LIGHT_TEXT_COLOR,
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_SIZE,
@@ -363,6 +365,7 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   content.bulletShape = getBulletShape(str(fd, "bulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
   content.sectionMarker = getMarkerMode(str(fd, "sectionMarker"))?.id ?? DEFAULT_MARKER;
   content.sectionBulletShape = getBulletShape(str(fd, "sectionBulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
+  content.textScale = getTextSize(str(fd, "textScale"))?.id ?? DEFAULT_TEXT_SIZE_ID;
 
   store.updateSectionContent(id, content);
   revalidateSite(site);

@@ -4,7 +4,7 @@ import { billingOk } from "@/lib/billing";
 import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
-import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
+import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
 import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
@@ -617,6 +617,10 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     // Counted within the same mode, so a page with three numbered sections and
     // two lettered ones reads 01, 02, 03 and A, B rather than one interleaved
     // run where neither sequence makes sense.
+    // A per-section text scale, in em, so it multiplies the page scale the
+    // root already set rather than replacing it. Everything inside a section
+    // is authored in em, so one declaration moves the whole section together.
+    const sectionScale = getTextSize(s.content.textScale)?.value;
     const marker = s.content.sectionMarker ?? "none";
     const stepNumber = sections.slice(0, i).filter((p) => (p.content.sectionMarker ?? "none") === marker).length + 1;
     // The storefront's panel is already the page's header: it carries the
@@ -637,6 +641,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       <div
         key={s.id}
         className={`site-section site-align-${getTextAlign(s.align)} site-btn-${getTextAlign(s.buttonAlign)} ${full ? "site-full" : ""} ${side}`.trim()}
+        style={sectionScale && sectionScale !== "1" ? { fontSize: `${sectionScale}em` } : undefined}
       >
         {containerTheme ? (
           <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>

@@ -132,7 +132,13 @@ export const TEXT_SIZES: TextSize[] = [
   { id: "xxxl", label: "Enormous", value: "1.65" },
 ];
 
-export const DEFAULT_TEXT_SIZE = TEXT_SIZES[1].value;
+/**
+ * Looked up by id, not by index. It used to be TEXT_SIZES[1], which quietly
+ * became "small" the moment a smaller step was added at the front — the kind
+ * of change that moves every existing page's type without touching any page.
+ */
+export const DEFAULT_TEXT_SIZE_ID = "standard";
+export const DEFAULT_TEXT_SIZE = TEXT_SIZES.find((t) => t.id === DEFAULT_TEXT_SIZE_ID)!.value;
 
 /** Text colors that stay legible on the dark backdrops. Any hex is allowed too. */
 export const TEXT_COLORS = [
@@ -155,3 +161,8 @@ export const LIGHT_TEXT_COLORS = [
 export const DEFAULT_LIGHT_TEXT_COLOR = LIGHT_TEXT_COLORS[0].value;
 
 export const DEFAULT_TEXT_COLOR = TEXT_COLORS[0].value;
+
+/** A text-size step by id, for the per-section scale. */
+export function getTextSize(id: string | undefined | null) {
+  return TEXT_SIZES.find((t) => t.id === id) ?? null;
+}

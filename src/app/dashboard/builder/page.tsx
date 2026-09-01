@@ -11,7 +11,7 @@ import {
   SECTION_TEMPLATES,
   type FieldSpec, parseLines } from "@/lib/sections";
 import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
-import { DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
+import { DEFAULT_TEXT_SIZE_ID, TEXT_SIZES, DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
   addSectionAction,
@@ -203,6 +203,32 @@ function Field({ spec, value }: { spec: FieldSpec; value: string }) {
 /** Section types that render their content as a list, so a marker has rows to mark. */
 const LIST_TYPES = new Set(["bonus", "links"]);
 
+/**
+ * Type size for this section alone.
+ *
+ * Multiplies the page's own scale rather than replacing it, because every
+ * section is authored in em: one declaration on the wrapper moves the heading,
+ * the body and the buttons together, in proportion. Standard is the no-op, so
+ * a section nobody has touched reads exactly as the page does.
+ */
+function SectionTextSizeField({ current }: { current: string }) {
+  return (
+    <div className="border-t border-edge pt-4">
+      <span className="label !mb-0">Text size</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        Scales this section against the rest of the page. Standard leaves it alone.
+      </p>
+      <select name="textScale" defaultValue={current} className="field mt-2 w-auto !py-1.5 text-sm">
+        {TEXT_SIZES.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function SectionPortraitField({ current }: { current: string }) {
   return (
     <div className="border-t border-edge pt-4">
@@ -312,6 +338,7 @@ function SectionCard({
             shape={section.content.bulletShape ?? DEFAULT_BULLET_SHAPE}
           />
         )}
+        <SectionTextSizeField current={section.content.textScale ?? DEFAULT_TEXT_SIZE_ID} />
         <SectionMarkerField
           scope="section"
           mode={section.content.sectionMarker ?? DEFAULT_MARKER}
