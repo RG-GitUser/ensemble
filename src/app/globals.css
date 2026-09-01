@@ -786,6 +786,12 @@ a.site-card:hover {
   place-items: center;
   flex: none;
 }
+/* A container's own portrait sits over a section, not beside a page, so it
+   runs about half the storefront panel's size. */
+.site-portrait-sm {
+  width: 5.5rem;
+  height: 5.5rem;
+}
 .site-portrait img {
   width: 100%;
   height: 100%;

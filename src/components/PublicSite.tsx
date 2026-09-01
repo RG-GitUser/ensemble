@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, clampMinHeight, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
+import { borderVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, getColorMode, getCorner, getFrame, getLayout, getSpacing, getTextAlign } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -384,6 +384,27 @@ function SectionView({
  * domains (/domain/[host]). Owner links and the "Powered by" link use APP_URL
  * so they point back at the platform even when served on a customer domain.
  */
+/**
+ * A container's own portrait, above whatever that section renders.
+ *
+ * Offered on every section rather than a chosen few: a creator putting a face
+ * beside their bonus drops or their merch is the same instinct the storefront
+ * panel serves, and there is no type where it would be wrong. It reuses the
+ * portrait and frame styles that panel uses, at a size that sits over a
+ * section rather than beside a page.
+ */
+function SectionPortrait({ src, frame }: { src?: string; frame: string }) {
+  if (!src) return null;
+  return (
+    <div className="flex justify-center pt-10">
+      <div className={`site-portrait site-portrait-sm site-frame-${frame}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" />
+      </div>
+    </div>
+  );
+}
+
 export async function PublicSite({ site, preview = false }: { site: Site; preview?: boolean }) {
   const user = await getCurrentUser();
   const isOwner = user?.id === site.userId;
@@ -513,6 +534,9 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
   const storefront = layout?.id === "storefront";
   const owner = storefront ? getUserById(site.userId) : null;
   const profileAccounts = storefront ? getSocialAccounts(site.id) : [];
+  // Any container may carry its own portrait, so the frame treatment is
+  // resolved once here rather than per section.
+  const frameId = getFrame(cfg.profileFrame)?.id ?? DEFAULT_FRAME;
 
   const sectionNodes = sections.map((s, i) => {
     // A per-section theme renders the section inside a themed band.
@@ -538,10 +562,14 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       >
         {containerTheme ? (
           <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
+            <SectionPortrait src={s.content.profileImage} frame={frameId} />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </div>
         ) : (
-          <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+          <>
+            <SectionPortrait src={s.content.profileImage} frame={frameId} />
+            <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
+          </>
         )}
       </div>
     );

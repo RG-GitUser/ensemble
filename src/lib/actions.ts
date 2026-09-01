@@ -337,6 +337,17 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   if (!tpl) return;
   const content: Record<string, string> = {};
   for (const f of tpl.fields) content[f.key] = str(fd, `field_${f.key}`);
+
+  // The portrait is offered on every container rather than declared per
+  // template, so it sits outside tpl.fields. The loop above rebuilds content
+  // from scratch, which would drop it on every unrelated save, so it has to be
+  // carried across here: a new upload wins, an explicit remove clears it, and
+  // otherwise whatever was there stays.
+  const upload = await themeImageFrom(fd, "sectionImageFile", site.id, "profile");
+  if (typeof upload === "string") content.profileImage = upload;
+  else if (str(fd, "clearSectionImage") === "1") content.profileImage = "";
+  else content.profileImage = section.content.profileImage ?? "";
+
   store.updateSectionContent(id, content);
   revalidateSite(site);
 }

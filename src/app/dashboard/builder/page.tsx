@@ -194,6 +194,43 @@ function Field({ spec, value }: { spec: FieldSpec; value: string }) {
   );
 }
 
+/**
+ * Every container can carry a portrait, so this control is offered on all of
+ * them rather than declared on individual templates. It saves with the rest of
+ * the section, and the frame around it follows the one chosen in Design.
+ */
+function SectionPortraitField({ current }: { current: string }) {
+  return (
+    <div className="border-t border-edge pt-4">
+      <span className="label !mb-0">Profile image</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        Optional. Sits above this section, framed the way you set it in Design.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {current && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={current} alt="" className="h-10 w-10 rounded-full object-cover" />
+        )}
+        <label className="btn-ghost cursor-pointer !py-2 text-sm">
+          {current ? "Replace" : "Add image"}
+          <input
+            type="file"
+            name="sectionImageFile"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg"
+            className="hidden"
+          />
+        </label>
+        {current && (
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-mist">
+            <input type="checkbox" name="clearSectionImage" value="1" className="h-4 w-4 accent-brand" />
+            Remove on save
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SectionCard({
   section,
   index,
@@ -264,6 +301,7 @@ function SectionCard({
         {tpl.fields.map((f) => (
           <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
         ))}
+        <SectionPortraitField current={section.content.profileImage ?? ""} />
         <SaveButton />
       </form>
     </div>
