@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getSpacing, getTextAlign, markerFor } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -432,11 +432,25 @@ function RowMarker({ mode, shape, index }: { mode?: string; shape?: string; inde
  * how a number looks and a new section type is numbered without knowing it.
  * Zero-padded, because 01 beside 10 lines up and 1 beside 10 does not.
  */
-function StepNumber({ n }: { n: number | null }) {
-  if (n === null) return null;
+function SectionMarker({ mode, shape, n }: { mode?: string; shape?: string; n: number }) {
+  const m = getMarkerMode(mode)?.id ?? DEFAULT_MARKER;
+  if (m === "none") return null;
+
+  if (m === "bullet") {
+    const b = getBulletShape(shape) ?? getBulletShape(DEFAULT_BULLET_SHAPE)!;
+    return (
+      <p className="site-step-number" aria-hidden>
+        <svg viewBox="0 0 24 24" width="1.4em" height="1.4em" className="inline-block">
+          <path d={b.path} fill="var(--site-accent)" />
+        </svg>
+      </p>
+    );
+  }
+  // Zero-padded, because 01 beside 10 lines up and 1 beside 10 does not.
+  const label = m === "letter" ? markerFor("letter", n - 1).text.replace(".", "") : String(n).padStart(2, "0");
   return (
     <p className="site-step-number" style={{ color: "var(--site-accent)" }}>
-      {String(n).padStart(2, "0")}
+      {label}
     </p>
   );
 }
@@ -600,10 +614,11 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     const containerTheme = themeCss(s.theme, cfg.themeColor);
     // Numbering counts only the sections opted into it, so turning it on for
     // three sections out of nine gives 01, 02, 03 rather than 02, 05, 08.
-    const stepNumber =
-      s.content.numbered === "1"
-        ? sections.slice(0, i).filter((p) => p.content.numbered === "1").length + 1
-        : null;
+    // Counted within the same mode, so a page with three numbered sections and
+    // two lettered ones reads 01, 02, 03 and A, B rather than one interleaved
+    // run where neither sequence makes sense.
+    const marker = s.content.sectionMarker ?? "none";
+    const stepNumber = sections.slice(0, i).filter((p) => (p.content.sectionMarker ?? "none") === marker).length + 1;
     // The storefront's panel is already the page's header: it carries the
     // portrait, the name and the links. A hero spanning the top would repeat
     // all three and push every offer below the fold, so here it joins the grid
@@ -626,13 +641,13 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
         {containerTheme ? (
           <div className="site-band site-card mx-auto my-8 overflow-hidden site-round-3xl" style={containerTheme}>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
-            <StepNumber n={stepNumber} />
+            <SectionMarker mode={s.content.sectionMarker} shape={s.content.sectionBulletShape} n={stepNumber} />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </div>
         ) : (
           <>
             <SectionPortrait src={s.content.profileImage} frame={frameId} />
-            <StepNumber n={stepNumber} />
+            <SectionMarker mode={s.content.sectionMarker} shape={s.content.sectionBulletShape} n={stepNumber} />
             <SectionView section={s} site={site} plan={plan} chat={chat} host={host} appUrl={appUrl} />
           </>
         )}

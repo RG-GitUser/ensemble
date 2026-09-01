@@ -203,25 +203,6 @@ function Field({ spec, value }: { spec: FieldSpec; value: string }) {
 /** Section types that render their content as a list, so a marker has rows to mark. */
 const LIST_TYPES = new Set(["bonus", "links"]);
 
-/**
- * Sections without rows still get the step number, which is a page-level
- * accent rather than a list one.
- */
-function SectionNumberField({ numbered }: { numbered: boolean }) {
-  return (
-    <div className="border-t border-edge pt-4">
-      <span className="label !mb-0">Accents</span>
-      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm">
-        <input type="checkbox" name="numbered" defaultChecked={numbered} className="h-4 w-4 accent-brand" />
-        <span className="text-mist">Number this section on the page</span>
-      </label>
-      <p className="mt-1.5 text-xs text-mist/70">
-        Numbered sections count only each other, so three of nine read 01, 02, 03.
-      </p>
-    </div>
-  );
-}
-
 function SectionPortraitField({ current }: { current: string }) {
   return (
     <div className="border-t border-edge pt-4">
@@ -324,15 +305,18 @@ function SectionCard({
         {tpl.fields.map((f) => (
           <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
         ))}
-        {LIST_TYPES.has(section.type) ? (
+        {LIST_TYPES.has(section.type) && (
           <SectionMarkerField
+            scope="rows"
             mode={section.content.markerMode ?? DEFAULT_MARKER}
             shape={section.content.bulletShape ?? DEFAULT_BULLET_SHAPE}
-            numbered={section.content.numbered === "1"}
           />
-        ) : (
-          <SectionNumberField numbered={section.content.numbered === "1"} />
         )}
+        <SectionMarkerField
+          scope="section"
+          mode={section.content.sectionMarker ?? DEFAULT_MARKER}
+          shape={section.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE}
+        />
         <SectionPortraitField current={section.content.profileImage ?? ""} />
         <SaveButton />
       </form>

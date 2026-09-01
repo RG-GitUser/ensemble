@@ -361,7 +361,8 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   // stored, and numbering is a flag rather than free text.
   content.markerMode = getMarkerMode(str(fd, "markerMode"))?.id ?? DEFAULT_MARKER;
   content.bulletShape = getBulletShape(str(fd, "bulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
-  content.numbered = fd.get("numbered") === "on" ? "1" : "";
+  content.sectionMarker = getMarkerMode(str(fd, "sectionMarker"))?.id ?? DEFAULT_MARKER;
+  content.sectionBulletShape = getBulletShape(str(fd, "sectionBulletShape"))?.id ?? DEFAULT_BULLET_SHAPE;
 
   store.updateSectionContent(id, content);
   revalidateSite(site);

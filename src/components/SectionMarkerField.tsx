@@ -17,19 +17,30 @@ import { BULLET_SHAPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, MARKER_MODES } fro
 export function SectionMarkerField({
   mode: modeProp,
   shape: shapeProp,
-  numbered,
+  scope,
 }: {
   mode: string;
   shape: string;
-  numbered: boolean;
+  /**
+   * "rows" marks each row inside a list section; "section" marks the section
+   * itself, above its heading. Same four modes and the same three shapes,
+   * because it is the same decision at two scales.
+   */
+  scope: "rows" | "section";
 }) {
   const [mode, setMode] = useState(modeProp || DEFAULT_MARKER);
   const [shape, setShape] = useState(shapeProp || DEFAULT_BULLET_SHAPE);
+  const nameMode = scope === "rows" ? "markerMode" : "sectionMarker";
+  const nameShape = scope === "rows" ? "bulletShape" : "sectionBulletShape";
 
   return (
     <div className="border-t border-edge pt-4">
-      <span className="label !mb-0">Row markers</span>
-      <p className="mt-0.5 text-xs text-mist/70">What sits to the left of each row in this section.</p>
+      <span className="label !mb-0">{scope === "rows" ? "Row markers" : "Section accent"}</span>
+      <p className="mt-0.5 text-xs text-mist/70">
+        {scope === "rows"
+          ? "What sits to the left of each row in this section."
+          : "A marker above this section's heading. Sections count within their own mode, so three numbered ones read 01, 02, 03 whatever else is on the page."}
+      </p>
 
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {MARKER_MODES.map((m) => (
@@ -80,13 +91,8 @@ export function SectionMarkerField({
         </div>
       )}
 
-      <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-sm">
-        <input type="checkbox" name="numbered" defaultChecked={numbered} className="h-4 w-4 accent-brand" />
-        <span className="text-mist">Also number this section on the page</span>
-      </label>
-
-      <input type="hidden" name="markerMode" value={mode} />
-      <input type="hidden" name="bulletShape" value={shape} />
+      <input type="hidden" name={nameMode} value={mode} />
+      <input type="hidden" name={nameShape} value={shape} />
     </div>
   );
 }

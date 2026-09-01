@@ -1,11 +1,28 @@
 import {
+  Archivo,
+  Bitter,
+  Bricolage_Grotesque,
+  Crimson_Pro,
+  DM_Sans,
+  Epilogue,
+  Figtree,
+  Fraunces,
   Geist,
   JetBrains_Mono,
+  Literata,
   Lora,
+  Manrope,
+  Newsreader,
   Nunito,
   Outfit,
   Playfair_Display,
+  Plus_Jakarta_Sans,
+  Rubik,
+  Sora,
+  Source_Serif_4,
   Space_Grotesk,
+  Urbanist,
+  Work_Sans,
 } from "next/font/google";
 
 /**
@@ -33,6 +50,23 @@ const lora = Lora({ subsets: ["latin"], display: "swap" });
 const nunito = Nunito({ subsets: ["latin"], display: "swap" });
 const outfit = Outfit({ subsets: ["latin"], display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], display: "swap" });
+const manrope = Manrope({ subsets: ["latin"], display: "swap" });
+const sora = Sora({ subsets: ["latin"], display: "swap" });
+const figtree = Figtree({ subsets: ["latin"], display: "swap" });
+const dmSans = DM_Sans({ subsets: ["latin"], display: "swap" });
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap" });
+const workSans = Work_Sans({ subsets: ["latin"], display: "swap" });
+const rubik = Rubik({ subsets: ["latin"], display: "swap" });
+const urbanist = Urbanist({ subsets: ["latin"], display: "swap" });
+const epilogue = Epilogue({ subsets: ["latin"], display: "swap" });
+const archivo = Archivo({ subsets: ["latin"], display: "swap" });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], display: "swap" });
+const fraunces = Fraunces({ subsets: ["latin"], display: "swap" });
+const bitter = Bitter({ subsets: ["latin"], display: "swap" });
+const newsreader = Newsreader({ subsets: ["latin"], display: "swap" });
+const literata = Literata({ subsets: ["latin"], display: "swap" });
+const crimson = Crimson_Pro({ subsets: ["latin"], display: "swap" });
+const sourceSerif = Source_Serif_4({ subsets: ["latin"], display: "swap" });
 
 export interface FontDef {
   id: string;
@@ -50,6 +84,23 @@ export const FONTS: FontDef[] = [
   { id: "playfair", label: "Playfair", note: "Editorial, high contrast", family: playfair.style.fontFamily },
   { id: "lora", label: "Lora", note: "Warm serif, easy to read", family: lora.style.fontFamily },
   { id: "nunito", label: "Nunito", note: "Rounded and approachable", family: nunito.style.fontFamily },
+  { id: "manrope", label: "Manrope", note: "Crisp and quietly modern", family: manrope.style.fontFamily },
+  { id: "sora", label: "Sora", note: "Squared off, a bit editorial", family: sora.style.fontFamily },
+  { id: "figtree", label: "Figtree", note: "Open and unfussy", family: figtree.style.fontFamily },
+  { id: "dmsans", label: "DM Sans", note: "Low contrast, very legible", family: dmSans.style.fontFamily },
+  { id: "jakarta", label: "Plus Jakarta Sans", note: "Rounded, product-ish", family: jakarta.style.fontFamily },
+  { id: "worksans", label: "Work Sans", note: "Sturdy, good at size", family: workSans.style.fontFamily },
+  { id: "rubik", label: "Rubik", note: "Soft corners, friendly", family: rubik.style.fontFamily },
+  { id: "urbanist", label: "Urbanist", note: "Geometric and airy", family: urbanist.style.fontFamily },
+  { id: "epilogue", label: "Epilogue", note: "Sharp, a little fashion", family: epilogue.style.fontFamily },
+  { id: "archivo", label: "Archivo", note: "Grotesque, works loud", family: archivo.style.fontFamily },
+  { id: "bricolage", label: "Bricolage Grotesque", note: "Characterful, slightly odd", family: bricolage.style.fontFamily },
+  { id: "fraunces", label: "Fraunces", note: "Wonky serif with personality", family: fraunces.style.fontFamily },
+  { id: "bitter", label: "Bitter", note: "Slab serif, solid", family: bitter.style.fontFamily },
+  { id: "newsreader", label: "Newsreader", note: "Serif built for reading", family: newsreader.style.fontFamily },
+  { id: "literata", label: "Literata", note: "Bookish and calm", family: literata.style.fontFamily },
+  { id: "crimson", label: "Crimson Pro", note: "Classic old-style serif", family: crimson.style.fontFamily },
+  { id: "sourceserif", label: "Source Serif", note: "Neutral serif, wide range", family: sourceSerif.style.fontFamily },
   { id: "mono", label: "JetBrains Mono", note: "Monospaced", family: mono.style.fontFamily },
 ];
 
@@ -71,10 +122,14 @@ export interface TextSize {
 }
 
 export const TEXT_SIZES: TextSize[] = [
+  { id: "xs", label: "Tiny", value: "0.8" },
   { id: "small", label: "Small", value: "0.9" },
   { id: "standard", label: "Standard", value: "1" },
+  { id: "medium", label: "Medium", value: "1.06" },
   { id: "large", label: "Large", value: "1.12" },
   { id: "xl", label: "Extra large", value: "1.28" },
+  { id: "xxl", label: "Huge", value: "1.45" },
+  { id: "xxxl", label: "Enormous", value: "1.65" },
 ];
 
 export const DEFAULT_TEXT_SIZE = TEXT_SIZES[1].value;
