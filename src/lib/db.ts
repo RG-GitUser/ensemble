@@ -433,9 +433,27 @@ function seedDemoChat(d: Database.Database): void {
 }
 
 /**
+ * The password the admin account is seeded with.
+ *
+ * "admin1234" is fine on a laptop and indefensible on a public host, and this
+ * source is public, so in production the fallback must not be a string anyone
+ * can look up. Without ADMIN_PASSWORD we mint a random one and print it once,
+ * which keeps /admin reachable on a fresh box without publishing the way in.
+ * Rotate it deliberately with scripts/set-admin-password.mjs.
+ */
+function seedPassword(): string {
+  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD;
+  if (process.env.NODE_ENV !== "production") return "admin1234";
+  const generated = randomBytes(18).toString("base64url");
+  console.warn(`[ensemble] No ADMIN_PASSWORD set. Admin seeded with: ${generated}`);
+  console.warn("[ensemble] Save that now, then rotate it with scripts/set-admin-password.mjs.");
+  return generated;
+}
+
+/**
  * Seed the admin account so /admin is reachable out of the box (idempotent).
- * Email matches ADMIN_EMAIL in auth.ts; password defaults to "admin1234"
- * (override with ADMIN_PASSWORD before first run).
+ * Email matches ADMIN_EMAIL in auth.ts; the password comes from seedPassword
+ * above, which only falls back to a known string outside production.
  */
 function seedAdmin(d: Database.Database): void {
   const email = (process.env.ADMIN_EMAIL || "rileyg0035@gmail.com").toLowerCase();
@@ -453,7 +471,7 @@ function seedAdmin(d: Database.Database): void {
     return;
   }
 
-  const password = process.env.ADMIN_PASSWORD || "admin1234";
+  const password = seedPassword();
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   const info = d

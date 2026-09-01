@@ -38,10 +38,14 @@ Open http://localhost:3000.
 
 ## Accounts
 
-- **Admin**: seeded on first run as `rileyg0035@gmail.com` / `admin1234` (override with `ADMIN_EMAIL` /
-  `ADMIN_PASSWORD` env vars before the database is first created). Comes with an Enterprise
-  site (`/hq`) and the **Admin Inbox** at `/admin` — quote requests and Enterprise support
-  tickets (reply + status).
+- **Admin**: seeded on first run at `ADMIN_EMAIL` (defaults to the maintainer's address).
+  In development the password is `admin1234`. In production, set `ADMIN_PASSWORD` before the
+  database is first created; if you don't, a random password is generated and printed once to
+  the server log, because this repo is public and a known default would be an open door.
+  Already deployed with the old default? Rotate it with `scripts/set-admin-password.mjs`,
+  which is also the only way to change it (there is no password screen in the app).
+  The account comes with an Enterprise site (`/hq`) and the **Admin Inbox** at `/admin`,
+  covering quote requests and Enterprise support tickets (reply + status).
 - **Demo**: a public example creator page at `/demo` (locked account), plus a read-only
   demo dashboard at `/demo/dashboard`.
 
