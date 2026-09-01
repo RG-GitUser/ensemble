@@ -1,5 +1,6 @@
 import { addLead, getSiteByToken } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
+import { ipFromHeaders, LIMITS, rateLimit } from "@/lib/ratelimit";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +20,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   }
   if (!getPlan(site.plan).newsletter) {
     return Response.json({ error: "Newsletter is not enabled on this page." }, { status: 403, headers: CORS });
+  }
+
+  // Open to any origin by design, which makes this the easiest lead table in
+  // the app to flood. Shares one bucket with the hosted page's signup action,
+  // so going through the embed instead does not hand anyone a second budget.
+  const limit = rateLimit(`newsletter:${ipFromHeaders(req.headers)}`, LIMITS.newsletter);
+  if (!limit.ok) {
+    return Response.json(
+      { error: "Too many signups from this connection. Try again in a few minutes." },
+      { status: 429, headers: { ...CORS, "Retry-After": String(limit.retryAfter) } },
+    );
   }
 
   // Sent as text/plain to skip the CORS preflight, so parse by hand.

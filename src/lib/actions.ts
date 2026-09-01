@@ -21,6 +21,7 @@ import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
 import { cleanHostname, platformHosts } from "./domains";
 import { isReservedSlug } from "./slugs";
+import { clientIp, LIMITS, rateLimit } from "./ratelimit";
 import { fetchPageHtml, inspectSnippet, validateSiteUrl, type SnippetCheck } from "./siteurl";
 import {
   ACCENTS,
@@ -945,6 +946,10 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   const body = str(fd, "body").slice(0, 500);
   if (!body) return { error: "Write a message first." };
 
+  // Throttled per visitor per page, so one script cannot bury a chatroom.
+  const chatLimit = rateLimit(`chat:${await clientIp()}:${siteId}`, LIMITS.chat);
+  if (!chatLimit.ok) return { error: "You're sending messages too quickly. Wait a moment, then try again." };
+
   store.addChatMessage(siteId, author, body);
   revalidatePath(`/${site.slug}`);
   revalidatePath("/dashboard/chatroom");
@@ -1289,6 +1294,12 @@ export async function subscribeAction(_prev: FormState, fd: FormData): Promise<F
   const plan = getPlan(site.plan);
   if (!plan.newsletter) return { error: "Newsletter is not enabled on this page." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  // Throttled per visitor across all pages. A real subscriber signs up once,
+  // so this only ever bites a script filling the leads table.
+  const signupLimit = rateLimit(`newsletter:${await clientIp()}`, LIMITS.newsletter);
+  if (!signupLimit.ok) return { error: "Too many signups from this connection. Try again in a few minutes." };
+
   store.addLead(siteId, email);
   return { ok: true };
 }
