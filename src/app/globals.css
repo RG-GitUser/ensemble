@@ -329,8 +329,37 @@ body,
   border-right-color: var(--site-border-color, rgba(255, 255, 255, 0.12));
   border-bottom-color: var(--site-border-color, rgba(255, 255, 255, 0.12));
   border-left-color: var(--site-border-left-color, var(--site-border-color, rgba(255, 255, 255, 0.12)));
-  box-shadow: var(--site-shadow, none);
+  box-shadow: var(--site-shadow, 0 1px 2px rgba(0, 0, 0, 0.28), 0 14px 30px -20px rgba(0, 0, 0, 0.55));
   transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/**
+ * The default lift under every container, as a var() fallback rather than a
+ * custom property.
+ *
+ * This has to be a fallback. A custom property DEFINED in this stylesheet gets
+ * substituted into its use sites at build time and the declarations dropped,
+ * so mode-specific overrides of it never survive to the browser. --site-shadow
+ * works only because nothing here defines it: borderVars writes it inline on
+ * the page root, the optimizer cannot resolve that, and the var() stays put.
+ * Same hazard the border longhands above are written around.
+ *
+ * So a border style carrying its own shadow still wins (inline beats every
+ * selector), and these two rules decide what happens when it doesn't.
+ *
+ * Two values, because a creator page is light or dark and one shadow cannot
+ * serve both: tuned for a white ground it vanishes on near-black, tuned for
+ * dark it is a grey smudge on white. Each pairs a tight contact shadow that
+ * seats the container with a wide soft one that lifts it, which reads as
+ * depth rather than as a visible edge.
+ */
+.site-root[data-site-mode="light"] .site-card {
+  box-shadow: var(--site-shadow, 0 1px 2px rgba(17, 12, 28, 0.05), 0 12px 26px -18px rgba(17, 12, 28, 0.18));
+}
+@media (prefers-color-scheme: light) {
+  .site-root[data-site-mode="auto"] .site-card {
+    box-shadow: var(--site-shadow, 0 1px 2px rgba(17, 12, 28, 0.05), 0 12px 26px -18px rgba(17, 12, 28, 0.18));
+  }
 }
 
 /**

@@ -462,12 +462,17 @@ export function borderCss(id: string | undefined | null, accent: string): CSSPro
 /** The same style as custom properties, read by `.site-card` on the public page. */
 export function borderVars(id: string | undefined | null, accent: string): Record<string, string> {
   const b = resolveBorder(id, accent);
-  return {
+  const vars: Record<string, string> = {
     "--site-border-width": b.width,
     "--site-border-color": b.color,
     "--site-border-left-width": b.leftWidth,
     "--site-border-left-color": b.leftColor,
-    "--site-shadow": b.shadow,
     "--site-border-hover": b.hover,
   };
+  // Only set when the style brings its own shadow. resolveBorder collapses
+  // "no shadow" to the string "none" for the inline preview tiles, which is
+  // right there, but writing that here would override the stylesheet's
+  // default lift with an explicit none and flatten every container.
+  if (b.shadow !== "none") vars["--site-shadow"] = b.shadow;
+  return vars;
 }
