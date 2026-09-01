@@ -595,9 +595,15 @@ a.site-card:hover {
  */
 .site-layout-storefront {
   display: grid;
-  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
   gap: calc(2rem * var(--site-rhythm, 1));
   align-items: start;
+  /* The other layouts let each section centre itself (site-w-lg mx-auto), but
+     those widths apply inside a grid column here, so nothing was centring the
+     page as a whole and the panel sat against the left edge of the viewport.
+     The wrapper takes that job instead, matching .site-band's measure. */
+  width: min(100% - 2rem, calc(72rem * var(--site-size, 1)));
+  margin-inline: auto;
 }
 
 .site-storefront-main {
