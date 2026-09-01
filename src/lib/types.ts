@@ -40,6 +40,10 @@ export interface SiteConfig {
   textColor?: string;
   /** How sections are arranged — a LAYOUTS id from lib/theme.ts. */
   layout?: string;
+  /** Vertical air between sections — a SPACINGS id from lib/theme.ts. */
+  sectionSpacing?: string;
+  /** Corner roundness of containers and buttons — a CORNERS id from lib/theme.ts. */
+  cornerStyle?: string;
   /**
    * Whether the public page offers light, dark, or lets the visitor choose.
    * Absent = "dark", so every page that predates this setting is untouched.
@@ -99,6 +103,8 @@ export type DesignConfig = Pick<
   | "fontScale"
   | "textColor"
   | "layout"
+  | "sectionSpacing"
+  | "cornerStyle"
   | "colorMode"
   | "lightBgColor"
   | "lightCardColor"
@@ -169,7 +175,21 @@ export interface Lead {
   id: number;
   siteId: number;
   email: string;
+  /** Secret carried by the unsubscribe link in every email. */
+  unsubToken: string;
+  /** When they opted out, or null while they're still subscribed. */
+  unsubscribedAt: string | null;
   createdAt: string;
+}
+
+/** One newsletter actually sent — the Audience tab's history. */
+export interface NewsletterPost {
+  id: number;
+  siteId: number;
+  subject: string;
+  body: string;
+  recipients: number;
+  sentAt: string;
 }
 
 export interface ChatMessage {
@@ -177,6 +197,8 @@ export interface ChatMessage {
   siteId: number;
   author: string;
   body: string;
+  /** Posted by the site owner from the dashboard — rooms show a badge. */
+  isCreator: boolean;
   createdAt: string;
 }
 
@@ -248,6 +270,28 @@ export interface ReferrerViews {
 export type SocialAuthKind = "handle" | "bluesky" | "webhook" | "oauth";
 
 /** A social platform account the creator connected to their dashboard (no credentials). */
+/** One dated follower reading for a single platform. */
+export interface FollowerSnapshot {
+  platform: string;
+  /** YYYY-MM-DD — the date the count describes, not when it was typed in. */
+  day: string;
+  count: number;
+  /** "manual" today; a platform id once APIs write these rows. */
+  source: string;
+}
+
+/**
+ * A follower count as it stood on a requested date. `measuredOn` is the day
+ * the reading was actually taken, which is on or before the date asked about
+ * — the two differ whenever nothing was recorded on the date itself.
+ */
+export interface FollowerReading {
+  platform: string;
+  count: number;
+  measuredOn: string;
+  source: string;
+}
+
 export interface SocialAccount {
   id: number;
   siteId: number;

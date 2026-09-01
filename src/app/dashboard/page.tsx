@@ -12,6 +12,7 @@ import {
   getUserPrefs,
   getSocialAccounts,
   getSocialPosts,
+  SITE_CONFIG_DEFAULTS,
 } from "@/lib/db";
 import { domainProgress } from "@/lib/domains";
 import { getPlan } from "@/lib/plans";
@@ -20,6 +21,24 @@ import { SocialOverview } from "@/components/SocialOverview";
 import { isStarterContent } from "@/lib/sections";
 import { SetupChecklist, type Checkpoint } from "@/components/SetupChecklist";
 import type { Section } from "@/lib/types";
+
+/** Has the creator moved any part of the look off what the site ships with? */
+function styled(cfg: NonNullable<ReturnType<typeof getSiteByUser>>["config"]): boolean {
+  return (
+    !!cfg.themeId ||
+    !!cfg.fontId ||
+    !!cfg.fontScale ||
+    !!cfg.bgImage ||
+    !!cfg.cardImage ||
+    !!cfg.textColor ||
+    !!cfg.layout ||
+    !!cfg.containerSize ||
+    !!cfg.borderStyle ||
+    cfg.bgColor !== SITE_CONFIG_DEFAULTS.bgColor ||
+    cfg.cardColor !== SITE_CONFIG_DEFAULTS.cardColor ||
+    cfg.themeColor !== SITE_CONFIG_DEFAULTS.themeColor
+  );
+}
 
 /**
  * The six checkpoints, in the order they're worth doing. Publishing is last on
@@ -69,7 +88,11 @@ function setupSteps(
       id: "design",
       label: "Pick your look",
       hint: "Choose a backdrop, a layout and a font. All of it is on every plan.",
-      done: !!cfg.themeId || !!cfg.bgImage || cfg.bgColor !== undefined || cfg.fontId !== undefined,
+      // Presence proves nothing: every one of these ships with a value, so
+      // `bgColor !== undefined` was true for every site ever created and this
+      // checkpoint could never read as outstanding. Only a value the creator
+      // moved off the shipped default counts as a look they picked.
+      done: styled(cfg),
       href: "/dashboard/builder?tab=design",
       cta: "Open Design",
     },

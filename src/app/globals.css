@@ -370,6 +370,27 @@ a.site-ink-soft:hover { color: var(--site-ink, #fff); }
 }
 
 /**
+ * Page rhythm and corner roundness (SPACINGS / CORNERS in lib/theme.ts).
+ *
+ * Each is one bare multiplier in a var, applied to bases that keep today's
+ * proportions: site-pad is the old py-14, site-pad-sm the old py-12, and the
+ * round steps mirror Tailwind's lg→3xl radii. At the default of 1 the page
+ * is pixel-identical to before these settings existed.
+ */
+.site-pad { padding-block: calc(3.5rem * var(--site-rhythm, 1)); }
+.site-pad-sm { padding-block: calc(3rem * var(--site-rhythm, 1)); }
+/* The hero opens the page: old pt-24/pb-16, scaled with everything else. */
+.site-pad-hero {
+  padding-top: calc(6rem * var(--site-rhythm, 1));
+  padding-bottom: calc(4rem * var(--site-rhythm, 1));
+}
+
+.site-round-lg { border-radius: calc(0.5rem * var(--site-round, 1)); }
+.site-round-xl { border-radius: calc(0.75rem * var(--site-round, 1)); }
+.site-round-2xl { border-radius: calc(1rem * var(--site-round, 1)); }
+.site-round-3xl { border-radius: calc(1.5rem * var(--site-round, 1)); }
+
+/**
  * A floor under each container (MIN_HEIGHT_MAX in lib/theme.ts).
  *
  * On the section wrapper and on a themed band alike, so a section that carries
@@ -513,6 +534,13 @@ a.site-ink-soft:hover { color: var(--site-ink, #fff); }
   .site-layout-stagger > .site-right { margin-left: auto; margin-right: 0; }
 }
 
+/* One narrow centred column — the link-in-bio archetype. The hero and footer
+   keep the full page (site-full), so the page still opens on a headline. */
+.site-layout-focus > :not(.site-full) {
+  width: min(100%, calc(30rem * var(--site-size, 1)));
+  margin-inline: auto;
+}
+
 /**
  * A section in a half-width column is a container, not a viewport. Its own
  * grids (merch, and anything else that lays out in columns) are sized against
@@ -520,7 +548,8 @@ a.site-ink-soft:hover { color: var(--site-ink, #fff); }
  * three columns inside half a page and every product turns into a sliver.
  */
 .site-layout-side > :not(.site-full),
-.site-layout-stagger > :not(.site-full) {
+.site-layout-stagger > :not(.site-full),
+.site-layout-focus > :not(.site-full) {
   container-type: inline-size;
 }
 @container (max-width: 44rem) {

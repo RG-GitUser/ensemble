@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cleanDay, todayISO } from "./followers";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
 import { getPlan, PLANS } from "./plans";
@@ -16,6 +17,7 @@ import {
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
+import { mailEnabled, sendNewsletter } from "./mailer";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
@@ -33,8 +35,12 @@ import {
   DEFAULT_BG,
   DEFAULT_BORDER,
   DEFAULT_CARD,
+  DEFAULT_CORNER,
   DEFAULT_SIZE,
   DEFAULT_LAYOUT,
+  DEFAULT_SPACING,
+  getCorner,
+  getSpacing,
   DEFAULT_LIGHT_BG,
   DEFAULT_LIGHT_CARD,
   getBorderStyle,
@@ -112,6 +118,9 @@ function revalidateSite(site: Site): void {
   // Publish state and domain status surface on these two as well.
   revalidatePath("/dashboard/connect");
   revalidatePath("/dashboard/settings");
+  // The Shop tab is a second editor over the merch section, so any section
+  // change may move its ground out from under it.
+  revalidatePath("/dashboard/shop");
   revalidatePath(`/${site.slug}`);
 }
 
@@ -177,6 +186,48 @@ export async function deleteMyAccount(): Promise<void> {
   store.deleteUserAccount(user.id);
   await endSession();
   redirect("/");
+}
+
+/* ---------------- follower counts ---------------- */
+
+/**
+ * Record follower counts for one date.
+ *
+ * Blank fields are skipped rather than stored as zero: leaving a platform
+ * empty means "I didn't check that one", and writing 0 would claim the
+ * creator lost every follower they had. A count of 0 typed deliberately is
+ * still honoured — it's the empty string that's treated as absent.
+ */
+export async function logFollowerCounts(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const day = cleanDay(str(fd, "day")) || todayISO();
+  // A date in the future would sit past the right-hand edge of every chart and
+  // describe a count nobody can have taken yet.
+  if (day > todayISO()) redirect("/dashboard/analytics?tab=followers&error=future");
+
+  let wrote = 0;
+  for (const account of store.getSocialAccounts(site.id)) {
+    const raw = str(fd, `count_${account.platform}`);
+    if (raw === "") continue;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0) continue;
+    store.recordFollowerCount(site.id, account.platform, day, n);
+    wrote++;
+  }
+
+  revalidatePath("/dashboard/analytics");
+  redirect(`/dashboard/analytics?tab=followers&on=${day}${wrote ? "" : "&error=empty"}`);
+}
+
+/** Remove a single reading — the way out of a figure typed on the wrong date. */
+export async function deleteFollowerCount(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const platform = str(fd, "platform");
+  const day = cleanDay(str(fd, "day"));
+  if (!platform || !day) return;
+  store.deleteFollowerCount(site.id, platform, day);
+  revalidatePath("/dashboard/analytics");
+  redirect(`/dashboard/analytics?tab=followers&on=${day}`);
 }
 
 /* ---------------- onboarding ---------------- */
@@ -280,6 +331,25 @@ export async function updateSectionAction(fd: FormData): Promise<void> {
   const section = store.getSection(id);
   if (!section || section.siteId !== site.id) return;
   const tpl = getTemplate(section.type);
+  if (!tpl) return;
+  const content: Record<string, string> = {};
+  for (const f of tpl.fields) content[f.key] = str(fd, `field_${f.key}`);
+  store.updateSectionContent(id, content);
+  revalidateSite(site);
+}
+
+/**
+ * The Shop tab saves through the merch section's own template fields — it is
+ * a friendlier editor over that one section, not a second product store, so
+ * whatever it writes is exactly what the Page Builder and the public page
+ * read back.
+ */
+export async function saveShopAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "sectionId"));
+  const section = store.getSection(id);
+  if (!section || section.siteId !== site.id || section.type !== "merch") return;
+  const tpl = getTemplate("merch");
   if (!tpl) return;
   const content: Record<string, string> = {};
   for (const f of tpl.fields) content[f.key] = str(fd, `field_${f.key}`);
@@ -620,6 +690,8 @@ function sanitizeDesign(raw: unknown, site: Site): DesignConfig {
     fontScale: pickSwatch(TEXT_SIZES, text("fontScale"), site.config.fontScale ?? DEFAULT_TEXT_SIZE),
     textColor: pickColor(TEXT_COLORS, text("textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     layout: getLayout(text("layout")) ? text("layout") : DEFAULT_LAYOUT,
+    sectionSpacing: getSpacing(text("sectionSpacing")) ? text("sectionSpacing") : DEFAULT_SPACING,
+    cornerStyle: getCorner(text("cornerStyle")) ? text("cornerStyle") : DEFAULT_CORNER,
     colorMode: getColorMode(text("colorMode")),
     lightThemeId: getThemeDef(text("lightThemeId")) ? text("lightThemeId") : "",
     lightBgColor: pickColor(LIGHT_BACKGROUNDS, text("lightBgColor"), site.config.lightBgColor ?? DEFAULT_LIGHT_BG),
@@ -710,6 +782,9 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     textColor: pickColor(TEXT_COLORS, str(fd, "textColor"), site.config.textColor ?? DEFAULT_TEXT_COLOR),
     // Section arrangement — only known layout ids reach the page.
     layout: getLayout(layoutRaw) ? layoutRaw : DEFAULT_LAYOUT,
+    // Page shape — rhythm and corner ids from their fixed lists.
+    sectionSpacing: getSpacing(str(fd, "sectionSpacing")) ? str(fd, "sectionSpacing") : DEFAULT_SPACING,
+    cornerStyle: getCorner(str(fd, "cornerStyle")) ? str(fd, "cornerStyle") : DEFAULT_CORNER,
     // Light/dark. The mode is one of three known ids; the light palette goes
     // through the same pickColor gate as the dark one, against the light
     // swatch lists.
@@ -934,15 +1009,18 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   const siteId = Number(str(fd, "siteId"));
   const site = store.getSiteById(siteId);
   if (!site) return { error: "Page not found." };
-  if (!site.published) {
+  // The badge is authenticated, never claimed: a visitor typing the
+  // creator's name gets plain text, only the logged-in owner gets the mark.
+  const user = await getCurrentUser();
+  const isCreator = !!user && user.id === site.userId;
+  if (!site.published && !isCreator) {
     // Drafts accept messages only from their owner (dashboard chatroom).
-    const user = await getCurrentUser();
-    if (!user || user.id !== site.userId) return { error: "Page not found." };
+    return { error: "Page not found." };
   }
   const plan = getPlan(site.plan);
   if (!plan.chatroom || site.config.chatroomEnabled === false) return { error: "Chat is not enabled on this page." };
 
-  const author = str(fd, "author").slice(0, 40) || "anon";
+  const author = str(fd, "author").slice(0, 40) || (isCreator && user ? user.name.split(" ")[0] : "anon");
   const body = str(fd, "body").slice(0, 500);
   if (!body) return { error: "Write a message first." };
 
@@ -950,7 +1028,7 @@ export async function postChatMessage(_prev: FormState, fd: FormData): Promise<F
   const chatLimit = rateLimit(`chat:${await clientIp()}:${siteId}`, LIMITS.chat);
   if (!chatLimit.ok) return { error: "You're sending messages too quickly. Wait a moment, then try again." };
 
-  store.addChatMessage(siteId, author, body);
+  store.addChatMessage(siteId, author, body, isCreator);
   revalidatePath(`/${site.slug}`);
   revalidatePath("/dashboard/chatroom");
   return { ok: true };
@@ -987,6 +1065,47 @@ export async function deleteLeadAction(fd: FormData): Promise<void> {
   store.deleteLead(id);
   revalidatePath("/dashboard/audience");
   revalidatePath("/dashboard/integrations");
+}
+
+/**
+ * Send a newsletter to everyone still subscribed.
+ *
+ * Sends from the platform's verified address with the creator's name on it
+ * and their account email as reply-to, one personalised email per address —
+ * each carries its own unsubscribe link. The broadcast is recorded only for
+ * the recipients that actually went out, so the history never claims more
+ * than happened.
+ */
+export async function sendNewsletterAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!getPlan(site.plan).newsletter) return { error: "Newsletters are an Enterprise feature." };
+  if (!mailEnabled()) {
+    return { error: "Email sending isn't switched on for this server yet — set RESEND_API_KEY and MAIL_FROM (see .env.example)." };
+  }
+
+  const subject = str(fd, "subject").slice(0, 150);
+  const body = str(fd, "body").slice(0, 10_000);
+  if (!subject || !body) return { error: "Give it a subject and something to say." };
+
+  const leads = store.getActiveLeads(site.id);
+  if (leads.length === 0) return { error: "Nobody to send to yet — the Newsletter section on your page collects subscribers." };
+
+  const owner = store.getUserById(site.userId);
+  if (!owner) return { error: "Account not found." };
+
+  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const { sent, failed } = await sendNewsletter({
+    fromName: owner.businessName,
+    replyTo: owner.email,
+    subject,
+    body,
+    recipients: leads.map((l) => ({ email: l.email, unsubUrl: `${base}/api/unsubscribe?t=${l.unsubToken}` })),
+  });
+
+  if (sent === 0) return { error: "Nothing went out — the mail service rejected the send. Check the server's mail configuration." };
+  store.recordNewsletterPost(site.id, subject, body, sent);
+  revalidatePath("/dashboard/audience");
+  return failed > 0 ? { error: `Sent to ${sent} subscriber${sent === 1 ? "" : "s"}, but ${failed} failed — try again later.` } : { ok: true };
 }
 
 /* ---------------- connect website ---------------- */

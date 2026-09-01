@@ -63,6 +63,17 @@ export function getPlatform(id: string): PlatformDef | undefined {
 }
 
 /**
+ * Is this brand's colour so close to black that it disappears on a dark page?
+ * TikTok, X and Threads all are. Exported because a glyph and a filled chart
+ * band need the same question answered but want different answers to it.
+ */
+export function isNearBlackBrand(color: string): boolean {
+  const n = parseInt(color.slice(1), 16);
+  const luminance = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return luminance < 40;
+}
+
+/**
  * Brand marks that are near-black vanish against the dark UI, so they borrow
  * the foreground colour instead of their own. This returns the token rather
  * than a hex: the light theme flips --color-snow to near-black, which is how
@@ -71,9 +82,7 @@ export function getPlatform(id: string): PlatformDef | undefined {
  * it right too.
  */
 export function iconFill(color: string): string {
-  const n = parseInt(color.slice(1), 16);
-  const luminance = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return luminance < 40 ? "var(--color-snow)" : color;
+  return isNearBlackBrand(color) ? "var(--color-snow)" : color;
 }
 
 /**

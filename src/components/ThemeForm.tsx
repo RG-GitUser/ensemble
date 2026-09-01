@@ -16,11 +16,16 @@ import {
   CONTAINERS,
   COLOR_MODES,
   type ColorMode,
+  CORNERS,
   DEFAULT_BORDER,
   DEFAULT_SIZE,
   edgeForLight,
+  getCorner,
+  getSpacing,
   isLight,
   LAYOUTS,
+  type ScaleDef,
+  SPACINGS,
   LIGHT_BACKGROUNDS,
   LIGHT_CONTAINERS,
   MAX_LOOKS,
@@ -321,7 +326,7 @@ function LayoutRow({ value, onPick }: { value: string; onPick: (v: string) => vo
   const bar = "rounded-[3px] bg-mist/35";
   return (
     <div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         {LAYOUTS.map((l) => {
           const selected = value === l.id;
           return (
@@ -359,9 +364,79 @@ function LayoutRow({ value, onPick }: { value: string; onPick: (v: string) => vo
                     <span className={`${bar} h-2.5 w-3/4`} />
                   </>
                 )}
+                {l.id === "focus" && (
+                  <>
+                    <span className={`${bar} h-2.5 w-full`} />
+                    <span className={`${bar} mx-auto h-2.5 w-1/2`} />
+                    <span className={`${bar} mx-auto h-2.5 w-1/2`} />
+                  </>
+                )}
               </span>
               <span className="mt-2 block text-xs font-semibold">{l.label}</span>
               <span className="mt-0.5 block text-[10px] leading-snug text-mist">{l.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Spacing and corner pickers share one tile row: a label, a blurb and a
+ * little drawing of what the page does — bars drifting apart for rhythm, a
+ * card whose corner actually wears the radius for roundness.
+ */
+function ScaleRow({
+  label,
+  hint,
+  options,
+  value,
+  onPick,
+  kind,
+}: {
+  label: string;
+  hint: string;
+  options: ScaleDef[];
+  value: string;
+  onPick: (v: string) => void;
+  kind: "spacing" | "corner";
+}) {
+  const bar = "rounded-[3px] bg-mist/35";
+  return (
+    <div>
+      <span className="label !mb-0">{label}</span>
+      <p className="mt-0.5 text-xs text-mist/70">{hint}</p>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {options.map((o) => {
+          const selected = value === o.id;
+          const mult = Number(o.value);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onPick(o.id)}
+              className={`rounded-xl border p-3 text-left transition ${
+                selected ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+              }`}
+            >
+              <span className="flex h-14 flex-col items-center justify-center rounded-lg bg-panel2 p-2">
+                {kind === "spacing" ? (
+                  <span className="flex w-full flex-col" style={{ gap: `${2 + mult * 5}px` }}>
+                    <span className={`${bar} h-2 w-full`} />
+                    <span className={`${bar} h-2 w-full`} />
+                    <span className={`${bar} h-2 w-full`} />
+                  </span>
+                ) : (
+                  <span
+                    className="h-9 w-4/5 border-2 border-mist/50 bg-mist/15"
+                    style={{ borderRadius: `${mult * 9}px` }}
+                  />
+                )}
+              </span>
+              <span className="mt-2 block text-xs font-semibold">{o.label}</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-mist">{o.blurb}</span>
             </button>
           );
         })}
@@ -383,14 +458,26 @@ function PreviewSections({
   layout,
   cardStyle,
   width,
+  minHeight,
+  rhythm,
 }: {
   layout: string;
   cardStyle: React.CSSProperties;
   /** Container width setting, as a percentage of the widest option. */
   width: string;
+  /** Container min-height in rem (0 = content decides), drawn to preview scale. */
+  minHeight: number;
+  /** Section-spacing multiplier — the preview's gaps drift with it. */
+  rhythm: number;
 }) {
+  // The real floor is 0–24rem against ~48rem-wide sections; a third of it
+  // keeps the same feel at preview scale without swallowing the panel.
+  const floor = minHeight > 0 ? `${(minHeight * 0.32).toFixed(2)}rem` : undefined;
+  const gap = `${(0.75 * rhythm).toFixed(3)}rem`;
+  const column: React.CSSProperties = { display: "flex", flexDirection: "column", gap, width, marginInline: "auto" };
+
   const Card = ({ title, sub, style }: { title: string; sub: string; style?: React.CSSProperties }) => (
-    <div className="rounded-xl p-3" style={{ ...cardStyle, ...style }}>
+    <div className="rounded-xl p-3" style={{ minHeight: floor, ...cardStyle, ...style }}>
       <p className="text-[0.85em] font-semibold leading-snug">{title}</p>
       <p className="mt-0.5 text-[0.72em] leading-snug opacity-70">{sub}</p>
     </div>
@@ -398,8 +485,8 @@ function PreviewSections({
 
   if (layout === "side") {
     return (
-      <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
-        <div className="grid grid-cols-2 gap-3">
+      <div className="mt-5" style={column}>
+        <div className="grid grid-cols-2" style={{ gap }}>
           <Card title="Featured video" sub="Your latest" />
           <Card title="About me" sub="Your story" />
           <Card title="Bonus content" sub="Early access" />
@@ -414,7 +501,7 @@ function PreviewSections({
 
   if (layout === "stagger") {
     return (
-      <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
+      <div className="mt-5" style={column}>
         <Card title="Featured video" sub="Your latest" style={{ width: "80%" }} />
         <Card title="About me" sub="Your story" style={{ width: "80%", marginLeft: "20%" }} />
         <Card title="Bonus content" sub="Early access" style={{ width: "80%" }} />
@@ -424,8 +511,20 @@ function PreviewSections({
     );
   }
 
+  if (layout === "focus") {
+    // 30rem column against the 48rem base — the same ratio the page uses.
+    return (
+      <div className="mt-5" style={column}>
+        <Card title="Featured video" sub="Your latest" style={{ width: "62%", marginInline: "auto" }} />
+        <Card title="Bonus content" sub="Early access" style={{ width: "62%", marginInline: "auto" }} />
+        <Card title="Links" sub="Find me everywhere" style={{ width: "62%", marginInline: "auto" }} />
+        <Card title="Footer" sub="Full width — it closes the page" />
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-5 space-y-3" style={{ width, marginInline: "auto" }}>
+    <div className="mt-5" style={column}>
       <Card title="Featured video" sub="Your latest" />
       <Card title="Bonus content" sub="Drops, behind the scenes, early access" />
       <Card title="Merch" sub="Sell straight from the page" />
@@ -450,6 +549,14 @@ function PreviewSections({
  * amounts, and one exact height would clip a merch grid or strand a links list
  * in whitespace, so a taller section still grows past whatever is set here.
  */
+/** The retired named widths, kept as one-tap starting points beside the drag. */
+const WIDTH_PRESETS = [
+  { label: "Narrow", value: 0.8 },
+  { label: "Standard", value: 1 },
+  { label: "Wide", value: 1.3 },
+  { label: "Extra wide", value: 1.6 },
+];
+
 function SizeRow({
   width,
   onWidth,
@@ -462,6 +569,10 @@ function SizeRow({
   onMinHeight: (v: string) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  // Where the pointer went down and what the values were then. A drag moves
+  // the edge relative to that grab, so picking up a handle never makes the
+  // value jump to wherever the cursor happened to land on it.
+  const grab = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const w = Number(clampSize(width));
   const h = Number(clampMinHeight(minHeight));
   const span = SIZE_MAX - SIZE_MIN;
@@ -470,21 +581,20 @@ function SizeRow({
   // beside it is the honest value; this only has to move the right way.
   const boxPx = 44 + (h / MIN_HEIGHT_MAX) * 150;
 
-  function widthFromClientX(clientX: number) {
-    const el = boxRef.current?.parentElement;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0) return;
-    const half = Math.abs(clientX - (r.left + r.width / 2));
-    onWidth(clampSize(SIZE_MIN + Math.min(1, (half * 2) / r.width) * span));
+  function dragWidth(clientX: number, side: -1 | 1) {
+    const parent = boxRef.current?.parentElement;
+    if (!parent || !grab.current) return;
+    const pw = parent.getBoundingClientRect().width;
+    if (pw === 0) return;
+    // The box is centred, so an edge pulled outward widens it from both
+    // sides at once — one pointer step moves the width by two.
+    const dw = (((clientX - grab.current.x) * side * 2) / pw) * span;
+    onWidth(clampSize(grab.current.w + dw));
   }
 
-  function heightFromClientY(clientY: number) {
-    const el = boxRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const px = Math.max(0, clientY - r.top);
-    onMinHeight(clampMinHeight(((px - 44) / 150) * MIN_HEIGHT_MAX));
+  function dragHeight(clientY: number) {
+    if (!grab.current) return;
+    onMinHeight(clampMinHeight(grab.current.h + ((clientY - grab.current.y) / 150) * MIN_HEIGHT_MAX));
   }
 
   const handle =
@@ -494,8 +604,9 @@ function SizeRow({
     <div>
       <span className="label !mb-0">Container size</span>
       <p className="mt-0.5 text-xs text-mist/70">
-        Drag the side edges to set how wide your sections run, and the bottom edge to give them a minimum height. Every
-        section scales together, so a links list stays narrower than a merch grid.
+        Drag the side edges to set how wide your sections run, and the bottom edge to give them a minimum height — the
+        live preview follows as you drag. Double-click an edge to reset it. Every section scales together, so a links
+        list stays narrower than a merch grid.
       </p>
 
       <div className="mt-3 select-none rounded-xl border border-edge bg-panel2 px-3 py-4">
@@ -517,11 +628,13 @@ function SizeRow({
               aria-valuenow={w}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
-                widthFromClientX(e.clientX);
+                grab.current = { x: e.clientX, y: e.clientY, w, h };
               }}
               onPointerMove={(e) => {
-                if (e.currentTarget.hasPointerCapture(e.pointerId)) widthFromClientX(e.clientX);
+                if (e.currentTarget.hasPointerCapture(e.pointerId)) dragWidth(e.clientX, side);
               }}
+              onDoubleClick={() => onWidth(DEFAULT_SIZE)}
+              title="Drag to resize — double-click for standard width"
               onKeyDown={(e) => {
                 const by = e.key === "ArrowRight" || e.key === "ArrowUp" ? 0.02 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -0.02 : 0;
                 if (by) { e.preventDefault(); onWidth(clampSize(w + by)); }
@@ -541,11 +654,13 @@ function SizeRow({
             aria-valuenow={h}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
-              heightFromClientY(e.clientY);
+              grab.current = { x: e.clientX, y: e.clientY, w, h };
             }}
             onPointerMove={(e) => {
-              if (e.currentTarget.hasPointerCapture(e.pointerId)) heightFromClientY(e.clientY);
+              if (e.currentTarget.hasPointerCapture(e.pointerId)) dragHeight(e.clientY);
             }}
+            onDoubleClick={() => onMinHeight("0")}
+            title="Drag for a height floor — double-click to let content decide"
             onKeyDown={(e) => {
               const by = e.key === "ArrowDown" ? 0.5 : e.key === "ArrowUp" ? -0.5 : 0;
               if (by) { e.preventDefault(); onMinHeight(clampMinHeight(h + by)); }
@@ -557,9 +672,38 @@ function SizeRow({
         </div>
       </div>
 
+      {/* The old named widths, back as one-tap shortcuts under the free drag. */}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {WIDTH_PRESETS.map((p) => {
+          const active = Math.abs(w - p.value) < 0.005;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onWidth(clampSize(p.value))}
+              aria-pressed={active}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                active ? "border-brand bg-brand/15 text-snow" : "border-edge text-mist hover:border-brand/60 hover:text-snow"
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-xs">
         <span className="text-mist/70">
-          {h === 0 ? "Height follows your content" : `At least ${h}rem tall, and taller when the content needs it`}
+          {h === 0 ? (
+            "Height follows your content"
+          ) : (
+            <>
+              At least {h}rem tall, and taller when the content needs it —{" "}
+              <button type="button" onClick={() => onMinHeight("0")} className="underline underline-offset-2 hover:text-snow">
+                clear
+              </button>
+            </>
+          )}
         </span>
         <span className="font-mono text-snow">
           {w.toFixed(2)}&times; wide{h > 0 ? ` · ${h}rem min` : ""}
@@ -667,6 +811,8 @@ export function ThemeForm({
   fontScale: fontScaleProp,
   textColor: textColorProp,
   layout: layoutProp,
+  sectionSpacing: spacingProp,
+  cornerStyle: cornerProp,
   colorMode: colorModeProp,
   lightBgColor,
   lightCardColor,
@@ -699,6 +845,10 @@ export function ThemeForm({
   textColor: string;
   /** Section arrangement (LAYOUTS id). */
   layout: string;
+  /** Vertical air between sections (SPACINGS id). */
+  sectionSpacing: string;
+  /** Corner roundness of containers and buttons (CORNERS id). */
+  cornerStyle: string;
   /** Whether the page is dark, light, or the visitor's choice. */
   colorMode: ColorMode;
   lightBgColor: string;
@@ -724,6 +874,8 @@ export function ThemeForm({
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
+  const [spacing, setSpacing] = useState(spacingProp);
+  const [corner, setCorner] = useState(cornerProp);
   const [colorMode, setColorMode] = useState<ColorMode>(colorModeProp);
   const [lightBg, setLightBg] = useState(lightBgColor);
   const [lightCard, setLightCard] = useState(lightCardColor);
@@ -902,6 +1054,8 @@ export function ThemeForm({
     fontScale: scale,
     textColor: ink,
     layout,
+    sectionSpacing: spacing,
+    cornerStyle: corner,
     colorMode,
     lightBgColor: lightBg,
     lightCardColor: lightCard,
@@ -922,6 +1076,8 @@ export function ThemeForm({
     if (d.fontScale) setScale(d.fontScale);
     if (d.textColor) setInk(d.textColor);
     if (d.layout) setLayout(d.layout);
+    if (d.sectionSpacing) setSpacing(d.sectionSpacing);
+    if (d.cornerStyle) setCorner(d.cornerStyle);
     if (d.colorMode) setColorMode(d.colorMode);
     if (d.lightBgColor) setLightBg(d.lightBgColor);
     if (d.lightCardColor) setLightCard(d.lightCardColor);
@@ -939,6 +1095,9 @@ export function ThemeForm({
   const previewInk = palette.ink;
   const previewCardStyle = {
     background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${palette.card}`,
+    // The preview cards' natural radius is 0.75rem — scaled by the corner
+    // setting exactly as .site-round-xl scales the page's own.
+    borderRadius: `${0.75 * Number(getCorner(corner)?.value ?? 1)}rem`,
     ...borderCss(border, accent),
     // Container edges are authored for a dark page — the public page flips
     // them for light mode, so the preview has to as well.
@@ -975,6 +1134,8 @@ export function ThemeForm({
       <input type="hidden" name="fontScale" value={scale} />
       <input type="hidden" name="textColor" value={ink} />
       <input type="hidden" name="layout" value={layout} />
+      <input type="hidden" name="sectionSpacing" value={spacing} />
+      <input type="hidden" name="cornerStyle" value={corner} />
       <input type="hidden" name="colorMode" value={colorMode} />
       <input type="hidden" name="lightBgColor" value={lightBg} />
       <input type="hidden" name="lightCardColor" value={lightCard} />
@@ -1330,6 +1491,14 @@ export function ThemeForm({
             custom
           />
           <SizeRow width={size} onWidth={setSize} minHeight={minH} onMinHeight={setMinH} />
+          <ScaleRow
+            label="Corners"
+            hint="One setting rounds every container and button together, from square to pill."
+            options={CORNERS}
+            value={corner}
+            onPick={setCorner}
+            kind="corner"
+          />
           <BorderRow value={border} onPick={setBorder} accent={accent} card={palette.card} base={palette.bg} />
 
           <div>
@@ -1384,12 +1553,20 @@ export function ThemeForm({
           hint="Where your sections sit. Your content doesn't move — only the arrangement does, so you can switch back any time."
         >
           <LayoutRow value={layout} onPick={setLayout} />
-          {layout !== "scroll" && (
+          {layout !== "scroll" && layout !== "focus" && (
             <p className="rounded-xl bg-panel2 px-4 py-2.5 text-xs text-mist">
               Your hero, merch grid and video always run full width — they don&apos;t read well in half a column. On
               phones every layout stacks into one column.
             </p>
           )}
+          <ScaleRow
+            label="Section spacing"
+            hint="How much air sits between your sections — the whole page keeps its own proportions."
+            options={SPACINGS}
+            value={spacing}
+            onPick={setSpacing}
+            kind="spacing"
+          />
         </Group>
 
         {/* 5 — The words themselves. */}
@@ -1505,8 +1682,8 @@ export function ThemeForm({
               </p>
               <div className="mt-4 text-center">
                 <span
-                  className="inline-block rounded-lg px-4 py-1.5 text-[0.85em] font-semibold text-white"
-                  style={{ background: accent }}
+                  className="inline-block px-4 py-1.5 text-[0.85em] font-semibold text-white"
+                  style={{ background: accent, borderRadius: `${0.5 * Number(getCorner(corner)?.value ?? 1)}rem` }}
                 >
                   Your button
                 </span>
@@ -1516,6 +1693,8 @@ export function ThemeForm({
                 layout={layout}
                 cardStyle={previewCardStyle}
                 width={previewCardWidth}
+                minHeight={Number(clampMinHeight(minH))}
+                rhythm={Number(getSpacing(spacing)?.value ?? 1)}
               />
 
               <p className="mt-6 border-t pt-3 text-center text-[0.7em] opacity-50" style={{ borderColor: "currentColor" }}>
