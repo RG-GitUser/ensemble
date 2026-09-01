@@ -36,7 +36,7 @@ function SectionView({
     case "hero":
       return (
         <section className="px-6 site-pad-hero text-center">
-          <h1 className="site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
+          <h1 className="site-hero-title site-w-lg mx-auto text-[2.25em] font-extrabold leading-tight sm:text-[3.75em]">{c.heading}</h1>
           {c.subheading && <p className="mx-auto mt-5 max-w-xl text-[1.125em] site-ink-soft">{c.subheading}</p>}
           {c.ctaLabel && (
             <div className="site-btn-row mt-8">

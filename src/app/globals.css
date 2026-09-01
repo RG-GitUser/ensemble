@@ -555,8 +555,43 @@ a.site-ink-soft:hover { color: var(--site-ink, #fff); }
 @container (max-width: 44rem) {
   .site-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@container (max-width: 26rem) {
+/* 22rem, not 26: a storefront column lands at about 25rem, and collapsing the
+   product grid there turned a merch section into a 1500px tower beside a
+   350px card. Two narrow products read better than one wide one stacked. */
+@container (max-width: 22rem) {
   .site-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/**
+ * A section in a column, rather than across the page.
+ *
+ * Every section is written for the full page, and the hero's type steps up at
+ * Tailwind's `sm:` breakpoint — a VIEWPORT query. So a half-width column on a
+ * wide screen still got a 3.75em headline over a full screen of padding, which
+ * is why a hero in any multi-column layout swallowed its column and pushed
+ * everything beside it out of proportion.
+ *
+ * The multi-column layouts already mark each section as a container, so these
+ * queries measure the room a section actually has. The single-column layout
+ * never matches them, and is untouched.
+ */
+@container (max-width: 42rem) {
+  .site-hero-title { font-size: 2.4em; }
+  .site-pad-hero {
+    padding-top: calc(3rem * var(--site-rhythm, 1));
+    padding-bottom: calc(2.5rem * var(--site-rhythm, 1));
+  }
+  .site-pad { padding-block: calc(2.5rem * var(--site-rhythm, 1)); }
+  .site-pad-sm { padding-block: calc(2rem * var(--site-rhythm, 1)); }
+}
+@container (max-width: 28rem) {
+  .site-hero-title { font-size: 1.9em; }
+  .site-pad-hero {
+    padding-top: calc(2rem * var(--site-rhythm, 1));
+    padding-bottom: calc(1.75rem * var(--site-rhythm, 1));
+  }
+  .site-pad { padding-block: calc(1.75rem * var(--site-rhythm, 1)); }
+  .site-pad-sm { padding-block: calc(1.5rem * var(--site-rhythm, 1)); }
 }
 
 /* Tappable containers keep their lift on hover, in whichever colour the
