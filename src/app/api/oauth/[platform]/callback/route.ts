@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { getSiteByUser, upsertSocialAccount } from "@/lib/db";
-import { getOAuthProvider, providerCredentials, type ConnectErrorCode } from "@/lib/oauth";
+import { getOAuthProvider, oauthRedirectUri, providerCredentials, type ConnectErrorCode } from "@/lib/oauth";
 import { exchangeCode, fetchIdentity } from "@/lib/oauth-connect";
 import { STATE_COOKIE } from "../route";
 
@@ -41,7 +41,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
   if (!creds) return back("not-configured");
 
   try {
-    const tokens = await exchangeCode(provider, creds, code, `${base}/api/oauth/${platform}/callback`);
+    // Must be byte-identical to the value sent at the authorize step.
+    const tokens = await exchangeCode(provider, creds, code, oauthRedirectUri(base, platform));
     if (!tokens) return back("token-failed");
 
     const result = await fetchIdentity(provider, tokens.accessToken);
