@@ -50,3 +50,12 @@ data/
 /.claude/
 /CLAUDE.md
 /AGENTS.md
+
+# Local backups written by scripts/backup.sh
+/backups/
+
+# Duplicate files created by file-sync tools (the project lives under ~/Desktop).
+# These are byte-identical copies; two of them landed in src/app route folders
+# and broke `tsc` with duplicate-identifier errors before being caught.
+*[[:space:]][0-9].ts
+*[[:space:]][0-9].tsx

@@ -86,11 +86,56 @@ its A record → the first HTTPS visit mints its certificate automatically.
 Everything mutable lives in `/srv/ensemble/data/` (SQLite DB + uploads).
 
 ```sh
-# nightly snapshot of the DB, keeping 14 days (crontab -e as ensemble)
-0 4 * * * sqlite3 /srv/ensemble/data/app.db ".backup /srv/ensemble/data/backup-$(date +\%u).db"
+chmod +x /srv/ensemble/scripts/backup.sh
+crontab -e   # as the ensemble user
+0 4 * * * /srv/ensemble/scripts/backup.sh >> /srv/ensemble/backups/backup.log 2>&1
 ```
 
-DigitalOcean droplet snapshots (weekly) cover the rest.
+`scripts/backup.sh` writes to `/srv/ensemble/backups/` — deliberately outside
+`data/`. It snapshots the database with `sqlite3 .backup`, tars the uploads,
+integrity-checks the copy before keeping it, and prunes past `KEEP_DAYS`.
+
+**Use `.backup`, never `cp`.** The database runs in WAL mode, so at any moment
+most recent writes are in `app.db-wal` rather than `app.db`. Copying `app.db`
+alone gets you an almost empty database that still opens cleanly — the worst
+kind of bad backup. Any manual copy must take `app.db`, `app.db-wal` and
+`app.db-shm` together.
+
+### Off the droplet
+
+Local copies do not survive losing the droplet, which is most of what a backup
+is for. Set an [rclone](https://rclone.org) remote (DigitalOcean Spaces is
+S3-compatible) and the script pushes each night's files there too:
+
+```sh
+apt install -y rclone
+rclone config                      # add a remote, e.g. "spaces"
+echo 'BACKUP_REMOTE=spaces:ensemble-backups' >> /srv/ensemble/.env
+```
+
+Without `BACKUP_REMOTE` the script still runs and says the copies are local
+only. DigitalOcean droplet snapshots (weekly) cover the rest of the disk.
+
+### Restoring
+
+```sh
+systemctl stop ensemble
+
+cd /srv/ensemble/data
+mv app.db app.db.broken                    # keep it: it may still have the WAL
+rm -f app.db-wal app.db-shm                # stale WAL against a new DB corrupts it
+cp /srv/ensemble/backups/app-3.db app.db   # pick the day you want
+tar xzf /srv/ensemble/backups/uploads-3.tar.gz -C /srv/ensemble/data
+
+chown -R ensemble:ensemble /srv/ensemble/data
+sqlite3 app.db "PRAGMA integrity_check;"   # expect: ok
+systemctl start ensemble
+```
+
+Deleting the old `-wal` and `-shm` matters: SQLite will try to replay a
+leftover WAL against the restored file, which is not the database it belongs
+to. Restore is worth rehearsing once on a throwaway droplet — an untested
+backup is a guess.
 
 ## 9. Updating the app
 
@@ -156,5 +201,21 @@ when it outgrows this one.
   otherwise let anyone enumerate your customers' domains). The block is a
   snippet imported into every site block — a new block without the import
   re-exposes it.
-- `ADMIN_PASSWORD` only applies when the database is first created. To change
-  it later you currently need to update the user row manually.
+- `ADMIN_PASSWORD` only applies when the database is first created; setting it
+  afterwards does nothing, because `seedAdmin` returns early once the account
+  exists. To change an already-seeded account, run the rotate script on the
+  machine holding the database. The password arrives on stdin so it stays out
+  of shell history and out of the process list, and every existing session for
+  the account is dropped:
+
+  ```sh
+  cd /srv/ensemble
+  read -rs NEWPW && printf '%s' "$NEWPW" | node scripts/set-admin-password.mjs
+  ```
+
+  The stored credential is a scrypt hash and is not reversible — if the
+  password is lost, rotating is the only way back in, for anyone.
+- **Watch egress if the live relay is on.** `scripts/check-egress.sh` projects
+  the month from usage so far and stays quiet unless the projection runs over
+  the droplet's allowance. `apt install -y vnstat && systemctl enable --now
+  vnstat`, then `0 9 * * * /srv/ensemble/scripts/check-egress.sh`.
