@@ -3,17 +3,21 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { deleteLookAction, saveLookAction, updateTheme, type FormState } from "@/lib/actions";
 import type { SavedLook } from "@/lib/types";
-import { RearrangeOverlay, type RearrangeSection } from "@/components/RearrangeOverlay";
 import {
   ACCENTS,
   BACKGROUNDS,
   BORDER_STYLES,
   borderCss,
   BUTTON_STYLES,
+  BUTTON_HOVERS,
+  CONTAINER_HOVERS,
   buttonVars,
   DEFAULT_GLOW,
   getGlow,
   GLOWS,
+  GLOW_SIZES,
+  DEFAULT_GLOW_SIZE,
+  getGlowSize,
   clampMinHeight,
   clampSize,
   MIN_HEIGHT_MAX,
@@ -41,7 +45,7 @@ import {
 } from "@/lib/theme";
 import { backdropCss, BRIGHT_GROUP, DARK_THEME_GROUPS, DARK_THEMES, getThemeDef, LIGHT_THEMES, themeCss, type ThemeGroup } from "@/lib/themes";
 import { FONTS, getFont, LIGHT_TEXT_COLORS, TEXT_COLORS, TEXT_SIZES } from "@/lib/fonts";
-import { CloseIcon, DragIcon, ShuffleIcon } from "@/components/icons";
+import { CloseIcon, ShuffleIcon } from "@/components/icons";
 
 /**
  * The Design tab's panes, in the order a page is built up — the backdrop
@@ -876,7 +880,11 @@ export function ThemeForm({
   faviconUrl,
   gradient: gradientProp,
   glowStrength: glowStrengthProp,
+  glowSize: glowSizeProp,
+  glowColor: glowColorProp,
   buttonStyle: buttonStyleProp,
+  containerHover: containerHoverProp,
+  buttonHover: buttonHoverProp,
   themeId: themeIdProp,
   fontId: fontIdProp,
   fontScale: fontScaleProp,
@@ -886,7 +894,6 @@ export function ThemeForm({
   profileFrame: profileFrameProp,
   profileHandle: profileHandleProp,
   profileLocation: profileLocationProp,
-  sections,
   sectionSpacing: spacingProp,
   cornerStyle: cornerProp,
   colorMode: colorModeProp,
@@ -913,7 +920,14 @@ export function ThemeForm({
   gradient: boolean;
   /** Accent wash strength (GLOWS id) and button treatment (BUTTON_STYLES id). */
   glowStrength: string;
+  /** How far the wash spreads (GLOW_SIZES id). */
+  glowSize: string;
+  /** Wash colour, or "" to follow the accent. */
+  glowColor: string;
   buttonStyle: string;
+  /** Hover treatments (CONTAINER_HOVERS / BUTTON_HOVERS ids). */
+  containerHover: string;
+  buttonHover: string;
   /** Active preset backdrop id ("" = custom/Midnight). */
   themeId: string;
   /** Typeface id from lib/fonts.ts ("" = Geist). */
@@ -929,8 +943,6 @@ export function ThemeForm({
   profileFrame: string;
   profileHandle: string;
   profileLocation: string;
-  /** Just id and type — enough to name and reorder them in the pop-out. */
-  sections: RearrangeSection[];
   /** Vertical air between sections (SPACINGS id). */
   sectionSpacing: string;
   /** Corner roundness of containers and buttons (CORNERS id). */
@@ -956,13 +968,16 @@ export function ThemeForm({
   const [border, setBorder] = useState(borderStyle);
   const [gradient, setGradient] = useState(gradientProp);
   const [glowStrength, setGlowStrength] = useState(glowStrengthProp);
+  const [glowSize, setGlowSize] = useState(glowSizeProp);
+  const [glowColor, setGlowColor] = useState(glowColorProp);
   const [buttonStyle, setButtonStyle] = useState(buttonStyleProp);
+  const [containerHover, setContainerHover] = useState(containerHoverProp);
+  const [buttonHover, setButtonHover] = useState(buttonHoverProp);
   const [themeId, setThemeId] = useState(themeIdProp);
   const [fontId, setFontId] = useState(fontIdProp);
   const [scale, setScale] = useState(fontScaleProp);
   const [ink, setInk] = useState(textColorProp);
   const [layout, setLayout] = useState(layoutProp);
-  const [rearranging, setRearranging] = useState(false);
   const [profileImg, setProfileImg] = useState<string>(profileImage);
   const [clearProfile, setClearProfile] = useState(false);
   const [frame, setFrame] = useState(profileFrameProp);
@@ -1134,13 +1149,35 @@ export function ThemeForm({
         ink,
         setInk,
       };
+  // The three glow values every surface here draws with. They sit above the
+  // preview because the preview is the first thing that reads them, and each
+  // one used to be hardcoded somewhere below: the wash was a fixed 55, the
+  // geometry a fixed "62% 44%", and the tint always the accent. That is what
+  // made the glow controls look inert — they saved correctly and the preview
+  // simply ignored them.
+  const glowAlpha = getGlow(glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha;
+  const glowGeom = getGlowSize(glowSize) ?? getGlowSize(DEFAULT_GLOW_SIZE)!;
+  /** Blank means "follow the accent", so every draw site resolves it the same way. */
+  const glowTint = glowColor || accent;
+  const previewButton = buttonVars(buttonStyle, accent);
+  /** Mirrors .site-frame-* from globals.css, scaled to the preview portrait. */
+  const previewFrameStyle: React.CSSProperties =
+    frame === "ring"
+      ? { padding: 3, background: accent }
+      : frame === "gradient"
+        ? { padding: 3, background: `linear-gradient(145deg, ${accent}, transparent 85%)` }
+        : frame === "glow"
+          ? { boxShadow: `0 0 0 1px ${accent}59, 0 10px 28px ${accent}4d` }
+          : {};
   const previewStyle = backdropCss({
     themeId: palette.themeId,
     accent,
     bgColor: palette.bg,
     bgImage: bgImg,
     glow: gradient,
-    glowSize: "62% 44%",
+    glowSize: glowGeom.preview,
+    glowAlpha,
+    glowColor: glowTint,
   });
   /** Everything the Design tab owns, exactly as it stands right now. */
   const currentDesign = {
@@ -1197,10 +1234,6 @@ export function ThemeForm({
   }
 
   const previewInk = palette.ink;
-  // The preview drew a fixed 55 wash regardless of the strength picked, so
-  // the control looked broken. One value, read by the page preview and the
-  // overlay tiles both.
-  const glowAlpha = getGlow(glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha;
   const previewCardStyle = {
     background: `${cardImg ? `url("${cardImg}") center / cover no-repeat, ` : ""}${palette.card}`,
     // The preview cards' natural radius is 0.75rem — scaled by the corner
@@ -1218,7 +1251,7 @@ export function ThemeForm({
   };
   /** Thumbnail for the "Custom" preset tile — reflects the current custom picks. */
   const customTileStyle = {
-    backgroundImage: `${gradient ? `radial-gradient(62% 44% at 50% -10%, ${accent}${glowAlpha}, transparent 70%), ` : ""}${
+    backgroundImage: `${gradient ? `radial-gradient(${glowGeom.preview} at 50% -10%, ${glowTint}${glowAlpha}, transparent 70%), ` : ""}${
       bgImg ? `url("${bgImg}") center / cover no-repeat` : "none"
     }`,
     backgroundColor: palette.bg,
@@ -1637,7 +1670,7 @@ export function ThemeForm({
                     className="block h-10 w-full"
                     style={{
                       background: `${
-                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${accent}${glowAlpha}, transparent 70%), ` : ""
+                        o.on ? `radial-gradient(70px 34px at 50% -10%, ${glowTint}${glowAlpha}, transparent 70%), ` : ""
                       }${bgImg ? `url("${bgImg}") center / cover no-repeat, ` : ""}${bg}`,
                     }}
                   />
@@ -1685,7 +1718,7 @@ export function ThemeForm({
                   >
                     <span
                       className="block h-10 w-full"
-                      style={{ background: `radial-gradient(70px 34px at 50% -10%, ${accent}${g.alpha}, transparent 70%), ${bg}` }}
+                      style={{ background: `radial-gradient(70px 34px at 50% -10%, ${glowTint}${g.alpha}, transparent 70%), ${bg}` }}
                     />
                     <span className="block px-2 py-1.5">
                       <span className="block text-[11px] font-semibold">{g.label}</span>
@@ -1696,6 +1729,91 @@ export function ThemeForm({
               </div>
             </div>
           )}
+
+          {/* Size and colour are only choices once there is a wash to shape.
+              Both exist because several backdrop presets ship their own
+              gradient artwork: against those, an accent-coloured wash at the
+              stock spread just muddies what is already there, so the glow
+              needs to be shrunk, restrained, or moved off the accent. */}
+          {gradient && (
+            <div>
+              <span className="label !mb-0">Glow size</span>
+              <p className="mt-0.5 text-xs text-mist/70">How far the wash spreads before it fades out.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {GLOW_SIZES.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-pressed={glowSize === g.id}
+                    onClick={() => setGlowSize(g.id)}
+                    className={`w-[8.5rem] overflow-hidden border text-left transition ${
+                      glowSize === g.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                    }`}
+                  >
+                    {/* Each tile draws its own geometry at the same scale the
+                        side preview uses, so picking one is a like-for-like
+                        comparison rather than a guess from the label. */}
+                    <span
+                      className="block h-10 w-full"
+                      style={{ background: `radial-gradient(${g.preview} at 50% -10%, ${glowTint}${glowAlpha}, transparent 70%), ${bg}` }}
+                    />
+                    <span className="block px-2 py-1.5">
+                      <span className="block text-[11px] font-semibold">{g.label}</span>
+                      <span className="block text-[10px] text-mist">{g.blurb}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {gradient && (
+            <div>
+              <span className="label !mb-0">Glow color</span>
+              <p className="mt-0.5 text-xs text-mist/70">
+                Follows your accent unless you set it apart — useful when the backdrop already has a gradient of its own.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {/* "" is the stored value for following the accent, so this tile
+                    is a real choice rather than the absence of one. */}
+                <button
+                  type="button"
+                  aria-pressed={glowColor === ""}
+                  onClick={() => setGlowColor("")}
+                  className={`w-[8.5rem] overflow-hidden border text-left transition ${
+                    glowColor === "" ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                  }`}
+                >
+                  <span
+                    className="block h-10 w-full"
+                    style={{ background: `radial-gradient(70px 34px at 50% -10%, ${accent}${glowAlpha}, transparent 70%), ${bg}` }}
+                  />
+                  <span className="block px-2 py-1.5">
+                    <span className="block text-[11px] font-semibold">Follow accent</span>
+                    <span className="block text-[10px] text-mist">Matches your color</span>
+                  </span>
+                </button>
+                {ACCENTS.map((sw) => (
+                  <button
+                    key={sw.value}
+                    type="button"
+                    aria-pressed={glowColor === sw.value}
+                    onClick={() => setGlowColor(sw.value)}
+                    aria-label={`Glow color: ${sw.label}`}
+                    className={`h-10 w-10 rounded-full border-2 transition ${
+                      glowColor === sw.value ? "border-brand" : "border-edge hover:border-brand/60"
+                    }`}
+                    style={{ background: sw.value }}
+                  />
+                ))}
+              </div>
+              {/* The usual "too light for white text" caution is meaningless for
+                  a wash — nothing is read on top of it. */}
+              <HexPicker label="Glow color" value={glowColor} onPick={setGlowColor} warning="" />
+            </div>
+          )}
+          <input type="hidden" name="glowSize" value={glowSize} />
+          <input type="hidden" name="glowColor" value={glowColor} />
 
           <div>
             <span className="label !mb-0">Buttons</span>
@@ -1736,6 +1854,63 @@ export function ThemeForm({
             </div>
           </div>
           <input type="hidden" name="glowStrength" value={glowStrength} />
+          {/* Words rather than swatches: a hover is a behaviour, and a static
+              tile can only ever hint at one. Kept as two compact rows so the
+              panel doesn't grow another two grids of pictures. */}
+          <div>
+            <span className="label !mb-0">On hover</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              What containers and buttons do when someone points at them. Hover the options to try them.
+            </p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <div>
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-mist">
+                  Containers
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {CONTAINER_HOVERS.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      aria-pressed={containerHover === h.id}
+                      title={h.blurb}
+                      onClick={() => setContainerHover(h.id)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                        containerHover === h.id ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+                      }`}
+                    >
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-mist">Buttons</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {BUTTON_HOVERS.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      aria-pressed={buttonHover === h.id}
+                      title={h.blurb}
+                      onClick={() => setButtonHover(h.id)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                        buttonHover === h.id ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+                      }`}
+                    >
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-mist/70">
+              {CONTAINER_HOVERS.find((h) => h.id === containerHover)?.blurb}{" "}
+              {BUTTON_HOVERS.find((h) => h.id === buttonHover)?.blurb}
+            </p>
+          </div>
+          <input type="hidden" name="containerHover" value={containerHover} />
+          <input type="hidden" name="buttonHover" value={buttonHover} />
           <input type="hidden" name="buttonStyle" value={buttonStyle} />
         </Group>
 
@@ -1930,16 +2105,6 @@ export function ThemeForm({
             >
               <ShuffleIcon /> Randomize
             </button>
-            {/* The side preview is big enough to judge colour, too small to
-                judge order. This opens the same page at a size you can think
-                about, and is the only place the order is editable from Design. */}
-            <button
-              type="button"
-              onClick={() => setRearranging(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-mist hover:text-snow"
-            >
-              <DragIcon /> Rearrange
-            </button>
           </div>
           {/* The preview carries the creator's type as well as their colors —
               font, scale and ink all apply here exactly as they do on the
@@ -1958,14 +2123,50 @@ export function ThemeForm({
                 color: previewInk,
               }}
             >
+              {/* The portrait, its frame, the handle and the location are all
+                  page settings set from this very screen, and none of them used
+                  to appear here — so picking a frame or typing a handle changed
+                  nothing you could see until you saved and opened the page.
+                  Drawn at preview scale rather than through the site-* classes,
+                  which are sized for a real page. */}
+              {profileImg && (
+                <div
+                  className="mx-auto mb-3 grid h-20 w-20 place-items-center rounded-full"
+                  style={previewFrameStyle}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={profileImg}
+                    alt=""
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                </div>
+              )}
               <p className="text-center text-[1.6em] font-extrabold leading-tight">Your name here</p>
+              {handle && (
+                <p className="mt-0.5 text-center text-[0.85em] font-semibold" style={{ color: accent }}>
+                  {handle}
+                </p>
+              )}
+              {where && <p className="mt-0.5 text-center text-[0.75em] opacity-70">{where}</p>}
               <p className="mx-auto mt-1.5 max-w-[22em] text-center text-[0.8em] opacity-70">
                 This is how your page will feel — your type, your colors, your layout.
               </p>
               <div className="mt-4 text-center">
+                {/* Drawn from the same buttonVars the page's buttons read, so
+                    the Buttons control is visible here rather than only after
+                    saving. It painted a flat accent before, which made every
+                    treatment but Solid look like it had done nothing. */}
                 <span
-                  className="inline-block px-4 py-1.5 text-[0.85em] font-semibold text-white"
-                  style={{ background: accent, borderRadius: `${0.5 * Number(getCorner(corner)?.value ?? 1)}rem` }}
+                  className="inline-block px-4 py-1.5 text-[0.85em] font-semibold"
+                  style={{
+                    background: previewButton["--site-btn-bg"],
+                    color: previewButton["--site-btn-ink"],
+                    borderColor: previewButton["--site-btn-border"],
+                    borderWidth: 1,
+                    borderStyle: "solid",
+                    borderRadius: `${0.5 * Number(getCorner(corner)?.value ?? 1)}rem`,
+                  }}
                 >
                   Your button
                 </span>
@@ -2046,17 +2247,6 @@ export function ThemeForm({
           up in the group and are associated by id. */}
       <form id="look-save" action={lookAction} className="hidden" />
       <form id="look-delete" action={deleteLookAction} className="hidden" />
-
-      {rearranging && (
-        <RearrangeOverlay
-          sections={sections}
-          layout={layout}
-          cardStyle={previewCardStyle}
-          ink={palette.ink}
-          pageBg={palette.bg}
-          onClose={() => setRearranging(false)}
-        />
-      )}
     </>
   );
 }

@@ -313,3 +313,29 @@ export function connectionHealth(expiresAt: string | null): { state: HealthState
     };
   return { state: "ready", daysLeft, message: "Auto-posting is ready" };
 }
+
+/**
+ * The one origin OAuth is allowed to happen on.
+ *
+ * Every provider matches redirect_uri against a fixed list registered in its
+ * developer console, character for character. Deriving it from the request's
+ * Host header meant the value changed with whichever platform host the creator
+ * happened to be browsing — PLATFORM_HOSTS carries the apex, www and sites.*,
+ * and the proxy passes all of them through without canonicalising — so
+ * starting the flow from www sent a redirect_uri nobody had registered and
+ * Meta answered "Invalid redirect_uri".
+ *
+ * APP_URL is the platform's canonical absolute URL and is already what the
+ * registered callbacks are built from, so it is the authority here. The
+ * request origin is only a fallback for local development, where APP_URL is
+ * typically unset and the registered URI is a localhost one anyway.
+ */
+export function oauthOrigin(requestOrigin: string): string {
+  const configured = (process.env.APP_URL || "").trim().replace(/\/$/, "");
+  return configured || requestOrigin;
+}
+
+/** The exact redirect_uri for a platform — the same string at both steps. */
+export function oauthRedirectUri(requestOrigin: string, platform: string): string {
+  return `${oauthOrigin(requestOrigin)}/api/oauth/${platform}/callback`;
+}

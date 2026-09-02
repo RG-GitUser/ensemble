@@ -24,6 +24,12 @@ export const LIMITS = {
   chat: { max: 10, windowMs: 60_000 },
   /** A real visitor subscribes once. Past a handful it is a script. */
   newsletter: { max: 5, windowMs: 10 * 60_000 },
+  /**
+   * Password resets. Low enough that the form cannot be used to mailbomb an
+   * address or to grind reset tokens, high enough to survive a person
+   * mistyping their address twice and asking again.
+   */
+  passwordReset: { max: 5, windowMs: 15 * 60_000 },
 } satisfies Record<string, Limit>;
 
 interface Window {

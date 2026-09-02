@@ -9,8 +9,8 @@ import {
   planAllowsTemplate,
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
-  type FieldSpec, parseLines } from "@/lib/sections";
-import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+  type FieldSpec } from "@/lib/sections";
+import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CONTAINER_HOVER, DEFAULT_BUTTON_HOVER, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_TEXT_SIZE_ID, TEXT_SIZES, DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -28,7 +28,7 @@ import { DangerButton } from "@/components/DangerButton";
 import { ThemeForm } from "@/components/ThemeForm";
 import { DraggableSections } from "@/components/DraggableSections";
 import { SaveButton } from "@/components/SaveButton";
-import { ArrowDownIcon, ArrowUpIcon, CheckIcon, CloseIcon, DragIcon, SortIcon } from "@/components/icons";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon, ChevronIcon, CloseIcon, DragIcon, SortIcon } from "@/components/icons";
 import type { Section } from "@/lib/types";
 
 /** The classic look when no theme is chosen. */
@@ -127,7 +127,7 @@ function SectionAppearance({ section, accent }: { section: Section; accent: stri
   const align = getTextAlign(section.align);
   const buttonAlign = getTextAlign(section.buttonAlign);
   return (
-    <div className="mb-4 space-y-3 border-b border-edge pb-4">
+    <div className="space-y-3 pb-2">
       <div>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-mist">Container theme</p>
       <div className="flex flex-wrap gap-1.5">
@@ -213,7 +213,7 @@ const LIST_TYPES = new Set(["bonus", "links"]);
  */
 function SectionTextSizeField({ current }: { current: string }) {
   return (
-    <div className="border-t border-edge pt-4">
+    <div>
       <span className="label !mb-0">Text size</span>
       <p className="mt-0.5 text-xs text-mist/70">
         Scales this section against the rest of the page. Standard leaves it alone.
@@ -231,7 +231,7 @@ function SectionTextSizeField({ current }: { current: string }) {
 
 function SectionPortraitField({ current }: { current: string }) {
   return (
-    <div className="border-t border-edge pt-4">
+    <div>
       <span className="label !mb-0">Profile image</span>
       <p className="mt-0.5 text-xs text-mist/70">
         Optional. Sits above this section, framed the way you set it in Design.
@@ -258,6 +258,42 @@ function SectionPortraitField({ current }: { current: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One collapsible group of settings inside a section card.
+ *
+ * A section card had grown to a flat stack of every control at once — content
+ * fields, row markers, text size, the section accent, a portrait and the
+ * appearance row — all expanded, all the time, with nothing saying which
+ * belonged together. Grouping them behind disclosures means the card opens at
+ * the thing people came for and the rest is one line each until wanted.
+ *
+ * Native <details>, so the cards stay Server Components with no client state,
+ * and the browser handles the open/shut itself.
+ */
+function SectionGroup({
+  title,
+  hint,
+  open = false,
+  children,
+}: {
+  title: string;
+  /** Shown beside the title while shut, to say what is inside. */
+  hint: string;
+  open?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={open} className="group border-t border-edge">
+      <summary className="flex cursor-pointer select-none items-center gap-2 py-3 text-sm font-semibold marker:content-none [&::-webkit-details-marker]:hidden">
+        <ChevronIcon className="shrink-0 text-mist transition-transform group-open:rotate-180" />
+        <span>{title}</span>
+        <span className="ml-auto text-xs font-normal text-mist/70 group-open:hidden">{hint}</span>
+      </summary>
+      <div className="space-y-4 pb-4">{children}</div>
+    </details>
   );
 }
 
@@ -325,29 +361,51 @@ function SectionCard({
           </form>
         </div>
       </div>
-      <SectionAppearance section={section} accent={accent} />
-      <form action={updateSectionAction} className="space-y-4">
+      {/* Content is what the card is for, so it is the one group that opens
+          with the card. Everything else is one line until asked for. */}
+      <form action={updateSectionAction}>
         <input type="hidden" name="sectionId" value={section.id} />
-        {tpl.fields.map((f) => (
-          <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
-        ))}
-        {LIST_TYPES.has(section.type) && (
+        <SectionGroup title="Content" hint="Words and links" open>
+          {tpl.fields.map((f) => (
+            <Field key={f.key} spec={f} value={section.content[f.key] ?? ""} />
+          ))}
+        </SectionGroup>
+
+        <SectionGroup
+          title="Markers &amp; numbering"
+          hint={LIST_TYPES.has(section.type) ? "Row markers, section accent" : "Section accent"}
+        >
+          {LIST_TYPES.has(section.type) && (
+            <SectionMarkerField
+              scope="rows"
+              mode={section.content.markerMode ?? DEFAULT_MARKER}
+              shape={section.content.bulletShape ?? DEFAULT_BULLET_SHAPE}
+            />
+          )}
           <SectionMarkerField
-            scope="rows"
-            mode={section.content.markerMode ?? DEFAULT_MARKER}
-            shape={section.content.bulletShape ?? DEFAULT_BULLET_SHAPE}
+            scope="section"
+            mode={section.content.sectionMarker ?? DEFAULT_MARKER}
+            shape={section.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE}
+            position={section.content.markerPosition ?? DEFAULT_MARKER_POSITION}
           />
-        )}
-        <SectionTextSizeField current={section.content.textScale ?? DEFAULT_TEXT_SIZE_ID} />
-        <SectionMarkerField
-          scope="section"
-          mode={section.content.sectionMarker ?? DEFAULT_MARKER}
-          shape={section.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE}
-          position={section.content.markerPosition ?? DEFAULT_MARKER_POSITION}
-        />
-        <SectionPortraitField current={section.content.profileImage ?? ""} />
-        <SaveButton />
+        </SectionGroup>
+
+        <SectionGroup title="Type &amp; image" hint="Text size, profile image">
+          <SectionTextSizeField current={section.content.textScale ?? DEFAULT_TEXT_SIZE_ID} />
+          <SectionPortraitField current={section.content.profileImage ?? ""} />
+        </SectionGroup>
+
+        <div className="border-t border-edge pt-4">
+          <SaveButton />
+        </div>
       </form>
+
+      {/* Outside the form above, and last, because each control here posts its
+          own form and lands immediately — HTML has no nested forms, and a
+          group that saves on click does not belong under a Save button. */}
+      <SectionGroup title="Appearance" hint="Theme, alignment — saves instantly">
+        <SectionAppearance section={section} accent={accent} />
+      </SectionGroup>
     </div>
   );
 }
@@ -429,7 +487,11 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             faviconUrl={site.config.faviconUrl ?? ""}
             gradient={site.config.gradient !== false}
             glowStrength={site.config.glowStrength ?? DEFAULT_GLOW}
+            glowSize={site.config.glowSize ?? DEFAULT_GLOW_SIZE}
+            glowColor={site.config.glowColor ?? ""}
             buttonStyle={site.config.buttonStyle ?? DEFAULT_BUTTON_STYLE}
+            containerHover={site.config.containerHover ?? DEFAULT_CONTAINER_HOVER}
+            buttonHover={site.config.buttonHover ?? DEFAULT_BUTTON_HOVER}
             themeId={site.config.themeId ?? ""}
             fontId={site.config.fontId ?? DEFAULT_FONT}
             fontScale={site.config.fontScale ?? DEFAULT_TEXT_SIZE}
@@ -439,24 +501,6 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             profileFrame={site.config.profileFrame ?? DEFAULT_FRAME}
             profileHandle={site.config.profileHandle ?? ""}
             profileLocation={site.config.profileLocation ?? ""}
-            sections={sections.map((s) => {
-              // The list-shaped sections store rows as "Label | url | …", so the
-              // first field of each row is the label a visitor actually reads.
-              const rows = parseLines(s.content.items ?? "").slice(0, 3);
-              return {
-                id: s.id,
-                type: s.type,
-                heading: s.content.heading ?? "",
-                sub: s.content.subheading ?? s.content.body ?? "",
-                items: rows.map((r: string[]) => r[0] ?? "").filter(Boolean),
-                sectionMarker: s.content.sectionMarker ?? DEFAULT_MARKER,
-                sectionBulletShape: s.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE,
-                markerMode: s.content.markerMode ?? DEFAULT_MARKER,
-                bulletShape: s.content.bulletShape ?? DEFAULT_BULLET_SHAPE,
-                markerPosition: s.content.markerPosition ?? DEFAULT_MARKER_POSITION,
-                textScale: s.content.textScale ?? DEFAULT_TEXT_SIZE_ID,
-              };
-            })}
             sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}
             cornerStyle={site.config.cornerStyle ?? DEFAULT_CORNER}
             colorMode={getColorMode(site.config.colorMode)}

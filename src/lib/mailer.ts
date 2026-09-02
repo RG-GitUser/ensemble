@@ -98,3 +98,134 @@ export async function sendNewsletter(opts: {
   }
   return { sent, failed };
 }
+
+/**
+ * The address platform mail comes from.
+ *
+ * Deliberately not MAIL_FROM. That one is the creators' newsletter sender and
+ * carries a creator's name as its display name; a password reset is from
+ * Ensemble itself and should never look like it came from a creator. Defaults
+ * to noreply@ on the platform domain, which is a send-only mailbox — replies
+ * to a reset link have nowhere useful to go.
+ */
+function systemFrom(): string {
+  return process.env.AUTH_MAIL_FROM || "Ensemble <noreply@ensemble.it.com>";
+}
+
+/**
+ * Send one password-reset link.
+ *
+ * Returns false when mail is not configured or the send fails, and the caller
+ * deliberately does not surface which — telling a stranger that an address
+ * exists but the mail server is down is still telling them the address exists.
+ */
+async function sendSystemMail(opts: {
+  to: string;
+  subject: string;
+  lead: string;
+  cta?: { label: string; url: string };
+  footer: string;
+}): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return false;
+
+  const text = [opts.lead, opts.cta?.url, opts.footer].filter(Boolean).join("\n\n");
+  const button = opts.cta
+    ? `<p style="margin:0 0 1.5em;"><a href="${escapeHtml(opts.cta.url)}" style="display:inline-block; ` +
+      `background:#8b5cf6; color:#fff; padding:0.75em 1.25em; border-radius:0.5em; text-decoration:none; ` +
+      `font-weight:600;">${escapeHtml(opts.cta.label)}</a></p>`
+    : "";
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: systemFrom(),
+        to: [opts.to],
+        subject: opts.subject,
+        text,
+        html:
+          `<div style="max-width:36em; margin:0 auto; font-family:system-ui,-apple-system,sans-serif; color:#1a1a1a;">` +
+          `<p style="margin:0 0 1em; line-height:1.6;">${escapeHtml(opts.lead)}</p>` +
+          button +
+          `<p style="margin:0; line-height:1.6; font-size:14px; color:#555;">${escapeHtml(opts.footer)}</p></div>`,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Send one password-reset link.
+ *
+ * Returns false when mail is not configured or the send fails, and the caller
+ * deliberately does not surface which — telling a stranger that an address
+ * exists but the mail server is down is still telling them the address exists.
+ */
+export async function sendPasswordReset(opts: { to: string; url: string; expiresMinutes: number }): Promise<boolean> {
+  return sendSystemMail({
+    to: opts.to,
+    subject: "Reset your Ensemble password",
+    lead: "Someone asked to reset the password for your Ensemble account.",
+    cta: { label: "Choose a new password", url: opts.url },
+    footer:
+      `The link works once and expires in ${opts.expiresMinutes} minutes. ` +
+      `If this wasn't you, ignore this email — your password stays as it is.`,
+  });
+}
+
+/** Confirm a recovery address can actually receive mail before trusting it. */
+export async function sendBackupVerification(opts: {
+  to: string;
+  url: string;
+  expiresMinutes: number;
+}): Promise<boolean> {
+  return sendSystemMail({
+    to: opts.to,
+    subject: "Confirm your Ensemble recovery address",
+    lead:
+      "This address was added as the recovery address for an Ensemble account. " +
+      "Confirm it and it can be used to get back in if the login address is ever forgotten.",
+    cta: { label: "Confirm this address", url: opts.url },
+    footer:
+      `The link works once and expires in ${opts.expiresMinutes} minutes. ` +
+      `If you weren't expecting this, ignore it — nothing changes unless the link is opened.`,
+  });
+}
+
+/** Recovery: a link to set a new login address, sent to the recovery mailbox. */
+export async function sendLoginRecovery(opts: { to: string; url: string; expiresMinutes: number }): Promise<boolean> {
+  return sendSystemMail({
+    to: opts.to,
+    subject: "Get back into your Ensemble account",
+    lead:
+      "This address is the recovery address for an Ensemble account, and someone asked for a way back in. " +
+      "The link below sets a new login address and password.",
+    cta: { label: "Set a new login address", url: opts.url },
+    footer:
+      `The link works once and expires in ${opts.expiresMinutes} minutes. ` +
+      `If this wasn't you, ignore this email — the account is untouched.`,
+  });
+}
+
+/**
+ * Tell the address being replaced that it is being replaced.
+ *
+ * Recovery hands whoever controls the backup mailbox a new login address and
+ * password, which is exactly the shape of a takeover if that mailbox is not
+ * theirs. The old address cannot stop it, but it should never be the last to
+ * know, so this goes out after the change lands.
+ */
+export async function sendLoginChangedNotice(opts: { to: string; newEmail: string }): Promise<boolean> {
+  return sendSystemMail({
+    to: opts.to,
+    subject: "Your Ensemble login address was changed",
+    lead:
+      `The login address for your Ensemble account was changed to ${opts.newEmail} ` +
+      `using the account's recovery address. Every signed-in session was ended.`,
+    footer: "If this wasn't you, reply to this message or contact support straight away.",
+  });
+}

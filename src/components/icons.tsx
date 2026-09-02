@@ -112,3 +112,12 @@ export function LedgerIcon({ className }: { className?: string }) {
     </Svg>
   );
 }
+
+/** Points down when a disclosure is shut, and is rotated when it is open. */
+export function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden className={className}>
+      <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

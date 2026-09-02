@@ -33,12 +33,14 @@ export function SectionMarkerField({
 }) {
   const [mode, setMode] = useState(modeProp || DEFAULT_MARKER);
   const [shape, setShape] = useState(shapeProp || DEFAULT_BULLET_SHAPE);
-  const [position, setPosition] = useState(positionProp || DEFAULT_MARKER_POSITION);
+  const [position, setPosition] = useState(
+    positionProp || ((modeProp || DEFAULT_MARKER) === "bullet" ? "corner" : DEFAULT_MARKER_POSITION)
+  );
   const nameMode = scope === "rows" ? "markerMode" : "sectionMarker";
   const nameShape = scope === "rows" ? "bulletShape" : "sectionBulletShape";
 
   return (
-    <div className="border-t border-edge pt-4">
+    <div>
       <span className="label !mb-0">{scope === "rows" ? "Row markers" : "Section accent"}</span>
       <p className="mt-0.5 text-xs text-mist/70">
         {scope === "rows"
@@ -57,15 +59,15 @@ export function SectionMarkerField({
               mode === m.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
             }`}
           >
-            <span className="flex h-8 flex-col justify-center gap-1">
+            <span className="flex h-11 flex-col justify-center gap-1.5">
               {m.sample.map((sample, i) => (
-                <span key={i} className="flex items-center gap-1.5">
-                  <span className="w-3 text-[10px] font-bold text-brand">{sample}</span>
+                <span key={i} className="flex items-center gap-2">
+                  <span className="w-4 text-[13px] font-bold leading-none text-brand">{sample}</span>
                   <span className="h-1 flex-1 bg-mist/30" />
                 </span>
               ))}
             </span>
-            <span className="mt-2 block text-xs font-semibold">{m.label}</span>
+            <span className="mt-3.5 block text-xs font-semibold">{m.label}</span>
             <span className="block text-[10px] text-mist">{m.blurb}</span>
           </button>
         ))}
@@ -95,35 +97,32 @@ export function SectionMarkerField({
         </div>
       )}
 
-      {/* Bullets are corner-only: centred over a heading a lone dot reads as a
-          stray glyph. Numbers and letters work either way, so they choose. */}
+      {/* Every mode chooses, bullets included. A bullet that never chose still
+          resolves to the corner on the page, so nothing written before this
+          moves — see resolveMarkerPosition. */}
       {scope === "section" && mode !== "none" && (
         <div className="mt-3">
           <span className="label !mb-1 block">Position</span>
-          {mode === "bullet" ? (
-            <p className="text-xs text-mist/70">Bullets sit in the outer top-left corner.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {MARKER_POSITIONS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={position === p.id}
-                  onClick={() => setPosition(p.id)}
-                  className={`border px-3 py-2 text-left text-xs transition ${
-                    position === p.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
-                  }`}
-                >
-                  <span className="block font-semibold">{p.label}</span>
-                  <span className="block text-[10px] text-mist">{p.blurb}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {MARKER_POSITIONS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={position === p.id}
+                onClick={() => setPosition(p.id)}
+                className={`border px-3 py-2 text-left text-xs transition ${
+                  position === p.id ? "border-brand bg-brand/10" : "border-edge hover:border-brand/60"
+                }`}
+              >
+                <span className="block font-semibold">{p.label}</span>
+                <span className="block text-[10px] text-mist">{p.blurb}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {scope === "section" && <input type="hidden" name="markerPosition" value={mode === "bullet" ? "corner" : position} />}
+      {scope === "section" && <input type="hidden" name="markerPosition" value={position} />}
       <input type="hidden" name={nameMode} value={mode} />
       <input type="hidden" name={nameShape} value={shape} />
     </div>

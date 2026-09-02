@@ -37,6 +37,13 @@ export function proxy(req: NextRequest): NextResponse {
     const isPublic =
       path === "/" ||
       path.startsWith("/login") ||
+      // Password recovery has to survive WIP mode. Someone already holding an
+      // account is exactly who is meant to get in while the funnel is shut,
+      // and a reset link that redirects to the landing page is a dead link.
+      path.startsWith("/forgot") ||
+      path.startsWith("/reset/") ||
+      path.startsWith("/recover") ||
+      path.startsWith("/verify-backup/") ||
       path === "/s" ||
       path.startsWith("/s/") ||
       path === "/privacy" ||

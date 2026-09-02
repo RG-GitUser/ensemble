@@ -778,7 +778,10 @@ a.site-card:hover {
 .site-step-number {
   padding-top: calc(2rem * var(--site-rhythm, 1));
   text-align: center;
-  font-size: 0.8em;
+  /* Was 0.8em, which put the marker below body size and read as a footnote
+     rather than as the thing labelling the section. It is an accent, so it
+     sits just above the copy it introduces. */
+  font-size: 1.15em;
   font-weight: 800;
   letter-spacing: 0.18em;
   opacity: 0.85;
@@ -852,4 +855,81 @@ a.site-card:hover {
 .site-frame-glow {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--site-accent, currentColor) 35%, transparent),
     0 14px 40px color-mix(in srgb, var(--site-accent, currentColor) 30%, transparent);
+}
+
+/**
+ * Hover treatments for containers and buttons.
+ *
+ * Chosen in Design and applied as a class, since :hover has no inline form.
+ * The class goes on the page root and these select downward, so one attribute
+ * covers every container and button on the page — the alternative was tagging
+ * a dozen call sites individually and missing the next one somebody adds.
+ *
+ * Every colour comes from --site-accent or the button's own custom properties,
+ * so a hover can only ever use colours the creator already picked.
+ *
+ * The transition sits on the element rather than inside :hover, or the effect
+ * would animate on the way in and snap on the way out.
+ */
+.site-hover-c-lift .site-card,
+.site-hover-c-glow .site-card,
+.site-hover-c-outline .site-card,
+.site-hover-c-brighten .site-card,
+.site-hover-b-lift .site-btn,
+.site-hover-b-glow .site-btn,
+.site-hover-b-invert .site-btn,
+.site-hover-b-grow .site-btn {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    filter 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.site-hover-c-lift .site-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+.site-hover-c-glow .site-card:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--site-accent, currentColor) 45%, transparent),
+    0 16px 44px color-mix(in srgb, var(--site-accent, currentColor) 28%, transparent);
+}
+.site-hover-c-outline .site-card:hover {
+  border-color: var(--site-accent, currentColor);
+}
+.site-hover-c-brighten .site-card:hover {
+  filter: brightness(1.12);
+}
+
+.site-hover-b-lift .site-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+.site-hover-b-glow .site-btn:hover {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--site-accent, currentColor) 28%, transparent),
+    0 10px 30px color-mix(in srgb, var(--site-accent, currentColor) 45%, transparent);
+}
+/* Reads the button's own resolved colours, so Invert follows whichever button
+   treatment is set rather than assuming a solid accent fill. */
+.site-hover-b-invert .site-btn:hover {
+  background: var(--site-btn-ink, #fff);
+  color: var(--site-btn-bg, var(--site-accent));
+  border-color: var(--site-btn-ink, #fff);
+}
+.site-hover-b-grow .site-btn:hover {
+  transform: scale(1.04);
+}
+
+/* Movement is the part people can be sensitive to; colour and shadow are not,
+   so only the transform effects are dropped. */
+@media (prefers-reduced-motion: reduce) {
+  .site-hover-c-lift .site-card:hover,
+  .site-hover-b-lift .site-btn:hover,
+  .site-hover-b-grow .site-btn:hover {
+    transform: none;
+  }
 }

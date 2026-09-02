@@ -7,6 +7,10 @@ export interface User {
   name: string;
   businessName: string;
   createdAt: string;
+  /** Recovery address, "" when unset. Only usable once verified. */
+  backupEmail: string;
+  /** When the backup address proved it could receive mail. 0 = never. */
+  backupVerifiedAt: number;
 }
 
 export interface SiteConfig {
@@ -31,8 +35,16 @@ export interface SiteConfig {
   gradient?: boolean;
   /** How strong that glow is — a GLOWS id from lib/theme.ts. */
   glowStrength?: string;
+  /** How far the glow spreads — a GLOW_SIZES id from lib/theme.ts. */
+  glowSize?: string;
+  /** Glow colour. "" follows the accent, which is the historic behaviour. */
+  glowColor?: string;
   /** How the accent paints buttons — a BUTTON_STYLES id from lib/theme.ts. */
   buttonStyle?: string;
+  /** What a container does under the pointer — a CONTAINER_HOVERS id. */
+  containerHover?: string;
+  /** What a button does under the pointer — a BUTTON_HOVERS id. */
+  buttonHover?: string;
   tagline: string;
   /** Site-wide visual theme id from lib/themes.ts ("" = classic midnight). */
   themeId?: string;

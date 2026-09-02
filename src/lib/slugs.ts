@@ -29,12 +29,16 @@ const ROUTES = [
   "domain",
   "embed-demo",
   "embed.js",
+  "forgot",
   "login",
   "onboarding",
   "privacy",
+  "recover",
+  "reset",
   "s",
   "signup",
   "terms",
+  "verify-backup",
 ];
 
 /** Next.js internals and web-standard files served from the root. */

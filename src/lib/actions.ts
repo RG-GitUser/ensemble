@@ -17,7 +17,14 @@ import {
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, DEFAULT_METRIC, getMetric, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
-import { mailEnabled, sendNewsletter } from "./mailer";
+import {
+  mailEnabled,
+  sendBackupVerification,
+  sendLoginChangedNotice,
+  sendLoginRecovery,
+  sendNewsletter,
+  sendPasswordReset,
+} from "./mailer";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
@@ -51,6 +58,12 @@ import {
   DEFAULT_MARKER,
   DEFAULT_FRAME,
   DEFAULT_GLOW,
+  DEFAULT_CONTAINER_HOVER,
+  DEFAULT_BUTTON_HOVER,
+  getContainerHover,
+  getButtonHover,
+  DEFAULT_GLOW_SIZE,
+  getGlowSize,
   getBulletShape,
   getButtonStyle,
   getMarkerMode,
@@ -61,6 +74,7 @@ import {
   LIGHT_BACKGROUNDS,
   LIGHT_CONTAINERS,
   MAX_LOOKS,
+  normalizeHex,
   pickColor,
   pickSwatch,
 } from "./theme";
@@ -92,6 +106,8 @@ import type { DesignConfig, Plan, Site, SiteConfig } from "./types";
 export interface FormState {
   error?: string;
   ok?: boolean;
+  /** A success line to show in place of the form's own copy. */
+  message?: string;
 }
 
 /* ---------------- helpers ---------------- */
@@ -173,6 +189,162 @@ export async function login(_prev: FormState, fd: FormData): Promise<FormState> 
   const site = store.getSiteByUser(user.id);
   const quote = store.getQuoteByUser(user.id);
   redirect(site || quote ? "/dashboard" : "/onboarding");
+}
+
+/**
+ * How long a reset link stays good. Long enough to find the mail and act on
+ * it, short enough that a link sitting in a mailbox is not a standing key.
+ */
+const RESET_TTL_MINUTES = 45;
+
+/**
+ * Ask for a reset link.
+ *
+ * Always reports success, whether or not the address has an account. The
+ * response to an unknown address has to be indistinguishable from the response
+ * to a known one, or this form becomes a way to test which addresses are
+ * registered. That is also why a mail failure is not surfaced: "we couldn't
+ * send it" confirms the account exists just as loudly as sending it would.
+ *
+ * Rate limited per address so the form cannot be used to mailbomb someone.
+ */
+export async function requestPasswordReset(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  const limit = rateLimit(`reset:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const user = store.getUserByEmail(email);
+  if (user) {
+    const token = randomBytes(32).toString("base64url");
+    store.createAuthToken(token, user.id, "password_reset", Date.now() + RESET_TTL_MINUTES * 60_000);
+    const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    await sendPasswordReset({
+      to: user.email,
+      url: `${base}/reset/${token}`,
+      expiresMinutes: RESET_TTL_MINUTES,
+    });
+  }
+  return { ok: true, message: "If there's an account for that address, a reset link is on its way." };
+}
+
+/**
+ * Spend a reset link and set the new password.
+ *
+ * The token is checked and consumed inside one transaction, so a link that is
+ * submitted twice — a double-click, a resubmitted form — changes the password
+ * once and reports the second attempt as expired.
+ */
+export async function resetPassword(_prev: FormState, fd: FormData): Promise<FormState> {
+  const token = str(fd, "token");
+  const password = str(fd, "password");
+  const confirm = str(fd, "confirm");
+
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Those two passwords don't match." };
+
+  const limit = rateLimit(`reset-submit:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  if (!store.consumePasswordReset(token, hashPassword(password))) {
+    return { error: "That link has expired or was already used. Ask for a new one." };
+  }
+  redirect("/login?reset=1");
+}
+
+/** Set or replace the recovery address. Nothing is trusted until confirmed. */
+export async function setBackupEmail(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const email = str(fd, "backupEmail").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+  if (email === user.email.toLowerCase()) {
+    return { error: "That's already your login address. A recovery address has to be a different inbox." };
+  }
+  if (!mailEnabled()) return { error: "Email sending isn't switched on for this server, so the address can't be confirmed." };
+
+  const limit = rateLimit(`backup:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  // The address rides on the token rather than being written to the account,
+  // so an unconfirmed address is never a way in and a typo cannot lock anyone
+  // out of the recovery path they already had.
+  const token = randomBytes(32).toString("base64url");
+  store.createAuthToken(token, user.id, "verify_backup", Date.now() + RESET_TTL_MINUTES * 60_000, email);
+  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  await sendBackupVerification({ to: email, url: `${base}/verify-backup/${token}`, expiresMinutes: RESET_TTL_MINUTES });
+  revalidatePath("/dashboard/settings");
+  return { ok: true, message: `Confirmation sent to ${email}. It becomes your recovery address once you open the link.` };
+}
+
+/** Drop the recovery address. No email needed — this only removes access. */
+export async function removeBackupEmail(): Promise<void> {
+  const user = await requireUser();
+  store.clearBackupEmail(user.id);
+  revalidatePath("/dashboard/settings");
+}
+
+/**
+ * Recovery, step one: someone knows their recovery address but not the address
+ * they log in with.
+ *
+ * Answers identically whether or not the address is a verified backup, for the
+ * same reason the password form does — this must not become a way to test
+ * which addresses are registered anywhere.
+ */
+export async function requestLoginRecovery(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  const limit = rateLimit(`recover:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const user = store.getUserByBackupEmail(email);
+  if (user) {
+    const token = randomBytes(32).toString("base64url");
+    store.createAuthToken(token, user.id, "recover_login", Date.now() + RESET_TTL_MINUTES * 60_000);
+    const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    await sendLoginRecovery({ to: email, url: `${base}/recover/${token}`, expiresMinutes: RESET_TTL_MINUTES });
+  }
+  return { ok: true, message: "If that's a confirmed recovery address, a way back in is on its way to it." };
+}
+
+/**
+ * Recovery, step two: set the login address and password together.
+ *
+ * Both at once because someone who has lost track of which address they used
+ * has almost certainly lost the password with it, and they have already proved
+ * they can read the recovery mailbox.
+ */
+export async function recoverLogin(_prev: FormState, fd: FormData): Promise<FormState> {
+  const token = str(fd, "token");
+  const email = str(fd, "email").toLowerCase();
+  const password = str(fd, "password");
+  const confirm = str(fd, "confirm");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Those two passwords don't match." };
+
+  const limit = rateLimit(`recover-submit:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const pending = store.getAuthToken(token, "recover_login");
+  if (!pending) return { error: "That link has expired or was already used. Ask for a new one." };
+
+  // Checked before spending the token so a clash leaves the link usable.
+  const taken = store.getUserByEmail(email);
+  if (taken && taken.id !== pending.user.id) {
+    return { error: "Another account already uses that address. Pick a different one." };
+  }
+
+  const previous = pending.user.email;
+  if (!store.consumeLoginRecovery(token, email, hashPassword(password))) {
+    return { error: "That link has expired or was already used. Ask for a new one." };
+  }
+  // The address being replaced should never be the last to know.
+  if (previous.toLowerCase() !== email) await sendLoginChangedNotice({ to: previous, newEmail: email });
+  redirect("/login?recovered=1");
 }
 
 export async function logout(): Promise<void> {
@@ -847,7 +1019,15 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     gradient: fd.get("gradient") === "on",
     // Both are ids from fixed lists, so only known values reach the page.
     glowStrength: getGlow(str(fd, "glowStrength")) ? str(fd, "glowStrength") : DEFAULT_GLOW,
+    glowSize: getGlowSize(str(fd, "glowSize")) ? str(fd, "glowSize") : DEFAULT_GLOW_SIZE,
+    // "" is a real choice here — it means "follow the accent" — so this can't
+    // go through pickColor, which treats empty as absent and substitutes the
+    // fallback. Anything non-empty has to normalize to a hex before it reaches
+    // the page's inline CSS.
+    glowColor: normalizeHex(str(fd, "glowColor")) || "",
     buttonStyle: getButtonStyle(str(fd, "buttonStyle")) ? str(fd, "buttonStyle") : DEFAULT_BUTTON_STYLE,
+    containerHover: getContainerHover(str(fd, "containerHover")) ? str(fd, "containerHover") : DEFAULT_CONTAINER_HOVER,
+    buttonHover: getButtonHover(str(fd, "buttonHover")) ? str(fd, "buttonHover") : DEFAULT_BUTTON_HOVER,
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
     // Type. Family and size are ids from a fixed list; the ink is a color, so
