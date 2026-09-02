@@ -42,6 +42,8 @@ export function proxy(req: NextRequest): NextResponse {
       // and a reset link that redirects to the landing page is a dead link.
       path.startsWith("/forgot") ||
       path.startsWith("/reset/") ||
+      path.startsWith("/recover") ||
+      path.startsWith("/verify-backup/") ||
       path === "/s" ||
       path.startsWith("/s/") ||
       path === "/privacy" ||

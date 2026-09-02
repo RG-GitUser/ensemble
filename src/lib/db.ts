@@ -46,9 +46,11 @@ function createDb(): Database.Database {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at INTEGER NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS password_resets (
+    CREATE TABLE IF NOT EXISTS auth_tokens (
       token TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      purpose TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '',
       expires_at INTEGER NOT NULL,
       used_at INTEGER NOT NULL DEFAULT 0
     );
@@ -224,6 +226,16 @@ function createDb(): Database.Database {
   `);
 
   // Publisher-pipeline columns arrived after the social tables shipped.
+  // Recovery address. Verified separately from being set, because an address
+  // nobody has proved they can read is no way back into an account.
+  const userCols = new Set((db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!userCols.has("backup_email")) db.exec("ALTER TABLE users ADD COLUMN backup_email TEXT NOT NULL DEFAULT ''");
+  if (!userCols.has("backup_verified_at")) db.exec("ALTER TABLE users ADD COLUMN backup_verified_at INTEGER NOT NULL DEFAULT 0");
+  // password_resets was folded into auth_tokens before either shipped, so
+  // there is no deployment holding rows worth carrying across. The tokens it
+  // held live 45 minutes anyway.
+  db.exec("DROP TABLE IF EXISTS password_resets");
+
   const saCols = new Set((db.prepare("PRAGMA table_info(social_accounts)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!saCols.has("auth_kind")) db.exec("ALTER TABLE social_accounts ADD COLUMN auth_kind TEXT NOT NULL DEFAULT 'handle'");
   if (!saCols.has("secret")) db.exec("ALTER TABLE social_accounts ADD COLUMN secret TEXT NOT NULL DEFAULT ''");
@@ -598,6 +610,8 @@ interface UserRow {
   name: string;
   business_name: string;
   created_at: string;
+  backup_email: string;
+  backup_verified_at: number;
 }
 interface SiteRow {
   id: number;
@@ -648,7 +662,15 @@ interface LeadRow {
 }
 
 function toUser(r: UserRow): User {
-  return { id: r.id, email: r.email, name: r.name, businessName: r.business_name, createdAt: r.created_at };
+  return {
+    id: r.id,
+    email: r.email,
+    name: r.name,
+    businessName: r.business_name,
+    createdAt: r.created_at,
+    backupEmail: r.backup_email ?? "",
+    backupVerifiedAt: r.backup_verified_at ?? 0,
+  };
 }
 /**
  * What every site's config falls back to before its own stored values are laid
@@ -798,54 +820,127 @@ export function deleteSession(token: string): void {
   db().prepare("DELETE FROM sessions WHERE token = ?").run(token);
 }
 
-/* ---------- password resets ---------- */
+/* ---------- auth tokens ---------- */
 
 /**
- * Reset links are single-use and short-lived.
+ * One table for every emailed link that proves control of a mailbox: password
+ * resets, backup-address verification, and recovery of a forgotten login
+ * address. They differ only in what spending one does, so they share the
+ * issue / look-up / consume machinery and are told apart by `purpose`.
  *
- * Issuing one clears any earlier link for the same account, so a second
- * request invalidates the first: a link forwarded or left in an old inbox
- * stops working the moment the real owner asks again.
+ * `payload` carries whatever the purpose needs — the address being verified,
+ * for instance — so a pending change lives with the token rather than being
+ * written to the account before anyone has proved anything.
  */
-export function createPasswordReset(token: string, userId: number, expiresAt: number): void {
+export type AuthTokenPurpose = "password_reset" | "verify_backup" | "recover_login";
+
+/**
+ * Issue a link, replacing any earlier one of the same purpose for that account.
+ *
+ * A second request therefore invalidates the first: a link forwarded or left in
+ * an old inbox stops working the moment the real owner asks again.
+ */
+export function createAuthToken(
+  token: string,
+  userId: number,
+  purpose: AuthTokenPurpose,
+  expiresAt: number,
+  payload = ""
+): void {
   const d = db();
-  d.prepare("DELETE FROM password_resets WHERE user_id = ?").run(userId);
-  d.prepare("INSERT INTO password_resets (token, user_id, expires_at) VALUES (?, ?, ?)").run(token, userId, expiresAt);
+  d.prepare("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?").run(userId, purpose);
+  d.prepare("INSERT INTO auth_tokens (token, user_id, purpose, payload, expires_at) VALUES (?, ?, ?, ?, ?)").run(
+    token,
+    userId,
+    purpose,
+    payload,
+    expiresAt
+  );
 }
 
-/** The account a live, unused token belongs to — null once used or expired. */
-export function getPasswordResetUser(token: string): User | null {
+/** The account and payload behind a live, unused token — null once spent or expired. */
+export function getAuthToken(token: string, purpose: AuthTokenPurpose): { user: User; payload: string } | null {
   const r = db()
     .prepare(
-      `SELECT u.* FROM password_resets p JOIN users u ON u.id = p.user_id
-       WHERE p.token = ? AND p.used_at = 0 AND p.expires_at > ?`
+      `SELECT u.*, t.payload AS token_payload FROM auth_tokens t JOIN users u ON u.id = t.user_id
+       WHERE t.token = ? AND t.purpose = ? AND t.used_at = 0 AND t.expires_at > ?`
     )
-    .get(token, Date.now()) as UserRow | undefined;
-  return r ? toUser(r) : null;
+    .get(token, purpose, Date.now()) as (UserRow & { token_payload: string }) | undefined;
+  return r ? { user: toUser(r), payload: r.token_payload } : null;
 }
 
 /**
- * Spend the token and set the new password in one transaction, dropping every
- * existing session for that account.
+ * Spend a token and apply its effect in one transaction.
  *
- * Signing the other sessions out is the point of a reset: someone resetting
- * because a password leaked needs whoever else is holding it thrown out too.
- * Returns false when the token was already spent, which is what makes a
- * replayed link a no-op rather than a second password change.
+ * Everything that consumes a link goes through here so that checking and
+ * spending can never be separated — a link submitted twice does its work once
+ * and reports the second attempt as expired. `apply` runs only after the token
+ * is confirmed live and marked used.
  */
-export function consumePasswordReset(token: string, passwordHash: string): boolean {
+function consumeAuthToken(
+  token: string,
+  purpose: AuthTokenPurpose,
+  apply: (d: ReturnType<typeof db>, userId: number, payload: string) => void
+): boolean {
   const d = db();
   const run = d.transaction(() => {
     const row = d
-      .prepare("SELECT user_id FROM password_resets WHERE token = ? AND used_at = 0 AND expires_at > ?")
-      .get(token, Date.now()) as { user_id: number } | undefined;
+      .prepare("SELECT user_id, payload FROM auth_tokens WHERE token = ? AND purpose = ? AND used_at = 0 AND expires_at > ?")
+      .get(token, purpose, Date.now()) as { user_id: number; payload: string } | undefined;
     if (!row) return false;
-    d.prepare("UPDATE password_resets SET used_at = ? WHERE token = ?").run(Date.now(), token);
-    d.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
-    d.prepare("DELETE FROM sessions WHERE user_id = ?").run(row.user_id);
+    d.prepare("UPDATE auth_tokens SET used_at = ? WHERE token = ?").run(Date.now(), token);
+    apply(d, row.user_id, row.payload);
     return true;
   });
   return run();
+}
+
+/**
+ * Set a new password and sign every other session out.
+ *
+ * Dropping the sessions is the point: someone resetting because a password
+ * leaked needs whoever else is holding it thrown out too.
+ */
+export function consumePasswordReset(token: string, passwordHash: string): boolean {
+  return consumeAuthToken(token, "password_reset", (d, userId) => {
+    d.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, userId);
+    d.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+  });
+}
+
+/** Promote the pending address in the token to the account's verified backup. */
+export function consumeBackupVerification(token: string): boolean {
+  return consumeAuthToken(token, "verify_backup", (d, userId, payload) => {
+    d.prepare("UPDATE users SET backup_email = ?, backup_verified_at = ? WHERE id = ?").run(payload, Date.now(), userId);
+  });
+}
+
+/**
+ * Recovery: set the address the account logs in with, and a new password.
+ *
+ * Both at once because someone who has lost track of their login address has
+ * almost certainly lost the password with it, and they have already proved
+ * they control the recovery mailbox. Every session goes, so anyone signed in
+ * on the old address is turned out.
+ */
+export function consumeLoginRecovery(token: string, newEmail: string, passwordHash: string): boolean {
+  return consumeAuthToken(token, "recover_login", (d, userId) => {
+    d.prepare("UPDATE users SET email = ?, password_hash = ? WHERE id = ?").run(newEmail, passwordHash, userId);
+    d.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+  });
+}
+
+/** The single account holding this address as a verified backup, if any. */
+export function getUserByBackupEmail(email: string): User | null {
+  const r = db()
+    .prepare("SELECT * FROM users WHERE backup_email = ? AND backup_verified_at > 0")
+    .get(email) as UserRow | undefined;
+  return r ? toUser(r) : null;
+}
+
+/** Clear a recovery address without needing a round trip through email. */
+export function clearBackupEmail(userId: number): void {
+  db().prepare("UPDATE users SET backup_email = '', backup_verified_at = 0 WHERE id = ?").run(userId);
 }
 
 /* ---------- sites ---------- */

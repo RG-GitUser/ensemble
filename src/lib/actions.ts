@@ -17,7 +17,14 @@ import {
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, DEFAULT_METRIC, getMetric, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
-import { mailEnabled, sendNewsletter, sendPasswordReset } from "./mailer";
+import {
+  mailEnabled,
+  sendBackupVerification,
+  sendLoginChangedNotice,
+  sendLoginRecovery,
+  sendNewsletter,
+  sendPasswordReset,
+} from "./mailer";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
@@ -207,7 +214,7 @@ export async function requestPasswordReset(_prev: FormState, fd: FormData): Prom
   const user = store.getUserByEmail(email);
   if (user) {
     const token = randomBytes(32).toString("base64url");
-    store.createPasswordReset(token, user.id, Date.now() + RESET_TTL_MINUTES * 60_000);
+    store.createAuthToken(token, user.id, "password_reset", Date.now() + RESET_TTL_MINUTES * 60_000);
     const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
     await sendPasswordReset({
       to: user.email,
@@ -240,6 +247,100 @@ export async function resetPassword(_prev: FormState, fd: FormData): Promise<For
     return { error: "That link has expired or was already used. Ask for a new one." };
   }
   redirect("/login?reset=1");
+}
+
+/** Set or replace the recovery address. Nothing is trusted until confirmed. */
+export async function setBackupEmail(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const email = str(fd, "backupEmail").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+  if (email === user.email.toLowerCase()) {
+    return { error: "That's already your login address. A recovery address has to be a different inbox." };
+  }
+  if (!mailEnabled()) return { error: "Email sending isn't switched on for this server, so the address can't be confirmed." };
+
+  const limit = rateLimit(`backup:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  // The address rides on the token rather than being written to the account,
+  // so an unconfirmed address is never a way in and a typo cannot lock anyone
+  // out of the recovery path they already had.
+  const token = randomBytes(32).toString("base64url");
+  store.createAuthToken(token, user.id, "verify_backup", Date.now() + RESET_TTL_MINUTES * 60_000, email);
+  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  await sendBackupVerification({ to: email, url: `${base}/verify-backup/${token}`, expiresMinutes: RESET_TTL_MINUTES });
+  revalidatePath("/dashboard/settings");
+  return { ok: true, message: `Confirmation sent to ${email}. It becomes your recovery address once you open the link.` };
+}
+
+/** Drop the recovery address. No email needed — this only removes access. */
+export async function removeBackupEmail(): Promise<void> {
+  const user = await requireUser();
+  store.clearBackupEmail(user.id);
+  revalidatePath("/dashboard/settings");
+}
+
+/**
+ * Recovery, step one: someone knows their recovery address but not the address
+ * they log in with.
+ *
+ * Answers identically whether or not the address is a verified backup, for the
+ * same reason the password form does — this must not become a way to test
+ * which addresses are registered anywhere.
+ */
+export async function requestLoginRecovery(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  const limit = rateLimit(`recover:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const user = store.getUserByBackupEmail(email);
+  if (user) {
+    const token = randomBytes(32).toString("base64url");
+    store.createAuthToken(token, user.id, "recover_login", Date.now() + RESET_TTL_MINUTES * 60_000);
+    const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    await sendLoginRecovery({ to: email, url: `${base}/recover/${token}`, expiresMinutes: RESET_TTL_MINUTES });
+  }
+  return { ok: true, message: "If that's a confirmed recovery address, a way back in is on its way to it." };
+}
+
+/**
+ * Recovery, step two: set the login address and password together.
+ *
+ * Both at once because someone who has lost track of which address they used
+ * has almost certainly lost the password with it, and they have already proved
+ * they can read the recovery mailbox.
+ */
+export async function recoverLogin(_prev: FormState, fd: FormData): Promise<FormState> {
+  const token = str(fd, "token");
+  const email = str(fd, "email").toLowerCase();
+  const password = str(fd, "password");
+  const confirm = str(fd, "confirm");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Those two passwords don't match." };
+
+  const limit = rateLimit(`recover-submit:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const pending = store.getAuthToken(token, "recover_login");
+  if (!pending) return { error: "That link has expired or was already used. Ask for a new one." };
+
+  // Checked before spending the token so a clash leaves the link usable.
+  const taken = store.getUserByEmail(email);
+  if (taken && taken.id !== pending.user.id) {
+    return { error: "Another account already uses that address. Pick a different one." };
+  }
+
+  const previous = pending.user.email;
+  if (!store.consumeLoginRecovery(token, email, hashPassword(password))) {
+    return { error: "That link has expired or was already used. Ask for a new one." };
+  }
+  // The address being replaced should never be the last to know.
+  if (previous.toLowerCase() !== email) await sendLoginChangedNotice({ to: previous, newEmail: email });
+  redirect("/login?recovered=1");
 }
 
 export async function logout(): Promise<void> {

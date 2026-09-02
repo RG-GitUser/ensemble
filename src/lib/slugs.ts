@@ -33,10 +33,12 @@ const ROUTES = [
   "login",
   "onboarding",
   "privacy",
+  "recover",
   "reset",
   "s",
   "signup",
   "terms",
+  "verify-backup",
 ];
 
 /** Next.js internals and web-standard files served from the root. */

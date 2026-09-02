@@ -29,6 +29,10 @@ export default async function ForgotPasswordPage() {
           <ForgotPasswordForm />
         </div>
         <p className="mt-6 text-center text-sm text-mist">
+          Don&apos;t know which email you used?{" "}
+          <Link href="/recover" className="font-semibold text-brand hover:underline">Recover with your backup address</Link>
+        </p>
+        <p className="mt-2 text-center text-sm text-mist">
           Remembered it?{" "}
           <Link href="/login" className="font-semibold text-brand hover:underline">Back to log in</Link>
         </p>

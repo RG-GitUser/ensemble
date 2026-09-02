@@ -7,6 +7,8 @@ import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
 import { changePlan, openBillingPortal, toggleTutorials } from "@/lib/actions";
 import { DangerButton } from "@/components/DangerButton";
 import { SettingsForm } from "@/components/SettingsForm";
+import { BackupEmailCard } from "@/components/BackupEmailCard";
+import { mailEnabled } from "@/lib/mailer";
 import Link from "next/link";
 
 const BILLING_LABELS: Record<string, { label: string; tone: string }> = {
@@ -41,6 +43,12 @@ export default async function SettingsPage() {
 
       <div className="mt-6 space-y-6">
         <SettingsForm slug={site.slug} />
+
+        <BackupEmailCard
+          backupEmail={user.backupEmail}
+          verified={user.backupVerifiedAt > 0}
+          mailOn={mailEnabled()}
+        />
 
         {/* The full step-by-step lives on My Website so there's exactly one
             place to set a domain up — this is just the status + a way in. */}

@@ -7,6 +7,10 @@ export interface User {
   name: string;
   businessName: string;
   createdAt: string;
+  /** Recovery address, "" when unset. Only usable once verified. */
+  backupEmail: string;
+  /** When the backup address proved it could receive mail. 0 = never. */
+  backupVerifiedAt: number;
 }
 
 export interface SiteConfig {
