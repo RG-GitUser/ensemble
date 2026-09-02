@@ -57,9 +57,19 @@ export function DraggableSections({ items }: { items: DraggableItem[] }) {
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>, overId: number) {
-    if (dragId === null || dragId === overId) return;
+    if (dragId === null) return;
+    // Allow the drop before deciding whether to reorder, and in particular
+    // allow it over the dragged card itself.
+    //
+    // A drop only fires where dragover was prevented. Reordering moves the
+    // dragged card to sit under the cursor, so the card beneath the pointer at
+    // the moment of release is very often the dragged one — and returning
+    // early there left the drop unprevented, no drop event, `dropped` false,
+    // and dragEnd reverting the arrangement the person had just made. The
+    // reorder still has nothing to do in that case; the drop does.
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    if (dragId === overId) return;
 
     // Swap only once the pointer passes the target's midpoint.
     //
@@ -95,7 +105,19 @@ export function DraggableSections({ items }: { items: DraggableItem[] }) {
   }
 
   return (
-    <div className={`flex flex-col gap-5 transition-opacity ${pending ? "opacity-60" : ""}`}>
+    // The list itself accepts the drop, not only the cards. `gap-5` leaves real
+    // space between them, and releasing in one of those gaps used to land on
+    // no card at all — same revert as dropping on the dragged card did.
+    <div
+      className={`flex flex-col gap-5 transition-opacity ${pending ? "opacity-60" : ""}`}
+      onDragOver={(e) => {
+        if (dragId !== null) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        dropped.current = true;
+      }}
+    >
       {items.map((item, i) => {
         const pos = order.indexOf(item.id);
         return (
