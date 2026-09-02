@@ -138,14 +138,21 @@ export async function createPortalUrl(customerId: string): Promise<string> {
   return session.url;
 }
 
-/** Switch an existing subscription to a different plan (prorated). */
+/**
+ * Switch an existing subscription to a different plan.
+ *
+ * No prorations, and the billing anchor stays put: the month already paid
+ * for runs its course and the new price starts with the next invoice. This
+ * is exactly what the confirmation dialog on Settings promises, so changing
+ * one means changing the other.
+ */
 export async function changeSubscriptionPlan(subscriptionId: string, plan: Plan): Promise<void> {
   const sub = await stripe().subscriptions.retrieve(subscriptionId);
   const item = sub.items.data[0];
   if (!item) throw new Error(`Subscription ${subscriptionId} has no items`);
   await stripe().subscriptions.update(subscriptionId, {
     items: [{ id: item.id, price: await priceIdFor(plan) }],
-    proration_behavior: "create_prorations",
+    proration_behavior: "none",
   });
 }
 

@@ -126,8 +126,8 @@ export default async function SettingsPage() {
                       title={upgrade(site.plan, id) ? `Upgrade to ${p.name}?` : `Move down to ${p.name}?`}
                       body={
                         upgrade(site.plan, id)
-                          ? `You'll be charged $${p.price} a month. On an active subscription the change is prorated straight away; without one, you'll go through checkout.`
-                          : `You'll drop to $${p.price} a month and lose everything ${PLANS[site.plan].name} adds. Your content stays, but sections above the ${p.name} limit unpublish until you upgrade again.`
+                          ? `You'll be charged $${p.price} a month starting with your next invoice. Nothing is prorated, so the month you've already paid for runs its course. Without an active subscription, you'll go through checkout.`
+                          : `You'll drop to $${p.price} a month from your next invoice, with no refund for the rest of this one, and lose everything ${PLANS[site.plan].name} adds. Your content stays, but sections above the ${p.name} limit unpublish until you upgrade again.`
                       }
                       confirmLabel={upgrade(site.plan, id) ? `Upgrade to ${p.name}` : `Switch to ${p.name}`}
                       action={changePlan}
@@ -141,8 +141,8 @@ export default async function SettingsPage() {
           </div>
           {billingEnabled() ? (
             <p className="mt-4 text-xs text-mist/70">
-              Plan changes on an active subscription are prorated automatically. Without one, switching sends you
-              through checkout.
+              Plan changes on an active subscription take effect right away and are not prorated: the new price
+              starts with your next invoice. Without one, switching sends you through checkout.
             </p>
           ) : (
             <p className="mt-4 text-xs text-mist/70">
