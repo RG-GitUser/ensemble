@@ -778,7 +778,10 @@ a.site-card:hover {
 .site-step-number {
   padding-top: calc(2rem * var(--site-rhythm, 1));
   text-align: center;
-  font-size: 0.8em;
+  /* Was 0.8em, which put the marker below body size and read as a footnote
+     rather than as the thing labelling the section. It is an accent, so it
+     sits just above the copy it introduces. */
+  font-size: 1.15em;
   font-weight: 800;
   letter-spacing: 0.18em;
   opacity: 0.85;

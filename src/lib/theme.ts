@@ -389,16 +389,57 @@ export interface GlowDef {
   alpha: string;
 }
 
+/**
+ * The three original ids keep their exact alphas: they are stored in saved
+ * configs, so renaming or renumbering them would silently restyle live pages.
+ * The two additions bracket the range instead — several presets already carry
+ * their own gradient artwork, and against those a "soft" 33 was still too much
+ * wash, while a flat backdrop had nothing beyond 88.
+ */
 export const GLOWS: GlowDef[] = [
+  { id: "faint", label: "Faint", blurb: "Barely there — for backdrops that already glow.", alpha: "1a" },
   { id: "soft", label: "Soft", blurb: "A hint of colour at the top.", alpha: "33" },
   { id: "medium", label: "Medium", blurb: "The wash pages shipped with.", alpha: "55" },
   { id: "strong", label: "Strong", blurb: "Unmistakably your colour.", alpha: "88" },
+  { id: "vivid", label: "Vivid", blurb: "Full saturation, for flat backdrops.", alpha: "cc" },
 ];
 
-export const DEFAULT_GLOW = GLOWS[1].id;
+export const DEFAULT_GLOW = "medium";
 
 export function getGlow(id: string | undefined | null): GlowDef | null {
   return GLOWS.find((g) => g.id === id) ?? null;
+}
+
+/**
+ * How far the accent wash spreads.
+ *
+ * Carries both geometries because the two places that draw it are not the same
+ * size: the page paints into a viewport and uses pixels, the Design preview
+ * paints into a ~24rem column and uses percentages. Deriving one from the
+ * other by ratio drifts at the extremes, so each size states both and the
+ * caller picks the field that matches its surface.
+ */
+export interface GlowSizeDef {
+  id: string;
+  label: string;
+  blurb: string;
+  /** `radial-gradient` geometry for the full page. */
+  page: string;
+  /** The same shape at Design-preview scale. */
+  preview: string;
+}
+
+export const GLOW_SIZES: GlowSizeDef[] = [
+  { id: "tight", label: "Tight", blurb: "A small pool right at the top.", page: "420px 240px", preview: "34% 26%" },
+  { id: "regular", label: "Regular", blurb: "The spread pages shipped with.", page: "800px 400px", preview: "62% 44%" },
+  { id: "wide", label: "Wide", blurb: "Reaches most of the way across.", page: "1200px 560px", preview: "92% 62%" },
+  { id: "full", label: "Full", blurb: "Washes the whole top of the page.", page: "1800px 760px", preview: "140% 84%" },
+];
+
+export const DEFAULT_GLOW_SIZE = "regular";
+
+export function getGlowSize(id: string | undefined | null): GlowSizeDef | null {
+  return GLOW_SIZES.find((g) => g.id === id) ?? null;
 }
 
 /**
@@ -614,9 +655,20 @@ export function getMarkerPosition(id: string | undefined | null): MarkerPosition
   return id === "corner" ? "corner" : "above";
 }
 
-/** Bullets only ever sit in the corner, whatever is stored. */
+/**
+ * Where a section's marker sits.
+ *
+ * Bullets used to be pinned to the corner unconditionally. That kept sections
+ * written before the setting existed from ending up with a lone dot centred
+ * over a heading, but it also meant the position control did nothing for them.
+ *
+ * The distinction that actually matters is whether anyone chose. An absent
+ * position on a bullet still resolves to the corner, so every page that predates
+ * the control looks exactly as it did; an explicit choice is now honoured for
+ * bullets the same as for numbers and letters.
+ */
 export function resolveMarkerPosition(mode: string | undefined | null, position: string | undefined | null): MarkerPosition {
-  if ((getMarkerMode(mode)?.id ?? DEFAULT_MARKER) === "bullet") return "corner";
+  if ((getMarkerMode(mode)?.id ?? DEFAULT_MARKER) === "bullet" && !position) return "corner";
   return getMarkerPosition(position);
 }
 

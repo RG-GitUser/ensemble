@@ -31,6 +31,10 @@ export interface SiteConfig {
   gradient?: boolean;
   /** How strong that glow is — a GLOWS id from lib/theme.ts. */
   glowStrength?: string;
+  /** How far the glow spreads — a GLOW_SIZES id from lib/theme.ts. */
+  glowSize?: string;
+  /** Glow colour. "" follows the accent, which is the historic behaviour. */
+  glowColor?: string;
   /** How the accent paints buttons — a BUTTON_STYLES id from lib/theme.ts. */
   buttonStyle?: string;
   tagline: string;

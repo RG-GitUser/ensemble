@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getGlowSize, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -412,14 +412,14 @@ function RowMarker({ mode, shape, index }: { mode?: string; shape?: string; inde
   if (m.shape) {
     const b = getBulletShape(shape) ?? getBulletShape(DEFAULT_BULLET_SHAPE)!;
     return (
-      <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden className="mt-[0.15em] shrink-0">
+      <svg viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden className="mt-[0.08em] shrink-0">
         <path d={b.path} fill="var(--site-accent)" />
       </svg>
     );
   }
   if (!m.text) return null;
   return (
-    <span aria-hidden className="shrink-0 font-bold tabular-nums" style={{ color: "var(--site-accent)" }}>
+    <span aria-hidden className="shrink-0 text-[1.15em] font-bold leading-tight tabular-nums" style={{ color: "var(--site-accent)" }}>
       {m.text}
     </span>
   );
@@ -453,7 +453,7 @@ function SectionMarker({
     const b = getBulletShape(shape) ?? getBulletShape(DEFAULT_BULLET_SHAPE)!;
     return (
       <p className={cls} aria-hidden>
-        <svg viewBox="0 0 24 24" width="1.4em" height="1.4em" className="inline-block">
+        <svg viewBox="0 0 24 24" width="1.7em" height="1.7em" className="inline-block">
           <path d={b.path} fill="var(--site-accent)" />
         </svg>
       </p>
@@ -538,6 +538,8 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       bgImage: cfg.bgImage,
       glow,
       glowAlpha: getGlow(cfg.glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha,
+      glowSize: (getGlowSize(cfg.glowSize) ?? getGlowSize(DEFAULT_GLOW_SIZE)!).page,
+      glowColor: cfg.glowColor ?? "",
     }),
     card: card(cfg.cardColor ?? "rgba(255,255,255,0.05)"),
     ink: cfg.textColor || DEFAULT_TEXT_COLOR,
@@ -555,6 +557,8 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
       bgImage: cfg.bgImage,
       glow,
       glowAlpha: getGlow(cfg.glowStrength)?.alpha ?? getGlow(DEFAULT_GLOW)!.alpha,
+      glowSize: (getGlowSize(cfg.glowSize) ?? getGlowSize(DEFAULT_GLOW_SIZE)!).page,
+      glowColor: cfg.glowColor ?? "",
     }),
     card: card(cfg.lightCardColor ?? DEFAULT_LIGHT_CARD),
     ink: cfg.lightTextColor || DEFAULT_LIGHT_TEXT_COLOR,

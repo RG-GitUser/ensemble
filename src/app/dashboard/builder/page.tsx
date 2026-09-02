@@ -9,8 +9,8 @@ import {
   planAllowsTemplate,
   RECOMMENDED_ORDER,
   SECTION_TEMPLATES,
-  type FieldSpec, parseLines } from "@/lib/sections";
-import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
+  type FieldSpec } from "@/lib/sections";
+import { DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, DEFAULT_MARKER_POSITION, DEFAULT_BG, DEFAULT_BORDER, DEFAULT_CARD, DEFAULT_BUTTON_STYLE, DEFAULT_CORNER, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LAYOUT, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_MIN_HEIGHT, DEFAULT_SIZE, DEFAULT_SPACING, getColorMode, getTextAlign, TEXT_ALIGNS } from "@/lib/theme";
 import { DEFAULT_TEXT_SIZE_ID, TEXT_SIZES, DEFAULT_FONT, DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE } from "@/lib/fonts";
 import { THEMES, themeCss } from "@/lib/themes";
 import {
@@ -429,6 +429,8 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             faviconUrl={site.config.faviconUrl ?? ""}
             gradient={site.config.gradient !== false}
             glowStrength={site.config.glowStrength ?? DEFAULT_GLOW}
+            glowSize={site.config.glowSize ?? DEFAULT_GLOW_SIZE}
+            glowColor={site.config.glowColor ?? ""}
             buttonStyle={site.config.buttonStyle ?? DEFAULT_BUTTON_STYLE}
             themeId={site.config.themeId ?? ""}
             fontId={site.config.fontId ?? DEFAULT_FONT}
@@ -439,24 +441,6 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
             profileFrame={site.config.profileFrame ?? DEFAULT_FRAME}
             profileHandle={site.config.profileHandle ?? ""}
             profileLocation={site.config.profileLocation ?? ""}
-            sections={sections.map((s) => {
-              // The list-shaped sections store rows as "Label | url | …", so the
-              // first field of each row is the label a visitor actually reads.
-              const rows = parseLines(s.content.items ?? "").slice(0, 3);
-              return {
-                id: s.id,
-                type: s.type,
-                heading: s.content.heading ?? "",
-                sub: s.content.subheading ?? s.content.body ?? "",
-                items: rows.map((r: string[]) => r[0] ?? "").filter(Boolean),
-                sectionMarker: s.content.sectionMarker ?? DEFAULT_MARKER,
-                sectionBulletShape: s.content.sectionBulletShape ?? DEFAULT_BULLET_SHAPE,
-                markerMode: s.content.markerMode ?? DEFAULT_MARKER,
-                bulletShape: s.content.bulletShape ?? DEFAULT_BULLET_SHAPE,
-                markerPosition: s.content.markerPosition ?? DEFAULT_MARKER_POSITION,
-                textScale: s.content.textScale ?? DEFAULT_TEXT_SIZE_ID,
-              };
-            })}
             sectionSpacing={site.config.sectionSpacing ?? DEFAULT_SPACING}
             cornerStyle={site.config.cornerStyle ?? DEFAULT_CORNER}
             colorMode={getColorMode(site.config.colorMode)}

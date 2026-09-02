@@ -51,6 +51,8 @@ import {
   DEFAULT_MARKER,
   DEFAULT_FRAME,
   DEFAULT_GLOW,
+  DEFAULT_GLOW_SIZE,
+  getGlowSize,
   getBulletShape,
   getButtonStyle,
   getMarkerMode,
@@ -61,6 +63,7 @@ import {
   LIGHT_BACKGROUNDS,
   LIGHT_CONTAINERS,
   MAX_LOOKS,
+  normalizeHex,
   pickColor,
   pickSwatch,
 } from "./theme";
@@ -847,6 +850,12 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     gradient: fd.get("gradient") === "on",
     // Both are ids from fixed lists, so only known values reach the page.
     glowStrength: getGlow(str(fd, "glowStrength")) ? str(fd, "glowStrength") : DEFAULT_GLOW,
+    glowSize: getGlowSize(str(fd, "glowSize")) ? str(fd, "glowSize") : DEFAULT_GLOW_SIZE,
+    // "" is a real choice here — it means "follow the accent" — so this can't
+    // go through pickColor, which treats empty as absent and substitutes the
+    // fallback. Anything non-empty has to normalize to a hex before it reaches
+    // the page's inline CSS.
+    glowColor: normalizeHex(str(fd, "glowColor")) || "",
     buttonStyle: getButtonStyle(str(fd, "buttonStyle")) ? str(fd, "buttonStyle") : DEFAULT_BUTTON_STYLE,
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
