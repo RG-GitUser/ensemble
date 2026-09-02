@@ -1151,6 +1151,15 @@ export function ThemeForm({
   /** Blank means "follow the accent", so every draw site resolves it the same way. */
   const glowTint = glowColor || accent;
   const previewButton = buttonVars(buttonStyle, accent);
+  /** Mirrors .site-frame-* from globals.css, scaled to the preview portrait. */
+  const previewFrameStyle: React.CSSProperties =
+    frame === "ring"
+      ? { padding: 3, background: accent }
+      : frame === "gradient"
+        ? { padding: 3, background: `linear-gradient(145deg, ${accent}, transparent 85%)` }
+        : frame === "glow"
+          ? { boxShadow: `0 0 0 1px ${accent}59, 0 10px 28px ${accent}4d` }
+          : {};
   const previewStyle = backdropCss({
     themeId: palette.themeId,
     accent,
@@ -2048,7 +2057,32 @@ export function ThemeForm({
                 color: previewInk,
               }}
             >
+              {/* The portrait, its frame, the handle and the location are all
+                  page settings set from this very screen, and none of them used
+                  to appear here — so picking a frame or typing a handle changed
+                  nothing you could see until you saved and opened the page.
+                  Drawn at preview scale rather than through the site-* classes,
+                  which are sized for a real page. */}
+              {profileImg && (
+                <div
+                  className="mx-auto mb-3 grid h-20 w-20 place-items-center rounded-full"
+                  style={previewFrameStyle}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={profileImg}
+                    alt=""
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                </div>
+              )}
               <p className="text-center text-[1.6em] font-extrabold leading-tight">Your name here</p>
+              {handle && (
+                <p className="mt-0.5 text-center text-[0.85em] font-semibold" style={{ color: accent }}>
+                  {handle}
+                </p>
+              )}
+              {where && <p className="mt-0.5 text-center text-[0.75em] opacity-70">{where}</p>}
               <p className="mx-auto mt-1.5 max-w-[22em] text-center text-[0.8em] opacity-70">
                 This is how your page will feel — your type, your colors, your layout.
               </p>
