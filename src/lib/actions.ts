@@ -17,7 +17,7 @@ import {
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, DEFAULT_METRIC, getMetric, getPlatform, isDiscordWebhook, parseCount } from "./social";
 import { blueskySession, publishPost } from "./publish";
-import { mailEnabled, sendNewsletter } from "./mailer";
+import { mailEnabled, sendNewsletter, sendPasswordReset } from "./mailer";
 import { QUOTE_ACCESS_METHODS, QUOTE_FILE_MAX_BYTES, QUOTE_PLATFORMS } from "./quotes";
 import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
@@ -95,6 +95,8 @@ import type { DesignConfig, Plan, Site, SiteConfig } from "./types";
 export interface FormState {
   error?: string;
   ok?: boolean;
+  /** A success line to show in place of the form's own copy. */
+  message?: string;
 }
 
 /* ---------------- helpers ---------------- */
@@ -176,6 +178,68 @@ export async function login(_prev: FormState, fd: FormData): Promise<FormState> 
   const site = store.getSiteByUser(user.id);
   const quote = store.getQuoteByUser(user.id);
   redirect(site || quote ? "/dashboard" : "/onboarding");
+}
+
+/**
+ * How long a reset link stays good. Long enough to find the mail and act on
+ * it, short enough that a link sitting in a mailbox is not a standing key.
+ */
+const RESET_TTL_MINUTES = 45;
+
+/**
+ * Ask for a reset link.
+ *
+ * Always reports success, whether or not the address has an account. The
+ * response to an unknown address has to be indistinguishable from the response
+ * to a known one, or this form becomes a way to test which addresses are
+ * registered. That is also why a mail failure is not surfaced: "we couldn't
+ * send it" confirms the account exists just as loudly as sending it would.
+ *
+ * Rate limited per address so the form cannot be used to mailbomb someone.
+ */
+export async function requestPasswordReset(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  const limit = rateLimit(`reset:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  const user = store.getUserByEmail(email);
+  if (user) {
+    const token = randomBytes(32).toString("base64url");
+    store.createPasswordReset(token, user.id, Date.now() + RESET_TTL_MINUTES * 60_000);
+    const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    await sendPasswordReset({
+      to: user.email,
+      url: `${base}/reset/${token}`,
+      expiresMinutes: RESET_TTL_MINUTES,
+    });
+  }
+  return { ok: true, message: "If there's an account for that address, a reset link is on its way." };
+}
+
+/**
+ * Spend a reset link and set the new password.
+ *
+ * The token is checked and consumed inside one transaction, so a link that is
+ * submitted twice — a double-click, a resubmitted form — changes the password
+ * once and reports the second attempt as expired.
+ */
+export async function resetPassword(_prev: FormState, fd: FormData): Promise<FormState> {
+  const token = str(fd, "token");
+  const password = str(fd, "password");
+  const confirm = str(fd, "confirm");
+
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Those two passwords don't match." };
+
+  const limit = rateLimit(`reset-submit:${await clientIp()}`, LIMITS.passwordReset);
+  if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
+
+  if (!store.consumePasswordReset(token, hashPassword(password))) {
+    return { error: "That link has expired or was already used. Ask for a new one." };
+  }
+  redirect("/login?reset=1");
 }
 
 export async function logout(): Promise<void> {

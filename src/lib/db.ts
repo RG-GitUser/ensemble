@@ -46,6 +46,12 @@ function createDb(): Database.Database {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at INTEGER NOT NULL,
+      used_at INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -790,6 +796,56 @@ export function getSessionUser(token: string): User | null {
 
 export function deleteSession(token: string): void {
   db().prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+/* ---------- password resets ---------- */
+
+/**
+ * Reset links are single-use and short-lived.
+ *
+ * Issuing one clears any earlier link for the same account, so a second
+ * request invalidates the first: a link forwarded or left in an old inbox
+ * stops working the moment the real owner asks again.
+ */
+export function createPasswordReset(token: string, userId: number, expiresAt: number): void {
+  const d = db();
+  d.prepare("DELETE FROM password_resets WHERE user_id = ?").run(userId);
+  d.prepare("INSERT INTO password_resets (token, user_id, expires_at) VALUES (?, ?, ?)").run(token, userId, expiresAt);
+}
+
+/** The account a live, unused token belongs to — null once used or expired. */
+export function getPasswordResetUser(token: string): User | null {
+  const r = db()
+    .prepare(
+      `SELECT u.* FROM password_resets p JOIN users u ON u.id = p.user_id
+       WHERE p.token = ? AND p.used_at = 0 AND p.expires_at > ?`
+    )
+    .get(token, Date.now()) as UserRow | undefined;
+  return r ? toUser(r) : null;
+}
+
+/**
+ * Spend the token and set the new password in one transaction, dropping every
+ * existing session for that account.
+ *
+ * Signing the other sessions out is the point of a reset: someone resetting
+ * because a password leaked needs whoever else is holding it thrown out too.
+ * Returns false when the token was already spent, which is what makes a
+ * replayed link a no-op rather than a second password change.
+ */
+export function consumePasswordReset(token: string, passwordHash: string): boolean {
+  const d = db();
+  const run = d.transaction(() => {
+    const row = d
+      .prepare("SELECT user_id FROM password_resets WHERE token = ? AND used_at = 0 AND expires_at > ?")
+      .get(token, Date.now()) as { user_id: number } | undefined;
+    if (!row) return false;
+    d.prepare("UPDATE password_resets SET used_at = ? WHERE token = ?").run(Date.now(), token);
+    d.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
+    d.prepare("DELETE FROM sessions WHERE user_id = ?").run(row.user_id);
+    return true;
+  });
+  return run();
 }
 
 /* ---------- sites ---------- */

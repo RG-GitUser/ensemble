@@ -98,3 +98,60 @@ export async function sendNewsletter(opts: {
   }
   return { sent, failed };
 }
+
+/**
+ * The address platform mail comes from.
+ *
+ * Deliberately not MAIL_FROM. That one is the creators' newsletter sender and
+ * carries a creator's name as its display name; a password reset is from
+ * Ensemble itself and should never look like it came from a creator. Defaults
+ * to noreply@ on the platform domain, which is a send-only mailbox — replies
+ * to a reset link have nowhere useful to go.
+ */
+function systemFrom(): string {
+  return process.env.AUTH_MAIL_FROM || "Ensemble <noreply@ensemble.it.com>";
+}
+
+/**
+ * Send one password-reset link.
+ *
+ * Returns false when mail is not configured or the send fails, and the caller
+ * deliberately does not surface which — telling a stranger that an address
+ * exists but the mail server is down is still telling them the address exists.
+ */
+export async function sendPasswordReset(opts: { to: string; url: string; expiresMinutes: number }): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return false;
+
+  const safeUrl = escapeHtml(opts.url);
+  const text =
+    `Someone asked to reset the password for your Ensemble account.\n\n` +
+    `${opts.url}\n\n` +
+    `The link works once and expires in ${opts.expiresMinutes} minutes. ` +
+    `If this wasn't you, ignore this email — your password stays as it is.`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: systemFrom(),
+        to: [opts.to],
+        subject: "Reset your Ensemble password",
+        text,
+        html:
+          `<div style="max-width:36em; margin:0 auto; font-family:system-ui,-apple-system,sans-serif; color:#1a1a1a;">` +
+          `<p style="margin:0 0 1em; line-height:1.6;">Someone asked to reset the password for your Ensemble account.</p>` +
+          `<p style="margin:0 0 1.5em;"><a href="${safeUrl}" style="display:inline-block; background:#8b5cf6; color:#fff; ` +
+          `padding:0.75em 1.25em; border-radius:0.5em; text-decoration:none; font-weight:600;">Choose a new password</a></p>` +
+          `<p style="margin:0 0 1em; line-height:1.6; font-size:14px; color:#555;">` +
+          `The link works once and expires in ${opts.expiresMinutes} minutes.</p>` +
+          `<p style="margin:0; line-height:1.6; font-size:14px; color:#555;">` +
+          `If this wasn't you, ignore this email — your password stays as it is.</p></div>`,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
