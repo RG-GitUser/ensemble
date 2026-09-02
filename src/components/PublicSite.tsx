@@ -5,7 +5,7 @@ import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPag
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
-import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, getGlow, getGlowSize, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
+import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, buttonHoverClass, containerHoverClass, getGlow, getGlowSize, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
 import { backdropCss, themeCss } from "@/lib/themes";
 import { SiteModeToggle } from "@/components/SiteModeToggle";
 import { ChatBox } from "@/components/ChatBox";
@@ -689,7 +689,10 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
 
   return (
     <div
-      className="site-root site-ink relative isolate flex-1"
+      // One class each for the container and button hover treatments; both
+      // resolve to "" when set to None, so a page that never chose carries
+      // nothing extra.
+      className={`site-root site-ink relative isolate flex-1 ${containerHoverClass(cfg.containerHover)} ${buttonHoverClass(cfg.buttonHover)}`.trim()}
       // The boot script below rewrites data-site-mode from localStorage before
       // React hydrates, which is the whole point of it: a remembered choice
       // must be applied before first paint or the other palette flashes. React

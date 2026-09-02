@@ -41,6 +41,10 @@ export interface SiteConfig {
   glowColor?: string;
   /** How the accent paints buttons — a BUTTON_STYLES id from lib/theme.ts. */
   buttonStyle?: string;
+  /** What a container does under the pointer — a CONTAINER_HOVERS id. */
+  containerHover?: string;
+  /** What a button does under the pointer — a BUTTON_HOVERS id. */
+  buttonHover?: string;
   tagline: string;
   /** Site-wide visual theme id from lib/themes.ts ("" = classic midnight). */
   themeId?: string;

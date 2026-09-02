@@ -40,7 +40,7 @@ export function SectionMarkerField({
   const nameShape = scope === "rows" ? "bulletShape" : "sectionBulletShape";
 
   return (
-    <div className="border-t border-edge pt-4">
+    <div>
       <span className="label !mb-0">{scope === "rows" ? "Row markers" : "Section accent"}</span>
       <p className="mt-0.5 text-xs text-mist/70">
         {scope === "rows"

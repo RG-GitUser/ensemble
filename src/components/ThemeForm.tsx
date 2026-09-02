@@ -9,6 +9,8 @@ import {
   BORDER_STYLES,
   borderCss,
   BUTTON_STYLES,
+  BUTTON_HOVERS,
+  CONTAINER_HOVERS,
   buttonVars,
   DEFAULT_GLOW,
   getGlow,
@@ -881,6 +883,8 @@ export function ThemeForm({
   glowSize: glowSizeProp,
   glowColor: glowColorProp,
   buttonStyle: buttonStyleProp,
+  containerHover: containerHoverProp,
+  buttonHover: buttonHoverProp,
   themeId: themeIdProp,
   fontId: fontIdProp,
   fontScale: fontScaleProp,
@@ -921,6 +925,9 @@ export function ThemeForm({
   /** Wash colour, or "" to follow the accent. */
   glowColor: string;
   buttonStyle: string;
+  /** Hover treatments (CONTAINER_HOVERS / BUTTON_HOVERS ids). */
+  containerHover: string;
+  buttonHover: string;
   /** Active preset backdrop id ("" = custom/Midnight). */
   themeId: string;
   /** Typeface id from lib/fonts.ts ("" = Geist). */
@@ -964,6 +971,8 @@ export function ThemeForm({
   const [glowSize, setGlowSize] = useState(glowSizeProp);
   const [glowColor, setGlowColor] = useState(glowColorProp);
   const [buttonStyle, setButtonStyle] = useState(buttonStyleProp);
+  const [containerHover, setContainerHover] = useState(containerHoverProp);
+  const [buttonHover, setButtonHover] = useState(buttonHoverProp);
   const [themeId, setThemeId] = useState(themeIdProp);
   const [fontId, setFontId] = useState(fontIdProp);
   const [scale, setScale] = useState(fontScaleProp);
@@ -1845,6 +1854,63 @@ export function ThemeForm({
             </div>
           </div>
           <input type="hidden" name="glowStrength" value={glowStrength} />
+          {/* Words rather than swatches: a hover is a behaviour, and a static
+              tile can only ever hint at one. Kept as two compact rows so the
+              panel doesn't grow another two grids of pictures. */}
+          <div>
+            <span className="label !mb-0">On hover</span>
+            <p className="mt-0.5 text-xs text-mist/70">
+              What containers and buttons do when someone points at them. Hover the options to try them.
+            </p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <div>
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-mist">
+                  Containers
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {CONTAINER_HOVERS.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      aria-pressed={containerHover === h.id}
+                      title={h.blurb}
+                      onClick={() => setContainerHover(h.id)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                        containerHover === h.id ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+                      }`}
+                    >
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-mist">Buttons</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {BUTTON_HOVERS.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      aria-pressed={buttonHover === h.id}
+                      title={h.blurb}
+                      onClick={() => setButtonHover(h.id)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                        buttonHover === h.id ? "border-brand bg-brand/10 text-snow" : "border-edge text-mist hover:border-brand/60"
+                      }`}
+                    >
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-mist/70">
+              {CONTAINER_HOVERS.find((h) => h.id === containerHover)?.blurb}{" "}
+              {BUTTON_HOVERS.find((h) => h.id === buttonHover)?.blurb}
+            </p>
+          </div>
+          <input type="hidden" name="containerHover" value={containerHover} />
+          <input type="hidden" name="buttonHover" value={buttonHover} />
           <input type="hidden" name="buttonStyle" value={buttonStyle} />
         </Group>
 

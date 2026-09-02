@@ -503,6 +503,62 @@ export function buttonVars(id: string | undefined | null, accent: string): Recor
   };
 }
 
+/**
+ * What a container or a button does when the pointer is over it.
+ *
+ * Stored as an id and applied as a class, not an inline style, because there
+ * is no inline syntax for :hover — the rules live in globals.css beside the
+ * other .site-* rules and read the accent from --site-accent, so a hover can
+ * never introduce a colour nobody chose.
+ *
+ * "none" is first and is the default, so a page built before this existed
+ * behaves exactly as it did.
+ */
+export interface HoverDef {
+  id: string;
+  label: string;
+  blurb: string;
+}
+
+export const CONTAINER_HOVERS: HoverDef[] = [
+  { id: "none", label: "None", blurb: "Containers sit still." },
+  { id: "lift", label: "Lift", blurb: "Rises slightly, with a shadow under it." },
+  { id: "glow", label: "Glow", blurb: "A halo in your accent colour." },
+  { id: "outline", label: "Outline", blurb: "The edge picks up your accent." },
+  { id: "brighten", label: "Brighten", blurb: "Lightens a touch." },
+];
+
+export const BUTTON_HOVERS: HoverDef[] = [
+  { id: "none", label: "None", blurb: "Buttons sit still." },
+  { id: "lift", label: "Lift", blurb: "Rises slightly, with a shadow under it." },
+  { id: "glow", label: "Glow", blurb: "A halo in your accent colour." },
+  { id: "invert", label: "Invert", blurb: "Swaps its fill and its text." },
+  { id: "grow", label: "Grow", blurb: "Scales up a little." },
+];
+
+export const DEFAULT_CONTAINER_HOVER = "none";
+export const DEFAULT_BUTTON_HOVER = "none";
+
+export function getContainerHover(id: string | undefined | null): HoverDef | null {
+  return CONTAINER_HOVERS.find((h) => h.id === id) ?? null;
+}
+
+export function getButtonHover(id: string | undefined | null): HoverDef | null {
+  return BUTTON_HOVERS.find((h) => h.id === id) ?? null;
+}
+
+/** The class a container carries, or "" for the default no-op. */
+export function containerHoverClass(id: string | undefined | null): string {
+  const h = getContainerHover(id)?.id ?? DEFAULT_CONTAINER_HOVER;
+  return h === "none" ? "" : `site-hover-c-${h}`;
+}
+
+/** The class a button carries, or "" for the default no-op. */
+export function buttonHoverClass(id: string | undefined | null): string {
+  const h = getButtonHover(id)?.id ?? DEFAULT_BUTTON_HOVER;
+  return h === "none" ? "" : `site-hover-b-${h}`;
+}
+
 export const DEFAULT_BORDER = BORDER_STYLES[0].id;
 
 /** The candidate if it's in the palette, otherwise the fallback. */

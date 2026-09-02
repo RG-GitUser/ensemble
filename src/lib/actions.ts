@@ -58,6 +58,10 @@ import {
   DEFAULT_MARKER,
   DEFAULT_FRAME,
   DEFAULT_GLOW,
+  DEFAULT_CONTAINER_HOVER,
+  DEFAULT_BUTTON_HOVER,
+  getContainerHover,
+  getButtonHover,
   DEFAULT_GLOW_SIZE,
   getGlowSize,
   getBulletShape,
@@ -1022,6 +1026,8 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     // the page's inline CSS.
     glowColor: normalizeHex(str(fd, "glowColor")) || "",
     buttonStyle: getButtonStyle(str(fd, "buttonStyle")) ? str(fd, "buttonStyle") : DEFAULT_BUTTON_STYLE,
+    containerHover: getContainerHover(str(fd, "containerHover")) ? str(fd, "containerHover") : DEFAULT_CONTAINER_HOVER,
+    buttonHover: getButtonHover(str(fd, "buttonHover")) ? str(fd, "buttonHover") : DEFAULT_BUTTON_HOVER,
     // Preset backdrop — only known preset ids; "" = custom backdrop.
     themeId: getThemeDef(themeIdRaw) ? themeIdRaw : "",
     // Type. Family and size are ids from a fixed list; the ink is a color, so
