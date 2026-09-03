@@ -66,16 +66,32 @@ export interface PushTarget {
  * ingest, and pushing at reverse-engineered endpoints breaks without warning
  * mid-stream — worse than not offering it.
  */
+/**
+ * A stream key that is safe to splice into an RTMP URL, or "".
+ *
+ * Platform keys are opaque tokens made of URL-safe characters; anything else —
+ * a newline above all — is a way to add a destination rather than a key. Applied
+ * at the point of use as well as on save, so a value stored before this existed
+ * cannot reach the relay either.
+ */
+export function cleanStreamKey(raw: string): string {
+  const k = raw.trim();
+  return /^[A-Za-z0-9_.:@+-]{1,200}$/.test(k) ? k : "";
+}
+
 export function pushTargets(config: SiteConfig): PushTarget[] {
   const targets: PushTarget[] = [];
-  if (config.twitchStreamKey) {
-    targets.push({ platform: "twitch", url: `rtmp://live.twitch.tv/app/${config.twitchStreamKey}` });
+  const twitchKey = cleanStreamKey(config.twitchStreamKey ?? "");
+  if (twitchKey) {
+    targets.push({ platform: "twitch", url: `rtmp://live.twitch.tv/app/${twitchKey}` });
   }
-  if (config.youtubeStreamKey) {
-    targets.push({ platform: "youtube", url: `rtmp://a.rtmp.youtube.com/live2/${config.youtubeStreamKey}` });
+  const youtubeKey = cleanStreamKey(config.youtubeStreamKey ?? "");
+  if (youtubeKey) {
+    targets.push({ platform: "youtube", url: `rtmp://a.rtmp.youtube.com/live2/${youtubeKey}` });
   }
-  if (config.facebookStreamKey) {
-    targets.push({ platform: "facebook", url: `rtmps://live-api-s.facebook.com:443/rtmp/${config.facebookStreamKey}` });
+  const facebookKey = cleanStreamKey(config.facebookStreamKey ?? "");
+  if (facebookKey) {
+    targets.push({ platform: "facebook", url: `rtmps://live-api-s.facebook.com:443/rtmp/${facebookKey}` });
   }
   return targets;
 }

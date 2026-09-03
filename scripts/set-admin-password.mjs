@@ -46,7 +46,11 @@ function fail(message) {
   process.exit(1);
 }
 
-const password = (await readStdin()).replace(/\r?\n$/, "");
+// .trim(), matching the app: every password entering the app goes through a
+// helper that trims it before hashing, so a value with a leading or trailing
+// space set here would hash to something login could never reproduce — locking
+// the admin out with no visible cause.
+const password = (await readStdin()).trim();
 
 if (!password) fail("No password on stdin. See the comment at the top of this file for the command.");
 if (password.length < 12) fail(`Password is ${password.length} characters. Use at least 12.`);

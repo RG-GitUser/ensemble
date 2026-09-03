@@ -30,6 +30,22 @@ export const LIMITS = {
    * mistyping their address twice and asking again.
    */
   passwordReset: { max: 5, windowMs: 15 * 60_000 },
+  /**
+   * Sign-in attempts. The only credential endpoint that had no limit at all,
+   * which left an address published in this repo open to unlimited guessing —
+   * and, because password hashing is synchronous, made each attempt a slice of
+   * the single event loop every other request was waiting on. Counted per
+   * address as well as per connection, so a botnet spread across many IPs still
+   * meets a wall on the account it is grinding.
+   */
+  login: { max: 10, windowMs: 15 * 60_000 },
+  /**
+   * Content reports from the pairing snippet, per site. A real snippet reports
+   * once on a page load and only when the server asks; the token that
+   * authorises it is public by design, so this is the cap that keeps a stranger
+   * from rewriting a creator's inventory in a loop.
+   */
+  report: { max: 6, windowMs: 60_000 },
 } satisfies Record<string, Limit>;
 
 interface Window {

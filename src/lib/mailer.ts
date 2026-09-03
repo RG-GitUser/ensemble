@@ -74,7 +74,18 @@ export async function sendNewsletter(opts: {
       from,
       to: [r.email],
       reply_to: opts.replyTo,
-      subject: opts.subject,
+      // CRLF stripped rather than trusted to the provider's parser: the
+      // subject is creator-supplied and every other address-ish field here is
+      // already proven newline-free.
+      subject: opts.subject.replace(/[\r\n]+/g, " "),
+      // RFC 8058. The mail client's own Unsubscribe button sends a POST to this
+      // URL, which is exactly what the route now requires — so the native
+      // control keeps working while a link *scanner* following the same URL
+      // with a GET only reaches a confirmation page.
+      headers: {
+        "List-Unsubscribe": `<${r.unsubUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
       text: `${opts.body}\n\n—\nUnsubscribe: ${r.unsubUrl}`,
       html:
         `<div style="max-width:36em; margin:0 auto; font-family:system-ui,-apple-system,sans-serif; color:#1a1a1a;">` +
@@ -89,6 +100,9 @@ export async function sendNewsletter(opts: {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify(batch),
+        // Every other outbound call in the codebase carries one; a send that
+        // hangs here stalls the whole action and the broadcast is never recorded.
+        signal: AbortSignal.timeout(30_000),
       });
       if (res.ok) sent += batch.length;
       else failed += batch.length;
@@ -226,6 +240,9 @@ export async function sendLoginChangedNotice(opts: { to: string; newEmail: strin
     lead:
       `The login address for your Ensemble account was changed to ${opts.newEmail} ` +
       `using the account's recovery address. Every signed-in session was ended.`,
-    footer: "If this wasn't you, reply to this message or contact support straight away.",
+    // Not "reply to this message": systemFrom() is a send-only mailbox, and this
+    // is the one email a person whose account has just been taken over gets —
+    // sending their reply nowhere is the worst possible moment to do it.
+    footer: "If this wasn't you, contact support@ensemble.it.com straight away.",
   });
 }

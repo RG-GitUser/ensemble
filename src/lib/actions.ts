@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cleanDay, todayISO } from "./followers";
 import * as store from "./db";
 import { ADMIN_EMAIL, endSession, getCurrentUser, hashPassword, requireUser, startSession, verifyPassword } from "./auth";
+import { cleanStreamKey } from "./live";
 import { getPlan, PLANS } from "./plans";
 import {
   embedUrl,
@@ -183,6 +184,18 @@ export async function signup(_prev: FormState, fd: FormData): Promise<FormState>
 export async function login(_prev: FormState, fd: FormData): Promise<FormState> {
   const email = str(fd, "email").toLowerCase();
   const password = str(fd, "password");
+
+  // Two buckets, both of which must have room. The per-connection one stops one
+  // machine grinding many accounts; the per-address one stops many machines
+  // grinding one account, which is the shape that matters for an admin address
+  // anyone can read in the repo. Checked before the password is verified, so a
+  // refused attempt costs no hashing.
+  const tooManyFromHere = !rateLimit(`login:ip:${await clientIp()}`, LIMITS.login).ok;
+  const tooManyForAccount = !rateLimit(`login:acct:${email}`, LIMITS.login).ok;
+  if (tooManyFromHere || tooManyForAccount) {
+    return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
+  }
+
   const user = store.getUserByEmail(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return { error: "Invalid email or password." };
   await startSession(user.id);
@@ -216,7 +229,10 @@ export async function requestPasswordReset(_prev: FormState, fd: FormData): Prom
   if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
 
   const user = store.getUserByEmail(email);
-  if (user) {
+  // The demo account is seeded with a hash no password can produce, which is
+  // what makes it un-loginnable. A reset link would hand out a real password
+  // for it — to an address on a domain the platform does not control.
+  if (user && !store.isLockedAccount(user.id)) {
     const token = randomBytes(32).toString("base64url");
     store.createAuthToken(token, user.id, "password_reset", Date.now() + RESET_TTL_MINUTES * 60_000);
     const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -300,7 +316,7 @@ export async function requestLoginRecovery(_prev: FormState, fd: FormData): Prom
   if (!limit.ok) return { error: "Too many attempts. Try again in a few minutes." };
 
   const user = store.getUserByBackupEmail(email);
-  if (user) {
+  if (user && !store.isLockedAccount(user.id)) {
     const token = randomBytes(32).toString("base64url");
     store.createAuthToken(token, user.id, "recover_login", Date.now() + RESET_TTL_MINUTES * 60_000);
     const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -560,7 +576,12 @@ export async function saveShopAction(fd: FormData): Promise<void> {
   if (!tpl) return;
   const content: Record<string, string> = {};
   for (const f of tpl.fields) content[f.key] = str(fd, `field_${f.key}`);
-  store.updateSectionContent(id, content);
+  // A merge, not a replace. This tab posts only the four merch fields, so
+  // writing the whole content object wiped the portrait, marker mode, bullet
+  // shape and text scale that the Page Builder sets on the same section —
+  // silently, on every price edit. updateSectionAction carries those across by
+  // hand for the same reason; patching is the version that cannot forget one.
+  store.patchSectionContent(id, content);
   revalidateSite(site);
 }
 
@@ -672,7 +693,7 @@ export async function deleteSectionAction(fd: FormData): Promise<void> {
  */
 export async function deleteAllSectionsAction(): Promise<void> {
   const { site } = await requireSite();
-  for (const s of store.getSections(site.id)) store.deleteSection(s.id);
+  store.deleteAllSections(site.id);
   revalidateSite(site);
 }
 
@@ -738,14 +759,14 @@ export async function connectFinanceStripe(_prev: FormState, fd: FormData): Prom
   } catch {
     return { error: "Stripe rejected that key — check it has read access to Balance and Charges." };
   }
-  store.updateSite(site.id, { config: { ...site.config, financeStripeKey: key } });
+  store.patchSiteConfig(site.id, { financeStripeKey: key });
   revalidatePath("/dashboard/analytics");
   return { ok: true };
 }
 
 export async function disconnectFinanceStripe(): Promise<void> {
   const { site } = await requireSite();
-  store.updateSite(site.id, { config: { ...site.config, financeStripeKey: "" } });
+  store.patchSiteConfig(site.id, { financeStripeKey: "" });
   revalidatePath("/dashboard/analytics");
 }
 
@@ -755,7 +776,7 @@ export async function setSiteTheme(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const themeId = str(fd, "themeId");
   if (themeId && !getThemeDef(themeId)) return;
-  store.updateSite(site.id, { config: { ...site.config, themeId } });
+  store.patchSiteConfig(site.id, { themeId });
   revalidateSite(site);
 }
 
@@ -973,7 +994,7 @@ export async function saveLookAction(_prev: FormState, fd: FormData): Promise<Fo
     looks.push({ id: randomUUID(), name, design });
   }
 
-  store.updateSite(site.id, { config: { ...site.config, looks } });
+  store.patchSiteConfig(site.id, { looks });
   revalidatePath("/dashboard/builder");
   return { ok: true };
 }
@@ -982,7 +1003,7 @@ export async function deleteLookAction(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const id = str(fd, "lookId");
   const looks = (site.config.looks ?? []).filter((l) => l.id !== id);
-  store.updateSite(site.id, { config: { ...site.config, looks } });
+  store.patchSiteConfig(site.id, { looks });
   revalidatePath("/dashboard/builder");
 }
 
@@ -1007,8 +1028,10 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   const themeIdRaw = str(fd, "themeId");
   const fontIdRaw = str(fd, "fontId");
   const layoutRaw = str(fd, "layout");
-  const config: SiteConfig = {
-    ...site.config,
+  // A patch, deliberately not a spread of site.config: the uploads below are
+  // awaited, and anything written to this site meanwhile (the live badge, most
+  // visibly) would otherwise be carried back out of a stale snapshot and lost.
+  const config: Partial<SiteConfig> = {
     themeColor,
     bgColor,
     cardColor,
@@ -1071,7 +1094,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
     if (!svgSafe(bgSvg)) return { error: "That generated SVG couldn't be validated — try randomizing again." };
     config.bgImage = storeThemeAsset(site.id, "bg", Buffer.from(bgSvg, "utf8"), "svg");
   } else if (str(fd, "clearBgImage") === "1") {
-    delete config.bgImage;
+    config.bgImage = undefined;
   }
 
   const cardUpload = await themeImageFrom(fd, "cardImageFile", site.id, "card");
@@ -1079,7 +1102,7 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   if (cardUpload) {
     config.cardImage = cardUpload;
   } else if (str(fd, "clearCardImage") === "1") {
-    delete config.cardImage;
+    config.cardImage = undefined;
   }
 
 
@@ -1090,17 +1113,17 @@ export async function updateTheme(_prev: FormState, fd: FormData): Promise<FormS
   if (portraitUpload) {
     config.profileImage = portraitUpload;
   } else if (str(fd, "clearProfileImage") === "1") {
-    delete config.profileImage;
+    config.profileImage = undefined;
   }
   const iconUpload = await faviconFrom(fd, site.id);
   if (iconUpload && typeof iconUpload === "object") return iconUpload;
   if (iconUpload) {
     config.faviconUrl = iconUpload;
   } else if (str(fd, "clearFavicon") === "1") {
-    delete config.faviconUrl;
+    config.faviconUrl = undefined;
   }
 
-  store.updateSite(site.id, { config });
+  store.patchSiteConfig(site.id, config);
   revalidatePath("/dashboard/builder");
   revalidatePath(`/${site.slug}`);
   // The tab icon is served from the page's metadata, so both public routes
@@ -1261,7 +1284,7 @@ export async function openBillingPortal(): Promise<void> {
 export async function updateIntegrations(_prev: FormState, fd: FormData): Promise<FormState> {
   const { site } = await requireSite();
   const plan = getPlan(site.plan);
-  const config: SiteConfig = { ...site.config };
+  const config: Partial<SiteConfig> = {};
   if (plan.payments) config.stripeKey = str(fd, "stripeKey");
   if (plan.calendar) config.calendlyUrl = str(fd, "calendlyUrl");
   // The creator's own email platform. Only known provider ids are stored, so a
@@ -1276,7 +1299,7 @@ export async function updateIntegrations(_prev: FormState, fd: FormData): Promis
   // an absent checkbox reads as "off", so leaving this in would have turned
   // the chatroom off on every unrelated save from this form.
   if (plan.newsletter) config.newsletterEnabled = fd.get("newsletterEnabled") === "on";
-  store.updateSite(site.id, { config });
+  store.patchSiteConfig(site.id, config);
   revalidatePath("/dashboard/integrations");
   revalidatePath(`/${site.slug}`);
   return {};
@@ -1326,8 +1349,8 @@ export async function deleteChatMessageAction(fd: FormData): Promise<void> {
 export async function toggleChatroom(): Promise<void> {
   const { site } = await requireSite();
   if (!getPlan(site.plan).chatroom) return;
-  store.updateSite(site.id, {
-    config: { ...site.config, chatroomEnabled: site.config.chatroomEnabled === false },
+  store.patchSiteConfig(site.id, {
+    chatroomEnabled: site.config.chatroomEnabled === false
   });
   revalidatePath("/dashboard/chatroom");
   revalidatePath("/dashboard/integrations");
@@ -1583,7 +1606,9 @@ export async function removeSocialStat(fd: FormData): Promise<void> {
   const { site } = await requireSite();
   const id = Number(str(fd, "id"));
   if (id) store.deleteSocialStat(site.id, id);
-  revalidatePath("/dashboard/socials");
+  // Social stats render on Analytics (SocialGrowth), not on Socials — addSocialStat
+  // next door already revalidates the right one.
+  revalidatePath("/dashboard/analytics");
 }
 
 /** Re-attempt delivery of a post's queued/failed targets. */
@@ -1612,20 +1637,24 @@ export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<F
   // The relay exists now, so the key fields are back and mean something:
   // each saved key is a destination the relay pushes the creator's one
   // stream to. Blank clears, same as the channel fields above.
-  const twitchStreamKey = str(fd, "twitchStreamKey").slice(0, 200);
-  const youtubeStreamKey = str(fd, "youtubeStreamKey").slice(0, 200);
-  const facebookStreamKey = str(fd, "facebookStreamKey").slice(0, 200);
+  // Validated, not just truncated. These are interpolated into an RTMP URL and
+  // the relay reads its destination list line by line, so an embedded newline
+  // added a second ffmpeg output whose target the creator chose — a file path
+  // on the droplet, or an address of their own. str() only trims the ends.
+  const twitchStreamKey = cleanStreamKey(str(fd, "twitchStreamKey"));
+  const youtubeStreamKey = cleanStreamKey(str(fd, "youtubeStreamKey"));
+  const facebookStreamKey = cleanStreamKey(str(fd, "facebookStreamKey"));
+  if (str(fd, "twitchStreamKey") && !twitchStreamKey) return { error: "That doesn't look like a Twitch stream key." };
+  if (str(fd, "youtubeStreamKey") && !youtubeStreamKey) return { error: "That doesn't look like a YouTube stream key." };
+  if (str(fd, "facebookStreamKey") && !facebookStreamKey) return { error: "That doesn't look like a Facebook stream key." };
 
-  store.updateSite(site.id, {
-    config: {
-      ...site.config,
-      twitchChannel,
+  store.patchSiteConfig(site.id, {
+    twitchChannel,
       facebookLiveUrl,
       instagramLiveUser,
       twitchStreamKey,
       youtubeStreamKey,
       facebookStreamKey,
-    },
   });
   revalidatePath("/dashboard/integrations");
   revalidatePath(`/${site.slug}`);
@@ -1656,7 +1685,7 @@ export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState
     return { error: "Link at least one live platform below before going live." };
   }
 
-  store.updateSite(site.id, { config: { ...c, liveNow: true } });
+  store.patchSiteConfig(site.id, { liveNow: true });
 
   // Auto-announce on every connected social account.
   const platforms = store.getSocialAccounts(site.id).map((a) => a.platform);
@@ -1672,7 +1701,7 @@ export async function goLive(_prev: FormState, _fd: FormData): Promise<FormState
 
 export async function endLive(): Promise<void> {
   const { site } = await requireSite();
-  store.updateSite(site.id, { config: { ...site.config, liveNow: false } });
+  store.patchSiteConfig(site.id, { liveNow: false });
   revalidatePath("/dashboard/integrations");
   revalidatePath(`/${site.slug}`);
 }
@@ -1715,6 +1744,13 @@ export async function subscribeAction(_prev: FormState, fd: FormData): Promise<F
   if (!site) return { error: "Page not found." };
   const plan = getPlan(site.plan);
   if (!plan.newsletter) return { error: "Newsletter is not enabled on this page." };
+  // Both of these are honoured at render and in the embed payload, so without
+  // them here the switch and the draft state were decoration: a direct post
+  // kept filling the list of a page whose owner had turned signups off.
+  if (!site.published) return { error: "Page not found." };
+  if (site.config.newsletterEnabled === false) {
+    return { error: "Newsletter is not enabled on this page." };
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
 
   // Throttled per visitor across all pages. A real subscriber signs up once,
