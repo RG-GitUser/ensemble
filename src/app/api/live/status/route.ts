@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { getSiteByIngestKey, updateSite } from "@/lib/db";
+import { getSiteByIngestKey, patchSiteConfig } from "@/lib/db";
 import { hookAuthorized } from "@/lib/live";
 import { getPlan } from "@/lib/plans";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!site || !getPlan(site.plan).live) return new Response(null, { status: 404 });
 
   if ((site.config.liveNow === true) !== body.live) {
-    updateSite(site.id, { config: { ...site.config, liveNow: body.live } });
+    patchSiteConfig(site.id, { liveNow: body.live });
     revalidatePath(`/${site.slug}`);
     revalidatePath("/dashboard/integrations");
   }

@@ -1,5 +1,5 @@
 import { billingOk } from "@/lib/billing";
-import { getSiteByToken, recordPageView } from "@/lib/db";
+import { getSiteByToken, recordPageView, cleanReferrer } from "@/lib/db";
 import { buildEmbedContent } from "@/lib/embed";
 
 const CORS = {
@@ -22,7 +22,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   try {
     refHost = new URL(req.headers.get("referer") ?? "").host;
   } catch {}
-  recordPageView(site.id, refHost === (req.headers.get("host") ?? "") ? "" : refHost);
+  recordPageView(site.id, refHost === (req.headers.get("host") ?? "") ? "" : cleanReferrer(refHost));
 
   return Response.json(buildEmbedContent(site), { headers: CORS });
 }

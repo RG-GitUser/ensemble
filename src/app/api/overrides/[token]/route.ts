@@ -1,3 +1,4 @@
+import { billingOk } from "@/lib/billing";
 import { countSiteContent, getConnection, getEditedContent, getSiteByToken, touchConnection } from "@/lib/db";
 
 const CORS = {
@@ -17,7 +18,13 @@ const CORS = {
 export async function GET(req: Request, ctx: { params: Promise<{ token: string }> }): Promise<Response> {
   const { token } = await ctx.params;
   const site = getSiteByToken(token);
-  if (!site) return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  // Same rule the embed content route applies: unpublishing, or letting the
+  // subscription lapse, has to take the creator's edits down everywhere at
+  // once. Without this the snippet on their own website kept applying them
+  // indefinitely, for free.
+  if (!site || !site.published || !billingOk(site)) {
+    return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  }
 
   const connection = getConnection(site.id);
 

@@ -1,3 +1,5 @@
+import { billingOk } from "@/lib/billing";
+import { rateLimit, LIMITS } from "@/lib/ratelimit";
 import { getSiteByToken, replaceSiteContent, upsertConnection } from "@/lib/db";
 
 const CORS = {
@@ -26,6 +28,8 @@ const KINDS = new Set(["text", "image", "video"]);
 const MAX_ITEMS = 300;
 const MAX_SELECTOR = 500;
 const MAX_VALUE = 5_000;
+/** Generous for a real page's inventory, far under what buffering can cost. */
+const MAX_BODY = 2_000_000;
 
 interface Reported {
   selector: string;
@@ -40,16 +44,45 @@ export async function OPTIONS(): Promise<Response> {
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }): Promise<Response> {
   const { token } = await ctx.params;
   const site = getSiteByToken(token);
-  if (!site) return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  if (!site || !site.published || !billingOk(site)) {
+    return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  }
+
+  // The token is published in the creator's page source by design, so this
+  // endpoint is reachable by anyone who views it. Throttle per site: a real
+  // snippet reports on a page load, not in a loop.
+  if (!rateLimit(`report:${site.id}`, LIMITS.report).ok) {
+    return Response.json({ error: "Too many reports" }, { status: 429, headers: CORS });
+  }
+
+  // MAX_ITEMS / MAX_VALUE below bound what is STORED. They bound nothing about
+  // what is parsed, and route handlers get no body limit from Next or Caddy —
+  // so cap the read here, before req.json() buffers it.
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (declared > MAX_BODY) {
+    return Response.json({ error: "Report too large" }, { status: 413, headers: CORS });
+  }
+  let raw_body: string;
+  try {
+    raw_body = await req.text();
+  } catch {
+    return Response.json({ error: "Expected JSON" }, { status: 400, headers: CORS });
+  }
+  if (raw_body.length > MAX_BODY) {
+    return Response.json({ error: "Report too large" }, { status: 413, headers: CORS });
+  }
 
   let body: { url?: unknown; items?: unknown };
   try {
-    body = await req.json();
+    body = JSON.parse(raw_body);
   } catch {
     return Response.json({ error: "Expected JSON" }, { status: 400, headers: CORS });
   }
 
-  const raw = Array.isArray(body.items) ? body.items : [];
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  // Walking a two-million-entry array to keep 300 of them is the same denial of
+  // service the size cap above closes, one level down.
+  const raw = rawItems.length > MAX_ITEMS * 4 ? rawItems.slice(0, MAX_ITEMS * 4) : rawItems;
   const items = (raw as Reported[])
     .filter(
       (i) =>

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { billingOk } from "@/lib/billing";
-import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView } from "@/lib/db";
+import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView, cleanReferrer } from "@/lib/db";
 import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
@@ -513,7 +513,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     try {
       refHost = new URL(h.get("referer") ?? "").host;
     } catch {}
-    recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : refHost);
+    recordPageView(site.id, refHost === (h.get("host") ?? "") ? "" : cleanReferrer(refHost));
   }
 
   // One composed stack — accent glow, the creator's image, the preset's own

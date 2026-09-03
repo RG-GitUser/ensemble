@@ -51,6 +51,13 @@ export function proxy(req: NextRequest): NextResponse {
       path === "/documents" ||
       maybeCreatorPage;
     if (!isPublic) {
+      // 307 preserves the method and body, and server actions are dispatched by
+      // an id in a header rather than by route — so a POST redirected to "/"
+      // still ran the action it carried. A GET still gets sent to the landing
+      // page; anything else is simply refused.
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return new NextResponse(null, { status: 404 });
+      }
       return NextResponse.redirect(new URL("/", req.url));
     }
   }
@@ -67,13 +74,23 @@ export function proxy(req: NextRequest): NextResponse {
     return NextResponse.redirect(process.env.APP_URL || `https://${platformHosts().values().next().value ?? host}`);
   }
 
-  if (!host || platformHosts().has(host)) return NextResponse.next();
+  if (!host || platformHosts().has(host)) {
+    // x-ensemble-domain is how /domain/[host] recognises a proxy rewrite. It is
+    // stamped below, but a client can send a header by the same name, and on
+    // this path the request was being forwarded verbatim — so a platform URL
+    // plus one header rendered a creator's page at a second address and, worse,
+    // stamped "we heard from your domain" on their setup checklist.
+    const clean = new Headers(req.headers);
+    clean.delete("x-ensemble-domain");
+    return NextResponse.next({ request: { headers: clean } });
+  }
 
   const url = req.nextUrl.clone();
   url.pathname = `/domain/${host}`;
   // Marks the request as proxy-rewritten so /domain/[host] can refuse
   // direct hits on the platform URL.
   const headers = new Headers(req.headers);
+  headers.delete("x-ensemble-domain");
   headers.set("x-ensemble-domain", host);
   return NextResponse.rewrite(url, { request: { headers } });
 }
