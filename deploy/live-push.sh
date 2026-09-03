@@ -37,23 +37,46 @@ trap cleanup TERM INT EXIT
 
 notify true
 
-TARGETS=$(curl -fsS -m 10 "$APP/api/live/targets?key=$KEY" -H "x-live-secret: $SECRET" | jq -r '.targets[].url')
+# One base64 word per destination. The URLs carry creator-supplied stream keys,
+# and plain `jq -r` prints an embedded newline as a real one — so a key with a
+# newline in it used to split into an extra line here and become an extra ffmpeg
+# destination, with a target the creator chose. Base64 has no newlines, so a
+# line is always exactly one destination. (A NUL delimiter would be the other
+# idiom, but bash cannot hold NUL bytes in a variable.) The app validates keys
+# too; this is the half that cannot be bypassed by a value stored before it did.
+#
+# The lookup's exit status is captured separately: an empty result because the
+# app is restarting is not the same thing as a creator with no keys saved, and
+# taking the no-keys branch for it left the on-air badge lit while nothing was
+# pushed anywhere.
+TARGETS=$(curl -fsS -m 10 "$APP/api/live/targets?key=$KEY" -H "x-live-secret: $SECRET" | jq -r '.targets[].url | @base64')
+LOOKUP_STATUS=$?
+
+if [ "$LOOKUP_STATUS" -ne 0 ]; then
+  log "could not reach $APP to look up stream keys (status $LOOKUP_STATUS) — pushing nowhere"
+  while sleep 30; do :; done
+fi
 
 if [ -z "$TARGETS" ]; then
   log "no stream keys saved — ingesting but pushing nowhere"
   # Stay alive so the on-air badge still works; cleanup runs on stream end.
-  while sleep 3600; do :; done
+  # Short sleeps rather than one long one: bash runs a trap only between
+  # foreground commands, so `sleep 3600` deferred cleanup — and the on-air
+  # badge with it — for up to an hour after the stream ended.
+  while sleep 30; do :; done
 fi
 
 count=0
-while IFS= read -r url; do
+while IFS= read -r encoded; do
+  [ -z "$encoded" ] && continue
+  url=$(printf '%s' "$encoded" | base64 -d)
   [ -z "$url" ] && continue
   count=$((count + 1))
   # -c copy: pure forwarding, no transcode — this is what keeps the relay
   # cheap enough to live beside the app. Egress is logged per push below.
   ffmpeg -hide_banner -loglevel error \
     -i "rtmp://127.0.0.1:1935/$MTX_PATH" \
-    -c copy -f flv "$url" &
+    -c copy -f flv -nostdin "$url" &
 done <<< "$TARGETS"
 
 log "pushing to $count destination(s)"

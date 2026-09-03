@@ -31,7 +31,7 @@ ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
 
 # Node 22 LTS + build tools (better-sqlite3 compiles natively)
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs build-essential python3
+apt-get install -y nodejs build-essential python3 sqlite3
 
 # Caddy (official repo)
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -50,12 +50,19 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 ## 5. The app
 
 ```sh
+# /srv is root-owned, so make the directory first — as root, before su'ing.
+install -d -o ensemble -g ensemble /srv/ensemble
+
 sudo -iu ensemble
 git clone <your-repo> /srv/ensemble   # or rsync the project up
 cd /srv/ensemble
 cp .env.example .env                  # then EDIT IT:
 #  - DOMAIN_A_RECORD = the reserved IP
-#  - ADMIN_PASSWORD  = a real password (seeded on FIRST start — set it now)
+#  - ADMIN_PASSWORD  = uncomment and set a real one, OR leave it commented and
+#    read the generated one out of the log after first start:
+#      journalctl -u ensemble | grep -i "admin password"
+#    Either is fine. Leaving a placeholder value in place is not.
+chmod 600 .env                        # it holds every secret the app has
 npm ci
 npm run build
 ```
@@ -87,6 +94,10 @@ Everything mutable lives in `/srv/ensemble/data/` (SQLite DB + uploads).
 
 ```sh
 chmod +x /srv/ensemble/scripts/backup.sh
+# The cron line below redirects into this directory, and the shell opens that
+# redirect BEFORE running the script that would create it — so without this the
+# very first run fails before it starts, with no log to say why.
+mkdir -p /srv/ensemble/backups
 crontab -e   # as the ensemble user
 0 4 * * * /srv/ensemble/scripts/backup.sh >> /srv/ensemble/backups/backup.log 2>&1
 ```
@@ -109,7 +120,9 @@ S3-compatible) and the script pushes each night's files there too:
 
 ```sh
 apt install -y rclone
-rclone config                      # add a remote, e.g. "spaces"
+# As the ensemble user: the nightly job runs as ensemble and reads that user's
+# rclone config, so configuring the remote as root leaves it unreadable.
+sudo -iu ensemble rclone config    # add a remote, e.g. "spaces"
 echo 'BACKUP_REMOTE=spaces:ensemble-backups' >> /srv/ensemble/.env
 ```
 
@@ -123,7 +136,12 @@ systemctl stop ensemble
 
 cd /srv/ensemble/data
 mv app.db app.db.broken                    # keep it: it may still have the WAL
-rm -f app.db-wal app.db-shm                # stale WAL against a new DB corrupts it
+# MOVE the WAL with it rather than deleting it. Under WAL the most recent writes
+# live in that file, so `rm` is precisely what makes app.db.broken unrecoverable
+# — contradicting the line above. It still must not be left here, because SQLite
+# would replay it against the RESTORED file, which is a different database.
+mv -f app.db-wal app.db.broken-wal 2>/dev/null || true
+mv -f app.db-shm app.db.broken-shm 2>/dev/null || true
 cp /srv/ensemble/backups/app-3.db app.db   # pick the day you want
 tar xzf /srv/ensemble/backups/uploads-3.tar.gz -C /srv/ensemble/data
 
@@ -132,9 +150,10 @@ sqlite3 app.db "PRAGMA integrity_check;"   # expect: ok
 systemctl start ensemble
 ```
 
-Deleting the old `-wal` and `-shm` matters: SQLite will try to replay a
-leftover WAL against the restored file, which is not the database it belongs
-to. Restore is worth rehearsing once on a throwaway droplet — an untested
+Moving the old `-wal` and `-shm` aside matters twice over: SQLite would replay
+a leftover WAL against the restored file, which is not the database it belongs
+to — and the broken database you just set aside may still need its own WAL to
+be readable at all, so deleting it forecloses the recovery. Restore is worth rehearsing once on a throwaway droplet — an untested
 backup is a guess.
 
 ## 9. Updating the app

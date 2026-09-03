@@ -33,6 +33,16 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/srv/ensemble}"
+
+# DEPLOY.md documents BACKUP_REMOTE as a line appended to .env, but cron runs
+# this with a bare environment and never sources it — so off-droplet copies
+# silently never happened. Read it here, where the documentation says it lives.
+if [ -f "$APP_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$APP_DIR/.env"
+  set +a
+fi
 DATA_DIR="$APP_DIR/data"
 BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups}"
 # Day of week (1-7), so the set self-prunes to a rolling week without needing
@@ -54,8 +64,12 @@ sqlite3 "$DATA_DIR/app.db" ".backup '$DB_OUT'"
 # Integrity-check the copy, not the original. A backup nobody has opened is a
 # guess, and this is the one moment the copy is cheap to verify.
 if ! sqlite3 "$DB_OUT" "PRAGMA integrity_check;" | grep -qx "ok"; then
-  echo "✗ Backup failed its integrity check — keeping yesterday's and stopping." >&2
-  rm -f "$DB_OUT"
+  # NOT rm: $STAMP is the weekday, so .backup has already overwritten last
+  # week's copy in this slot. Deleting it here emptied the slot entirely, and
+  # seven consecutive failures emptied every slot — while the message claimed
+  # yesterday's was being kept. Park it for diagnosis instead.
+  mv -f "$DB_OUT" "$DB_OUT.bad" 2>/dev/null || true
+  echo "✗ Backup failed its integrity check — kept as $DB_OUT.bad. THIS SLOT HAS NO GOOD BACKUP." >&2
   exit 1
 fi
 

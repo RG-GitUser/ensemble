@@ -6,9 +6,13 @@ After=network.target ensemble.service
 
 [Service]
 User=ensemble
-# The app's .env — the relay only needs LIVE_HOOK_SECRET from it, and sharing
-# the file beats maintaining the same secret in two places.
-EnvironmentFile=/srv/ensemble/.env
+# Only the hook secret, in a file of its own. EnvironmentFile loads the WHOLE
+# file, so pointing this at the app's .env put STRIPE_SECRET_KEY, RESEND_API_KEY
+# and ADMIN_PASSWORD into the relay's environment — inherited by live-push.sh
+# and by every ffmpeg it spawns. Create it with:
+#   install -m 600 -o root -g root /dev/null /etc/ensemble/relay.env
+#   echo "LIVE_HOOK_SECRET=..." >> /etc/ensemble/relay.env
+EnvironmentFile=/etc/ensemble/relay.env
 ExecStart=/usr/local/bin/mediamtx /srv/ensemble/deploy/mediamtx.yml
 Restart=always
 RestartSec=3

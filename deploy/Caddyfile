@@ -19,14 +19,43 @@
 	handle /api/domains/check* {
 		respond 403
 	}
+	# The relay's hooks are called over loopback by MediaMTX and live-push.sh
+	# and have no business being reachable from the internet. /api/live/auth in
+	# particular takes no secret by design (MediaMTX cannot attach headers), so
+	# from outside it answered 200-vs-401 for any candidate ingest key.
+	handle /api/live/* {
+		respond 403
+	}
+}
+
+# Applied to both site blocks. Caddy sets none of these by default and neither
+# does next.config.ts, so every HTML response went out without them.
+(sec-headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
 }
 
 # The platform itself — normal managed certificates.
 ensemble.it.com, www.ensemble.it.com, sites.ensemble.it.com {
 	import block-ask-endpoint
+	import sec-headers
 	handle {
 		reverse_proxy localhost:3000
 	}
+}
+
+# Creator domains are served from the `https://` block below, which — having no
+# hostname — gives Caddy nothing to synthesise an HTTP→HTTPS redirect from. So
+# a visitor typing the bare domain (exactly what the setup instructions tell
+# them to do) reached no site on :80 and got an empty 404, and the creator
+# concluded their DNS was broken. This is that missing redirect.
+http:// {
+	redir https://{host}{uri} permanent
 }
 
 # Every other hostname is a creator's custom domain: mint a cert on demand
@@ -37,6 +66,7 @@ https:// {
 		on_demand
 	}
 	import block-ask-endpoint
+	import sec-headers
 	handle {
 		reverse_proxy localhost:3000
 	}

@@ -13,7 +13,26 @@ WorkingDirectory=/srv/ensemble
 ExecStart=/usr/bin/npm run start
 Restart=always
 RestartSec=3
+# Without a window, five restarts at 3s never reach systemd's default limit, so
+# a crash loop (corrupt database, bad .env, full disk) runs forever and silently.
+# With it, the unit gives up and enters `failed`, where a monitor can see it.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 Environment=NODE_ENV=production
+
+# The process needs its own directory and nothing else. None of this was set,
+# on a service that runs as a user the runbook puts in the sudo group.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/srv/ensemble
+# A 1GB droplet OOMs during `next build`; capping the unit means the kernel
+# kills this rather than picking a victim out of the whole box.
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target
