@@ -117,10 +117,23 @@ export function IntegrationsForm({
       {newsletter && (
         <div className="card flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold">Newsletter / memberships</h2>
-            <p className="mt-1 text-sm text-mist">Let followers subscribe from Newsletter sections on your page.</p>
+            <h2 className="font-bold" id="newsletter-enabled-label">Newsletter / memberships</h2>
+            <p className="mt-1 text-sm text-mist" id="newsletter-enabled-hint">
+              Let followers subscribe from Newsletter sections on your page.
+            </p>
           </div>
-          <input type="checkbox" name="newsletterEnabled" defaultChecked={newsletterEnabled} className="h-5 w-5 accent-brand" />
+          {/* Named for assistive tech: this switches signups off across the
+              hosted page and the embed, and unlabelled it announced only
+              "checkbox, checked". */}
+          <input
+            type="checkbox"
+            id="newsletterEnabled"
+            name="newsletterEnabled"
+            defaultChecked={newsletterEnabled}
+            aria-labelledby="newsletter-enabled-label"
+            aria-describedby="newsletter-enabled-hint"
+            className="h-5 w-5 accent-brand"
+          />
         </div>
       )}
       {state.error && (

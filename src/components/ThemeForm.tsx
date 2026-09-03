@@ -136,8 +136,16 @@ function HexPicker({
         <input
           value={text}
           onChange={(e) => {
-            setText(e.target.value);
-            const normalized = normalizeHex(e.target.value);
+            const next = e.target.value;
+            setText(next);
+            // Commit only at a length that is already complete: #abc or
+            // #aabbcc. normalizeHex expands the short form, so committing at
+            // every keystroke meant typing "#8b5" mid-way through "#8b5cf6"
+            // became "#88bb55", which flowed back through `value` and replaced
+            // what was being typed — a six-digit hex could only be pasted.
+            const trimmed = next.trim();
+            if (trimmed.length !== 4 && trimmed.length !== 7) return;
+            const normalized = normalizeHex(trimmed);
             if (normalized) onPick(normalized);
           }}
           placeholder="#8b5cf6"
@@ -1179,7 +1187,14 @@ export function ThemeForm({
     glowAlpha,
     glowColor: glowTint,
   });
-  /** Everything the Design tab owns, exactly as it stands right now. */
+  /**
+   * Everything the Design tab owns, exactly as it stands right now.
+   *
+   * bgImage is the SAVED url rather than the live `bgImg` preview: immediately
+   * after choosing a file or rolling a random SVG, the preview is a blob:/data:
+   * url that sanitizeDesign rejects on the way in, so a look saved at that
+   * moment recorded no background at all.
+   */
   const currentDesign = {
     themeColor: accent,
     bgColor: bg,
@@ -1187,7 +1202,7 @@ export function ThemeForm({
     containerSize: size,
     containerMinHeight: minH,
     borderStyle: border,
-    bgImage: bgImg,
+    bgImage,
     cardImage: cardImg,
     gradient,
     themeId,
@@ -1227,9 +1242,14 @@ export function ThemeForm({
     setLightThemeId(d.lightThemeId ?? "");
     setGradient(d.gradient !== false);
     // Images are files on the site, not part of the palette — a look only
-    // restores one if it's still the image the site has.
-    setBgImg(d.bgImage ?? "");
-    setClearBg(!d.bgImage);
+    // restores one if it's still the image the site has. An ABSENT one means
+    // the look says nothing about the background, not "remove it": clearing on
+    // absence turned applying a look into a silent delete of the background the
+    // creator had.
+    if (d.bgImage) {
+      setBgImg(d.bgImage);
+      setClearBg(false);
+    }
     setBgSvg("");
   }
 

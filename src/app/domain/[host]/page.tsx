@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getSections, getSiteById, resolveDomain, touchDomain } from "@/lib/db";
+import { billingOk } from "@/lib/billing";
 import { getPlan } from "@/lib/plans";
 import { PublicSite } from "@/components/PublicSite";
 import type { Metadata } from "next";
@@ -24,7 +25,9 @@ async function siteForHost(host: string): Promise<Site | null> {
 export async function generateMetadata({ params }: { params: Promise<{ host: string }> }): Promise<Metadata> {
   const { host } = await params;
   const site = await siteForHost(host);
-  if (!site) return {};
+  // The body renders a holding page for an unpublished site; the title and
+  // description must not leak its real headline and tagline meanwhile.
+  if (!site || !site.published || !billingOk(site)) return {};
   // The creator's name, not Ensemble's — this is their domain.
   const hero = getSections(site.id).find((s) => s.type === "hero");
   const icon = site.config.faviconUrl;

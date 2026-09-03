@@ -13,7 +13,15 @@ export async function GET(): Promise<Response> {
     ["email", "subscribed_at", "status"],
     ...getLeads(site.id).map((l) => [l.email, l.createdAt, l.unsubscribedAt ? "unsubscribed" : "subscribed"]),
   ];
-  const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+  // Excel and LibreOffice evaluate a cell that starts with = + - @ (or a tab or
+  // CR) even inside quotes, and these addresses come from a public form — so a
+  // visitor could otherwise plant a formula in the creator's own spreadsheet.
+  // The apostrophe is the conventional neutraliser and shows as a plain string.
+  const cell = (v: string) => {
+    const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+  const csv = rows.map((r) => r.map(cell).join(",")).join("\n");
 
   return new Response(csv, {
     headers: {

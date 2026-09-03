@@ -184,8 +184,10 @@ export default async function AnalyticsPage({
   const chatMessages = plan.chatroom ? countChatMessages(site.id) : null;
 
   // Fill the last CHART_DAYS days so the chart shows gaps, not just active days.
-  // Fetched on every plan — lower tiers see it dimmed behind the upgrade overlay.
-  const daily = getDailyViews(site.id, CHART_DAYS);
+  // Only fetched when the plan allows it: LockedOverlay dims its children with
+  // opacity and a 1.5px blur, which is a visual treatment, not a gate — the
+  // real rows were being serialised into the HTML of every lower-tier account.
+  const daily = plan.dailyAnalytics ? getDailyViews(site.id, CHART_DAYS) : [];
   const byDay = new Map(daily.map((d) => [d.day, d.views]));
   const days: Array<{ day: string; views: number }> = [];
   const now = new Date();
@@ -197,7 +199,7 @@ export default async function AnalyticsPage({
   }
   const maxViews = Math.max(1, ...days.map((d) => d.views));
 
-  const referrers = getTopReferrers(site.id);
+  const referrers = plan.referrerAnalytics ? getTopReferrers(site.id) : [];
 
   // A date past today would ask the charts about a day that hasn't happened;
   // an unparseable one falls back the same way rather than throwing.

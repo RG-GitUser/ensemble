@@ -496,12 +496,22 @@ export function getButtonStyle(id: string | undefined | null): ButtonStyleDef | 
 /** The button style as the custom properties the public page reads. */
 export function buttonVars(id: string | undefined | null, accent: string): Record<string, string> {
   const b = getButtonStyle(id) ?? BUTTON_STYLES[0];
+  // Solid and Gradient print their label in fixed white on the accent itself.
+  // isLight() already exists for exactly this question — it just was never
+  // asked here — so a pale accent (the shipped Lime is about 1.9:1 against
+  // white) put every call-to-action on the page below AA. Dark ink on a light
+  // accent clears it; the check runs only where the ink is literal white, so
+  // Outline and Soft, whose ink IS the accent, are untouched.
+  const ink = b.ink === "#fff" && isLight(accent) ? BUTTON_INK_ON_LIGHT : b.ink;
   return {
     "--site-btn-bg": withAccent(b.bg, accent),
-    "--site-btn-ink": withAccent(b.ink, accent),
+    "--site-btn-ink": withAccent(ink, accent),
     "--site-btn-border": withAccent(b.border, accent),
   };
 }
+
+/** Near-black rather than pure black: softer against a saturated accent. */
+const BUTTON_INK_ON_LIGHT = "#15121c";
 
 /**
  * What a container or a button does when the pointer is over it.
