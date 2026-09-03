@@ -247,7 +247,33 @@ function createDb(): Database.Database {
   // a constraint, so the table is rebuilt once. Every existing row carries in
   // as a follower reading, which is what all of them were.
   const ssCols = new Set((db.prepare("PRAGMA table_info(social_stats)").all() as Array<{ name: string }>).map((c) => c.name));
+  // A previous run that died between the DROP and the RENAME leaves the rebuilt
+  // table orphaned and social_stats recreated empty by the CREATE IF NOT EXISTS
+  // above — which also makes the `metric` guard read as already-migrated, so
+  // nothing would ever look at it again. Finish that job before deciding.
+  const orphan = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'social_stats_rebuilt'")
+    .get() as { name: string } | undefined;
+  if (orphan) {
+    db.transaction(() => {
+      // Only the post-DROP interrupt actually stranded rows: there social_stats
+      // came back empty *with* the new column, so the orphan is the only copy.
+      // Interrupts before the DROP left the original table intact under the old
+      // schema, and the migration below will rebuild it — the orphan is a
+      // half-written duplicate, so it just goes.
+      if (ssCols.has("metric")) {
+        db.exec(`
+          INSERT OR IGNORE INTO social_stats (id, site_id, platform, metric, day, count, note, created_at)
+            SELECT id, site_id, platform, metric, day, count, note, created_at FROM social_stats_rebuilt;
+        `);
+      }
+      db.exec("DROP TABLE social_stats_rebuilt");
+    })();
+  }
   if (!ssCols.has("metric")) {
+    // One exec, but wrapped: db.exec auto-commits each statement separately, so
+    // an interrupt between the DROP and the RENAME would lose every reading.
+    db.transaction(() => {
     db.exec(`
       CREATE TABLE social_stats_rebuilt (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -265,6 +291,7 @@ function createDb(): Database.Database {
       DROP TABLE social_stats;
       ALTER TABLE social_stats_rebuilt RENAME TO social_stats;
     `);
+    })();
   }
 
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
@@ -278,10 +305,15 @@ function createDb(): Database.Database {
     db.exec("ALTER TABLE custom_domains ADD COLUMN verify_token TEXT NOT NULL DEFAULT ''");
   }
   if (!domCols.has("verified_at")) {
-    db.exec(`
-      ALTER TABLE custom_domains ADD COLUMN verified_at TEXT;
-      UPDATE custom_domains SET verified_at = datetime('now') WHERE verified_at IS NULL;
-    `);
+    // Wrapped: an interrupt between the two statements would leave every
+    // existing custom domain unverified, and resolveDomain requires
+    // verified_at — so every creator's domain would go dark at once.
+    db.transaction(() => {
+      db.exec(`
+        ALTER TABLE custom_domains ADD COLUMN verified_at TEXT;
+        UPDATE custom_domains SET verified_at = datetime('now') WHERE verified_at IS NULL;
+      `);
+    })();
   }
   // The welcome prompt arrived after user_prefs shipped, so everyone who
   // already had an account is marked as welcomed on the way in. They have
@@ -296,12 +328,18 @@ function createDb(): Database.Database {
     db.exec("ALTER TABLE user_prefs ADD COLUMN setup_dismissed INTEGER NOT NULL DEFAULT 0");
   }
   if (!prefCols.has("welcomed")) {
-    db.exec(`
-      ALTER TABLE user_prefs ADD COLUMN welcomed INTEGER NOT NULL DEFAULT 0;
-      INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed)
-        SELECT id, 1, '', 1 FROM users WHERE id NOT IN (SELECT user_id FROM user_prefs);
-      UPDATE user_prefs SET welcomed = 1;
-    `);
+    // Wrapped: an interrupt after the ALTER leaves the guard reading as done
+    // with every existing account still at welcomed = 0, which is exactly the
+    // "greet a long-standing customer with Welcome" outcome this backfill exists
+    // to prevent.
+    db.transaction(() => {
+      db.exec(`
+        ALTER TABLE user_prefs ADD COLUMN welcomed INTEGER NOT NULL DEFAULT 0;
+        INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed)
+          SELECT id, 1, '', 1 FROM users WHERE id NOT IN (SELECT user_id FROM user_prefs);
+        UPDATE user_prefs SET welcomed = 1;
+      `);
+    })();
   }
   // Snippet-reported content discovery replaced the server-side URL scan.
   const connCols = new Set((db.prepare("PRAGMA table_info(connections)").all() as Array<{ name: string }>).map((c) => c.name));
@@ -384,7 +422,73 @@ function createDb(): Database.Database {
   // before the billing columns existed.
   db.exec("UPDATE sites SET billing_status = 'active' WHERE slug IN ('demo', 'hq') AND billing_status = ''");
 
+  // One row per address per site. Without this a double-tapped signup makes two
+  // rows with two different unsub_tokens, the newsletter goes out once per row,
+  // and the unsubscribe link in one email clears only the row it belongs to —
+  // so the reader keeps receiving mail they opted out of. Existing duplicates
+  // have to go first or the index cannot be created: keep the oldest row per
+  // (site, address), and carry across an opt-out from any of its duplicates so
+  // deduping can never silently re-subscribe somebody.
+  db.transaction(() => {
+    db.exec(`
+      UPDATE leads SET unsubscribed_at = COALESCE(unsubscribed_at, (
+        SELECT MIN(d.unsubscribed_at) FROM leads d
+        WHERE d.site_id = leads.site_id AND d.email = leads.email AND d.unsubscribed_at IS NOT NULL
+      ));
+      DELETE FROM leads WHERE id NOT IN (
+        SELECT MIN(id) FROM leads GROUP BY site_id, email
+      );
+    `);
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_site_email ON leads(site_id, email)");
+  })();
+
+  // Foreign-key columns carried no indexes at all, so every one of these read
+  // paths was a full table scan — and with foreign_keys = ON, so was every
+  // cascading delete, once per parent row.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_sections_site ON sections(site_id, position);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_leads_site ON leads(site_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_unsub_token ON leads(unsub_token);
+    CREATE INDEX IF NOT EXISTS idx_chat_site ON chat_messages(site_id, id);
+    CREATE INDEX IF NOT EXISTS idx_site_content_site ON site_content(site_id, position);
+    CREATE INDEX IF NOT EXISTS idx_newsletter_site ON newsletter_posts(site_id, id);
+    CREATE INDEX IF NOT EXISTS idx_tickets_user ON support_tickets(user_id, id);
+    CREATE INDEX IF NOT EXISTS idx_quotes_user ON quote_requests(user_id, id);
+    CREATE INDEX IF NOT EXISTS idx_social_posts_site ON social_posts(site_id, id);
+    CREATE INDEX IF NOT EXISTS idx_post_targets_post ON social_post_targets(post_id);
+    CREATE INDEX IF NOT EXISTS idx_sites_stripe_sub ON sites(stripe_subscription_id);
+    CREATE INDEX IF NOT EXISTS idx_sites_stripe_cust ON sites(stripe_customer_id);
+    CREATE INDEX IF NOT EXISTS idx_users_backup_email ON users(backup_email);
+  `);
+
+  sweepExpired(db);
+
   return db;
+}
+
+/**
+ * Drop rows that are already dead: sessions past their expiry and auth tokens
+ * that are spent or expired. Both were only ever filtered at read time, so a
+ * year of logins left a table of tombstones that every password reset and every
+ * account deletion then had to scan.
+ *
+ * Deliberately not a retention policy — nothing here decides how long live data
+ * is kept, it only removes rows that already stopped counting for anything.
+ */
+/** Cheapest possible proof that the database is open and answering. */
+export function healthCheck(): void {
+  db().prepare("SELECT 1").get();
+}
+
+export function sweepExpired(handle?: Database.Database): void {
+  const d = handle ?? db();
+  const now = Date.now();
+  d.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(now);
+  d.prepare("DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at > 0").run(now);
 }
 
 function newEmbedToken(): string {
@@ -403,6 +507,18 @@ function newIngestKey(): string {
 // A syntactically valid salt:hash that no real password can produce, so the
 // demo account can never be logged into.
 const DEMO_LOCKED_HASH = "0".repeat(32) + ":" + "0".repeat(128);
+
+/**
+ * True for an account whose password is the unforgeable sentinel — the demo.
+ * verifyPassword can never match it, but a password reset would have set a real
+ * one, so the reset and recovery flows have to refuse it explicitly.
+ */
+export function isLockedAccount(userId: number): boolean {
+  const r = db().prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as
+    | { password_hash: string }
+    | undefined;
+  return !!r && r.password_hash === DEMO_LOCKED_HASH;
+}
 
 /** Seed the public example page at /demo (idempotent). */
 function seedDemo(d: Database.Database): void {
@@ -685,6 +801,23 @@ export const SITE_CONFIG_DEFAULTS = {
   tagline: "",
 };
 
+/**
+ * Parse a stored JSON blob, falling back to an empty object.
+ *
+ * These two mappers sit on the public render path, the dashboard and the Stripe
+ * webhook. An unguarded parse meant one truncated `config` — a disk-full write,
+ * a bad restore — threw out of getSiteBySlug and took every one of those down
+ * for that tenant at once, with no way back without hand-editing the database.
+ */
+function safeJson(raw: string | null | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function toSite(r: SiteRow): Site {
   return {
     id: r.id,
@@ -694,7 +827,7 @@ function toSite(r: SiteRow): Site {
     published: r.published === 1,
     config: {
       ...SITE_CONFIG_DEFAULTS,
-      ...JSON.parse(r.config || "{}"),
+      ...safeJson(r.config),
     },
     embedToken: r.embed_token ?? "",
     ingestKey: r.ingest_key ?? "",
@@ -711,7 +844,7 @@ function toSection(r: SectionRow): Section {
     siteId: r.site_id,
     type: r.type,
     position: r.position,
-    content: JSON.parse(r.content || "{}"),
+    content: safeJson(r.content) as Record<string, string>,
     theme: r.theme ?? "",
     align: r.align ?? "",
     buttonAlign: r.button_align ?? "",
@@ -789,6 +922,14 @@ export function deleteSiteData(siteId: number): void {
     d.prepare("DELETE FROM social_posts WHERE site_id = ?").run(siteId);
     d.prepare("DELETE FROM social_accounts WHERE site_id = ?").run(siteId);
     d.prepare("DELETE FROM social_stats WHERE site_id = ?").run(siteId);
+    // The growth log the docstring promises is follower_counts — social_stats
+    // is the other, parallel table. Wiping one and not the other left the
+    // Followers chart rendering a full history after "delete my data".
+    d.prepare("DELETE FROM follower_counts WHERE site_id = ?").run(siteId);
+    // Subject and full body of every broadcast ever sent.
+    d.prepare("DELETE FROM newsletter_posts WHERE site_id = ?").run(siteId);
+    // Content scraped from the creator's own external site.
+    d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
   });
   tx();
 }
@@ -880,7 +1021,7 @@ export function getAuthToken(token: string, purpose: AuthTokenPurpose): { user: 
 function consumeAuthToken(
   token: string,
   purpose: AuthTokenPurpose,
-  apply: (d: ReturnType<typeof db>, userId: number, payload: string) => void
+  apply: (d: ReturnType<typeof db>, userId: number, payload: string) => boolean | void
 ): boolean {
   const d = db();
   const run = d.transaction(() => {
@@ -889,10 +1030,33 @@ function consumeAuthToken(
       .get(token, purpose, Date.now()) as { user_id: number; payload: string } | undefined;
     if (!row) return false;
     d.prepare("UPDATE auth_tokens SET used_at = ? WHERE token = ?").run(Date.now(), token);
-    apply(d, row.user_id, row.payload);
+    // `apply` may refuse on a precondition only checkable inside the
+    // transaction. Throwing rolls the used_at stamp back with the effect, so a
+    // refused link is not silently burnt.
+    if (apply(d, row.user_id, row.payload) === false) throw new AuthTokenRefused();
     return true;
   });
-  return run();
+  try {
+    return run();
+  } catch (err) {
+    if (err instanceof AuthTokenRefused) return false;
+    throw err;
+  }
+}
+
+/** Internal signal: the token was valid, but its preconditions no longer hold. */
+class AuthTokenRefused extends Error {}
+
+/**
+ * Drop every outstanding emailed link for a user.
+ *
+ * createAuthToken only ever replaced tokens of the *same* purpose, so the two
+ * obvious responses to a suspicious email — remove the recovery address, then
+ * reset the password — left an attacker's recovery link live for the rest of
+ * its window, and spending it dropped the sessions the victim had just made.
+ */
+function revokeAuthTokens(d: ReturnType<typeof db>, userId: number): void {
+  d.prepare("DELETE FROM auth_tokens WHERE user_id = ?").run(userId);
 }
 
 /**
@@ -905,6 +1069,7 @@ export function consumePasswordReset(token: string, passwordHash: string): boole
   return consumeAuthToken(token, "password_reset", (d, userId) => {
     d.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, userId);
     d.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    revokeAuthTokens(d, userId);
   });
 }
 
@@ -925,8 +1090,17 @@ export function consumeBackupVerification(token: string): boolean {
  */
 export function consumeLoginRecovery(token: string, newEmail: string, passwordHash: string): boolean {
   return consumeAuthToken(token, "recover_login", (d, userId) => {
+    // Only good while the address it was sent to is still the confirmed one:
+    // removing the recovery address has to invalidate a link already in flight,
+    // or "remove it" does not mean what the settings card says it means.
+    const row = d.prepare("SELECT backup_verified_at FROM users WHERE id = ?").get(userId) as
+      | { backup_verified_at: number }
+      | undefined;
+    if (!row || !row.backup_verified_at) return false;
     d.prepare("UPDATE users SET email = ?, password_hash = ? WHERE id = ?").run(newEmail, passwordHash, userId);
     d.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    revokeAuthTokens(d, userId);
+    return true;
   });
 }
 
@@ -940,7 +1114,12 @@ export function getUserByBackupEmail(email: string): User | null {
 
 /** Clear a recovery address without needing a round trip through email. */
 export function clearBackupEmail(userId: number): void {
-  db().prepare("UPDATE users SET backup_email = '', backup_verified_at = 0 WHERE id = ?").run(userId);
+  const d = db();
+  d.transaction(() => {
+    d.prepare("UPDATE users SET backup_email = '', backup_verified_at = 0 WHERE id = ?").run(userId);
+    // Including any recovery link already sent to the address being removed.
+    revokeAuthTokens(d, userId);
+  })();
 }
 
 /* ---------- sites ---------- */
@@ -995,35 +1174,76 @@ export function slugTaken(slug: string, excludeSiteId?: number): boolean {
   return !!r && r.id !== excludeSiteId;
 }
 
+/**
+ * Write only the columns actually supplied.
+ *
+ * It used to write all four every time, rebuilding `config` from the value
+ * `toSite` had already merged SITE_CONFIG_DEFAULTS into — so a call that
+ * touched nothing but `plan` (a Stripe webhook, say) silently persisted today's
+ * defaults as if the creator had chosen them, and changing a default later
+ * would then skip exactly those sites.
+ */
 export function updateSite(id: number, fields: { slug?: string; plan?: string; published?: boolean; config?: object }): void {
-  const site = getSiteById(id);
-  if (!site) return;
-  db().prepare("UPDATE sites SET slug = ?, plan = ?, published = ?, config = ? WHERE id = ?").run(
-    fields.slug ?? site.slug,
-    fields.plan ?? site.plan,
-    fields.published === undefined ? (site.published ? 1 : 0) : fields.published ? 1 : 0,
-    JSON.stringify(fields.config ?? site.config),
-    id
-  );
+  const sets: string[] = [];
+  const values: Array<string | number> = [];
+  if (fields.slug !== undefined) { sets.push("slug = ?"); values.push(fields.slug); }
+  if (fields.plan !== undefined) { sets.push("plan = ?"); values.push(fields.plan); }
+  if (fields.published !== undefined) { sets.push("published = ?"); values.push(fields.published ? 1 : 0); }
+  if (fields.config !== undefined) { sets.push("config = ?"); values.push(JSON.stringify(fields.config)); }
+  if (!sets.length) return;
+  values.push(id);
+  db().prepare(`UPDATE sites SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+}
+
+/**
+ * Merge a patch into a site's config, reading and writing inside one
+ * transaction.
+ *
+ * The `{ ...site.config, x }` idiom callers used instead is a read-modify-write
+ * over a snapshot taken before any `await` in the action — so a theme save that
+ * spends seconds resizing an upload would write back a config captured before
+ * it started, discarding anything that landed meanwhile (the live-relay badge
+ * flipping on, most visibly). Reading here closes that window.
+ */
+export function patchSiteConfig(id: number, patch: Record<string, unknown>): void {
+  const d = db();
+  d.transaction(() => {
+    const row = d.prepare("SELECT config FROM sites WHERE id = ?").get(id) as { config: string } | undefined;
+    if (!row) return;
+    let current: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(row.config);
+      if (parsed && typeof parsed === "object") current = parsed as Record<string, unknown>;
+    } catch {
+      // A corrupt blob is not a reason to refuse the write — start clean.
+    }
+    d.prepare("UPDATE sites SET config = ? WHERE id = ?").run(JSON.stringify({ ...current, ...patch }), id);
+  })();
 }
 
 export function setSiteBilling(
   id: number,
   fields: { stripeCustomerId?: string; stripeSubscriptionId?: string; billingStatus?: string; billingEventAt?: number }
 ): void {
-  const site = getSiteById(id);
-  if (!site) return;
-  db()
-    .prepare(
-      "UPDATE sites SET stripe_customer_id = ?, stripe_subscription_id = ?, billing_status = ?, billing_event_at = ? WHERE id = ?"
-    )
-    .run(
-      fields.stripeCustomerId ?? site.stripeCustomerId,
-      fields.stripeSubscriptionId ?? site.stripeSubscriptionId,
-      fields.billingStatus ?? site.billingStatus,
-      fields.billingEventAt ?? site.billingEventAt,
-      id
-    );
+  const sets: string[] = [];
+  const values: Array<string | number> = [];
+  if (fields.stripeCustomerId !== undefined) { sets.push("stripe_customer_id = ?"); values.push(fields.stripeCustomerId); }
+  if (fields.stripeSubscriptionId !== undefined) { sets.push("stripe_subscription_id = ?"); values.push(fields.stripeSubscriptionId); }
+  if (fields.billingStatus !== undefined) { sets.push("billing_status = ?"); values.push(fields.billingStatus); }
+  if (fields.billingEventAt !== undefined) { sets.push("billing_event_at = ?"); values.push(fields.billingEventAt); }
+  if (!sets.length) return;
+  values.push(id);
+
+  // Stripe does not guarantee delivery order, and it redelivers anything that
+  // 500s. Two of the six webhook branches checked the watermark themselves and
+  // four did not, so a redelivered older event could both apply and rewind
+  // billing_event_at — re-arming every other stale event in the window. The
+  // guard belongs here, where no branch can forget it: a write carrying an
+  // event time older than the one already applied is simply not applied.
+  const guard = fields.billingEventAt !== undefined ? " AND billing_event_at <= ?" : "";
+  if (guard) values.push(fields.billingEventAt as number);
+
+  db().prepare(`UPDATE sites SET ${sets.join(", ")} WHERE id = ?${guard}`).run(...values);
 }
 
 export function getSiteByStripeSubscription(subscriptionId: string): Site | null {
@@ -1130,7 +1350,7 @@ export function markTourSeen(userId: number, tourId: string): void {
 /* ---------- sections ---------- */
 
 export function getSections(siteId: number): Section[] {
-  const rows = db().prepare("SELECT * FROM sections WHERE site_id = ? ORDER BY position").all(siteId) as SectionRow[];
+  const rows = db().prepare("SELECT * FROM sections WHERE site_id = ? ORDER BY position, id").all(siteId) as SectionRow[];
   return rows.map(toSection);
 }
 
@@ -1189,6 +1409,11 @@ export function patchSectionContent(id: number, patch: Record<string, string>): 
 
 export function deleteSection(id: number): void {
   db().prepare("DELETE FROM sections WHERE id = ?").run(id);
+}
+
+/** Every section on a site, in one statement — see deleteAllSectionsAction. */
+export function deleteAllSections(siteId: number): void {
+  db().prepare("DELETE FROM sections WHERE site_id = ?").run(siteId);
 }
 
 export function moveSection(id: number, dir: "up" | "down"): void {
@@ -1274,9 +1499,20 @@ export function updateQuoteStatus(id: number, status: string): void {
 
 /* ---------- leads ---------- */
 
+/**
+ * Add an address to a site's list, or bring a previously unsubscribed one back.
+ *
+ * One row per address per site (see the unique index): a second signup used to
+ * mean a second row with its own unsubscribe token, so the newsletter went out
+ * twice and unsubscribing once only stopped one of them. The existing token is
+ * kept on a re-subscribe — every link already sent for that address stays good.
+ */
 export function addLead(siteId: number, email: string): void {
   db()
-    .prepare("INSERT INTO leads (site_id, email, unsub_token) VALUES (?, ?, ?)")
+    .prepare(
+      `INSERT INTO leads (site_id, email, unsub_token) VALUES (?, ?, ?)
+       ON CONFLICT(site_id, email) DO UPDATE SET unsubscribed_at = NULL`
+    )
     .run(siteId, email, randomBytes(16).toString("hex"));
 }
 
@@ -1294,9 +1530,18 @@ export function getActiveLeads(siteId: number): Lead[] {
  * anything so the page can be honest about it.
  */
 export function unsubscribeLeadByToken(token: string): boolean {
+  // Resolve the token to the address, then opt out every row for it. One row
+  // per (site, address) is enforced now, but historic duplicates predating that
+  // index would otherwise keep sending after the reader thought they had left.
+  const owner = db()
+    .prepare("SELECT site_id, email FROM leads WHERE unsub_token = ?")
+    .get(token) as { site_id: number; email: string } | undefined;
+  if (!owner) return false;
   const info = db()
-    .prepare("UPDATE leads SET unsubscribed_at = datetime('now') WHERE unsub_token = ? AND unsubscribed_at IS NULL")
-    .run(token);
+    .prepare(
+      "UPDATE leads SET unsubscribed_at = datetime('now') WHERE site_id = ? AND email = ? AND unsubscribed_at IS NULL"
+    )
+    .run(owner.site_id, owner.email);
   if (info.changes > 0) return true;
   // Already unsubscribed still counts as success — clicking twice shouldn't scold.
   return !!db().prepare("SELECT id FROM leads WHERE unsub_token = ?").get(token);
@@ -1453,6 +1698,20 @@ export function updateTicket(id: number, fields: { status?: string; reply?: stri
 }
 
 /* ---------- page views ---------- */
+
+/**
+ * A referrer host, bounded and sanity-checked.
+ *
+ * It arrives from an unauthenticated request header and forms part of
+ * page_views' primary key, so an unbounded value is a way to write unlimited
+ * rows — permanently, since nothing prunes them — and to make every Analytics
+ * load group over them.
+ */
+export function cleanReferrer(host: string): string {
+  const h = host.trim().toLowerCase();
+  if (!h || h.length > 253) return "";
+  return /^[a-z0-9.-]+(:\d{1,5})?$/.test(h) ? h : "";
+}
 
 export function recordPageView(siteId: number, referrer: string): void {
   db()
@@ -1809,8 +2068,22 @@ export function upsertSocialAccount(
     );
 }
 
+/**
+ * Disconnect a platform, and take its recorded numbers with it.
+ *
+ * The readings are keyed on the site rather than the account, so they used to
+ * survive the disconnect — and because the follower series carries a count
+ * forward until a newer one replaces it, a platform logged at 400k kept adding
+ * 400k to every later day forever, while logFollowerCounts (which iterates
+ * connected accounts) could no longer record a correction for it.
+ */
 export function deleteSocialAccount(siteId: number, platform: string): void {
-  db().prepare("DELETE FROM social_accounts WHERE site_id = ? AND platform = ?").run(siteId, platform);
+  const d = db();
+  d.transaction(() => {
+    d.prepare("DELETE FROM social_accounts WHERE site_id = ? AND platform = ?").run(siteId, platform);
+    d.prepare("DELETE FROM follower_counts WHERE site_id = ? AND platform = ?").run(siteId, platform);
+    d.prepare("DELETE FROM social_stats WHERE site_id = ? AND platform = ?").run(siteId, platform);
+  })();
 }
 
 interface SocialStatRow {
