@@ -3,7 +3,8 @@ import { DashboardNavLink } from "@/components/DashboardNavLink";
 import { ADMIN_EMAIL, requireUser } from "@/lib/auth";
 import { logout } from "@/lib/actions";
 import { getSiteByUser, getUserPrefs } from "@/lib/db";
-import { getPlan, type PlanDef } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
+import { type PlanDef } from "@/lib/plans";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TourGuide } from "@/components/TourGuide";
 import { WelcomeDialog } from "@/components/WelcomeDialog";
@@ -13,7 +14,10 @@ const SETUP_STEPS = 6;
 
 const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?: string }> = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/socials", label: "Socials", requires: "social", badge: "Pro" },
+  // No badge: `social` is true on all three plans — Basic just caps how many
+  // accounts connect at once (maxSocialAccounts). The cap is surfaced on the
+  // page itself, where it means something.
+  { href: "/dashboard/socials", label: "Socials", requires: "social" },
   { href: "/dashboard/builder", label: "Page Builder" },
   { href: "/dashboard/connect", label: "My Website" },
   { href: "/dashboard/shop", label: "Shop", requires: "payments", badge: "Pro" },
@@ -21,7 +25,10 @@ const NAV: Array<{ href: string; label: string; requires?: keyof PlanDef; badge?
   { href: "/dashboard/audience", label: "Audience", requires: "newsletter", badge: "Ent" },
   { href: "/dashboard/chatroom", label: "Chatroom", requires: "chatroom", badge: "Ent" },
   { href: "/dashboard/integrations", label: "Integrations" },
-  { href: "/dashboard/support", label: "Support", requires: "helpdesk", badge: "Ent" },
+  // No badge: helpdesk is true on all three plans (plans.ts) and the pricing
+  // cards list "Access to the support team" as a Basic line. Badging it "Ent"
+  // put an upgrade prompt on a page every customer already has.
+  { href: "/dashboard/support", label: "Support", requires: "helpdesk" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
@@ -37,11 +44,10 @@ const NAV_LINK =
 /** Account-level rows sit apart from the page tools and carry their own colour. */
 const NAV_LINK_ACCOUNT = NAV_LINK.replace("text-mist", "text-warn") + " hover:!text-warn";
 
-
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
-  const plan = site ? getPlan(site.plan) : null;
+  const plan = site ? planFor(site) : null;
   const prefs = getUserPrefs(user.id);
 
   return (

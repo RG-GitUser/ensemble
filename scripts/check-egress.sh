@@ -26,7 +26,14 @@ set -euo pipefail
 ALLOWANCE_GB="${ALLOWANCE_GB:-1000}"
 # Warn at this share of the allowance, measured against how far into the month
 # we are — so 60% used on day 3 is a warning while 60% on day 25 is not.
-WARN_RATIO="${WARN_RATIO:-1.15}"
+# 0.80, not 1.15.
+#
+# Warning at 115% of the allowance fires only once the projection has already
+# passed the point where the bill is committed — by which time the useful
+# actions (throttle a stream, move the relay) are all too late. Warning at 80%
+# of projected usage leaves room to act. Relay egress is roughly 8 GB/hour to
+# three platforms, so one heavy streamer can move this fast.
+WARN_RATIO="${WARN_RATIO:-0.80}"
 IFACE="${IFACE:-}"
 
 if ! command -v vnstat >/dev/null 2>&1; then

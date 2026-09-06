@@ -6,12 +6,30 @@ After=network.target ensemble.service
 
 [Service]
 User=ensemble
-# The app's .env — the relay only needs LIVE_HOOK_SECRET from it, and sharing
-# the file beats maintaining the same secret in two places.
-EnvironmentFile=/srv/ensemble/.env
+# Its OWN file, containing only LIVE_HOOK_SECRET.
+#
+# This used to load the app's whole .env "because the relay only needs
+# LIVE_HOOK_SECRET from it" — but EnvironmentFile loads the file, not one line
+# of it, so every platform secret (Stripe, Resend, the admin password) was in
+# the relay's environment and inherited by live-push.sh, curl, jq and every
+# ffmpeg child it spawns. Create it with:
+#
+#   printf 'LIVE_HOOK_SECRET=%s\n' "$LIVE_HOOK_SECRET" > /etc/ensemble-relay.env
+#   chown root:ensemble /etc/ensemble-relay.env && chmod 640 /etc/ensemble-relay.env
+EnvironmentFile=/etc/ensemble-relay.env
 ExecStart=/usr/local/bin/mediamtx /srv/ensemble/deploy/mediamtx.yml
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+ReadWritePaths=/srv/ensemble/data
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target

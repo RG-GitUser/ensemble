@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { billingEnabled, billingOk } from "@/lib/billing";
+import { billingEnabled, billingOk, planFor } from "@/lib/billing";
 import { getDomainBySite, getSiteByUser, getUserPrefs } from "@/lib/db";
 import { domainProgress } from "@/lib/domains";
-import { getPlan, PLAN_ORDER, PLANS } from "@/lib/plans";
+import { PLAN_ORDER, PLANS } from "@/lib/plans";
 import { changePlan, openBillingPortal, toggleTutorials } from "@/lib/actions";
 import { DangerButton } from "@/components/DangerButton";
 import { SettingsForm } from "@/components/SettingsForm";
@@ -57,7 +57,7 @@ export default async function SettingsPage() {
             <div>
               <h2 className="font-bold">Your own domain</h2>
               <p className="mt-1 text-sm text-mist">
-                {!getPlan(site.plan).customDomain ? (
+                {!planFor(site).customDomain ? (
                   "Available on Pro and Enterprise — serve your page on a domain you own."
                 ) : domain ? (
                   <>
@@ -72,7 +72,7 @@ export default async function SettingsPage() {
                   `Not set up yet. ${domainState.total} short steps, no jargon.`
                 )}
               </p>
-              {getPlan(site.plan).customDomain && !domainState.live && (
+              {planFor(site).customDomain && !domainState.live && (
                 <p className="mt-1 text-xs text-mist/70">
                   {domainState.done} of {domainState.total} steps done
                 </p>

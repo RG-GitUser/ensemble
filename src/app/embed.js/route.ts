@@ -2,6 +2,8 @@
 // script needs ships inline (CSS included) — no other assets, no dependencies.
 // NOTE: keep this file free of backticks/${} inside EMBED_JS (it's a template literal).
 
+import { createHash } from "crypto";
+
 const CSS = [
   ".ens{--ens-accent:__ACCENT__;color:#1a1a1f;line-height:1.6;font-family:inherit}",
   ".ens.ens-dark{color:#f2f2f5}",
@@ -227,14 +229,32 @@ const EMBED_JS = `(function () {
 })();
 `;
 
-export function GET(): Response {
+/**
+ * These files are byte-identical for every visitor of every customer site,
+ * and they were served `no-store` with no ETag — so every page load of every
+ * paired website re-fetched them from the single droplet, on the critical
+ * path, for nothing.
+ *
+ * A short max-age keeps a fix propagating quickly; the ETag means the common
+ * case is a 304 with no body at all. stale-while-revalidate lets a browser use
+ * the cached copy while it checks.
+ */
+function staticScriptResponse(req: Request, js: string): Response {
+  const etag = `"${createHash("sha256").update(js).digest("base64url").slice(0, 27)}"`;
+  const headers = {
+    "Content-Type": "text/javascript; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+    ETag: etag,
+  };
+  if (req.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(js, { headers });
+}
+
+export function GET(req: Request): Response {
   // Inject the CSS constant inside the IIFE so nothing leaks onto the host page.
   const js = EMBED_JS.replace('"use strict";', '"use strict";\n  var CSS_TEXT = ' + JSON.stringify(CSS) + ";");
-  return new Response(js, {
-    headers: {
-      "Content-Type": "text/javascript; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-store",
-    },
-  });
+  return staticScriptResponse(req, js);
 }

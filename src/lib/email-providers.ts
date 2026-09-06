@@ -114,8 +114,14 @@ export async function forwardSubscriber(
       case "mailchimp": {
         // The datacentre is the suffix on the key itself, so the endpoint is
         // derived rather than asked for a second time.
+        //
+        // VALIDATED before it goes into the host. This value comes from a
+        // field the creator pastes into, and it was interpolated into the
+        // request's hostname unchecked — so a malformed key could re-point the
+        // request at a host of the attacker's choosing and hand it the
+        // creator's own Mailchimp key. Real datacentre ids look like "us21".
         const dc = key.split("-")[1];
-        if (!dc) return false;
+        if (!dc || !/^[a-z]{2}\d{1,3}$/.test(dc)) return false;
         res = await fetch(`https://${dc}.api.mailchimp.com/3.0/lists/${encodeURIComponent(list)}/members`, {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },

@@ -15,10 +15,29 @@ import { SaveButton } from "@/components/SaveButton";
  */
 
 interface ProductRow {
+  /**
+   * Stable identity for React, never saved.
+   *
+   * Rows were keyed by array index while offering reorder and delete, so React
+   * reused the DOM node at each POSITION rather than following the product:
+   * moving a row up left focus and the caret sitting on whichever product had
+   * taken its place, and deleting one shifted every field below it. An id that
+   * belongs to the row fixes both, and itemsFromRows never emits it.
+   */
+  id: string;
   name: string;
   price: string;
   img: string;
   buy: string;
+}
+
+let rowSeq = 0;
+function newRow(row: Omit<ProductRow, "id"> = { name: "", price: "", img: "", buy: "" }): ProductRow {
+  // Counter, not Math.random/Date.now: this runs during render on the server
+  // for the initial state, and a value that differs between server and client
+  // is a hydration mismatch.
+  rowSeq += 1;
+  return { id: `row-${rowSeq}`, ...row };
 }
 
 /** Same parsing rules as lib/sections parseLines, minus empty-line noise. */
@@ -29,7 +48,7 @@ function rowsFromItems(items: string): ProductRow[] {
     .filter(Boolean)
     .map((l) => {
       const [name = "", price = "", img = "", buy = ""] = l.split("|").map((p) => p.trim());
-      return { name, price, img, buy };
+      return newRow({ name, price, img, buy });
     });
 }
 
@@ -65,7 +84,7 @@ export function ShopManager({
 }) {
   const [rows, setRows] = useState<ProductRow[]>(() => {
     const r = rowsFromItems(items);
-    return r.length ? r : [{ name: "", price: "", img: "", buy: "" }];
+    return r.length ? r : [newRow()];
   });
   const [head, setHead] = useState(heading);
   const [buy, setBuy] = useState(buyLabel);
@@ -100,7 +119,7 @@ export function ShopManager({
               : { text: "Link saved — needs Pro", cls: "bg-warn/15 text-warn" }
             : { text: "Showcase only", cls: "bg-panel2 text-mist" };
           return (
-            <div key={i} className="rounded-xl border border-edge bg-panel2/40 p-3">
+            <div key={r.id} className="rounded-xl border border-edge bg-panel2/40 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${status.cls}`}>
                   {status.text}
@@ -171,7 +190,7 @@ export function ShopManager({
 
       <button
         type="button"
-        onClick={() => setRows((rs) => [...rs, { name: "", price: "", img: "", buy: "" }])}
+        onClick={() => setRows((rs) => [...rs, newRow()])}
         className="btn-ghost mt-3 !py-2 text-sm"
       >
         + Add product

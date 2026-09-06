@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { countSections, getSections, getSiteByUser } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { parseLines } from "@/lib/sections";
 import { fetchStripeFinance, formatMoney, type FinanceSummary } from "@/lib/finance";
 import { addSectionAction } from "@/lib/actions";
@@ -23,7 +23,7 @@ export default async function ShopPage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
 
   // The merch section itself is Pro and up (sections.ts), and addSectionAction
   // refuses it below that, so without this the page would offer a button that
@@ -76,15 +76,51 @@ export default async function ShopPage() {
       </div>
 
       {finance && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-3" data-tour="shop-snapshot">
-          <Tile label="Available balance" value={formatMoney(finance.available, finance.currency)} />
-          <Tile
-            label="Revenue — 30 days"
-            value={formatMoney(finance.gross30, finance.currency)}
-            sub={`${finance.count30} payments`}
-          />
-          <Tile label="Pending" value={formatMoney(finance.pending, finance.currency)} />
-        </div>
+        <>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3" data-tour="shop-snapshot">
+            <Tile
+              label={
+                finance.balances.length > 1
+                  ? `Available balance (${finance.currency.toUpperCase()})`
+                  : "Available balance"
+              }
+              value={formatMoney(finance.available, finance.currency)}
+            />
+            <Tile
+              label="Revenue — 30 days"
+              value={formatMoney(finance.gross30, finance.currency)}
+              sub={`${finance.count30} payments`}
+            />
+            <Tile label="Pending" value={formatMoney(finance.pending, finance.currency)} />
+          </div>
+          {/* Other currencies get their own tiles rather than being added to
+              the ones above. Summing across currencies produces a number that
+              is not money in any of them. */}
+          {finance.balances.length > 1 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-mist">Other currencies</p>
+              <div className="mt-2 grid gap-4 sm:grid-cols-3">
+                {finance.balances.slice(1).map((b) => (
+                  <Tile
+                    key={b.currency}
+                    label={`Available (${b.currency.toUpperCase()})`}
+                    value={formatMoney(b.available, b.currency)}
+                    sub={b.pending ? `${formatMoney(b.pending, b.currency)} pending` : undefined}
+                  />
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-mist/70">
+                Balances are shown per currency and never added together — the 30-day figures above cover{" "}
+                {finance.currency.toUpperCase()} only.
+              </p>
+            </div>
+          )}
+          {finance.truncated && (
+            <p className="mt-3 text-xs text-warn">
+              Showing the most recent 500 payments — your 30-day totals are higher than the figures above.
+            </p>
+          )}
+        </>
       )}
       {financeError && (
         <p className="mt-6 rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-sm text-brand2">

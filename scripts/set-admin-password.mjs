@@ -24,11 +24,19 @@ import path from "node:path";
 const DB_PATH = path.join(process.cwd(), "data", "app.db");
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "rileyg0035@gmail.com").toLowerCase();
 
-/** Matches hashPassword in src/lib/auth.ts. Keep the two in step. */
+/**
+ * Matches hashPassword in src/lib/auth.ts. Keep the two in step.
+ *
+ * The cost parameters are recorded in the string so they can be raised later
+ * without invalidating every stored password.
+ */
 function hashPassword(password) {
+  const N = 16384;
+  const r = 8;
+  const p = 1;
   const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+  const hash = scryptSync(password, salt, 64, { N, r, p }).toString("hex");
+  return `scrypt$${N}$${r}$${p}$${salt}$${hash}`;
 }
 
 function readStdin() {
@@ -46,7 +54,16 @@ function fail(message) {
   process.exit(1);
 }
 
-const password = (await readStdin()).replace(/\r?\n$/, "");
+// TRIMMED, because the app trims on the way in (see `str()` in lib/actions.ts).
+// Without this, a password with a leading or trailing space is stored with it
+// and can never be typed back in through the login form — a permanent lockout
+// of the admin account with no obvious diagnosis.
+const raw = (await readStdin()).replace(/\r?\n$/, "");
+const password = raw.trim();
+
+if (raw !== password) {
+  console.warn("! Leading/trailing whitespace removed — the login form trims too, so this is what would have worked.");
+}
 
 if (!password) fail("No password on stdin. See the comment at the top of this file for the command.");
 if (password.length < 12) fail(`Password is ${password.length} characters. Use at least 12.`);

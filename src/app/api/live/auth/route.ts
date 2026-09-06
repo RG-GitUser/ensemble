@@ -1,6 +1,6 @@
 import { getSiteByIngestKey } from "@/lib/db";
 import { liveHookSecret, pathIngestKey } from "@/lib/live";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 
 /**
  * MediaMTX's HTTP authentication endpoint (`authHTTPAddress`). It POSTs a
@@ -35,6 +35,6 @@ export async function POST(req: Request): Promise<Response> {
   if (action !== "publish") return deny();
 
   const site = getSiteByIngestKey(pathIngestKey(path));
-  if (!site || !getPlan(site.plan).live) return deny();
+  if (!site || !planFor(site).live) return deny();
   return new Response(null);
 }

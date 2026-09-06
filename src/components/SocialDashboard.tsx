@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
+  checkSocialAccount,
   connectSocial,
   createSocialPostAction,
   disconnectSocial,
@@ -16,6 +17,27 @@ import {
 import { CopyButton } from "@/components/CopyButton";
 import { getPlatform, iconFill, PLATFORMS, type PlatformDef } from "@/lib/social";
 import type { SocialAccount, SocialPost } from "@/lib/types";
+
+/**
+ * Retry, with the outcome shown next to it.
+ *
+ * retrySocialPost used to report nothing at all, so pressing this and having
+ * every target fail again looked identical to it working.
+ */
+function RetryPostButton({ postId }: { postId: number }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(retrySocialPost, {});
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="postId" value={postId} />
+      <button className="text-[11px] font-semibold text-brand hover:underline" disabled={pending}>
+        {pending ? "Retrying…" : "Retry"}
+      </button>
+      {(state.error || state.message) && (
+        <span className={`text-[11px] ${state.error ? "text-brand2" : "text-good"}`}>{state.error ?? state.message}</span>
+      )}
+    </form>
+  );
+}
 
 function PlatformIcon({ platform, size = 18 }: { platform: PlatformDef; size?: number }) {
   return (
@@ -85,6 +107,35 @@ function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthRea
   );
 }
 
+/**
+ * Ask the platform whether this connection still publishes, without posting.
+ *
+ * Rendered with key={platform} by the caller so switching accounts clears the
+ * previous answer — a stale green "Ready to publish as @someone" sitting under
+ * a different account is worse than no answer at all.
+ */
+function CheckConnection({ platform }: { platform: string }) {
+  const [state, formAction, pending] = useActionState<FormState, FormData>(checkSocialAccount, {});
+  return (
+    <>
+      <form action={formAction}>
+        <input type="hidden" name="platform" value={platform} />
+        <button
+          className="text-xs font-semibold text-mist transition hover:text-brand disabled:opacity-50"
+          disabled={pending}
+        >
+          {pending ? "Checking…" : "Check connection"}
+        </button>
+      </form>
+      {(state.message || state.error) && (
+        <p className={`w-full text-xs ${state.error ? "text-brand2" : "text-good"}`}>
+          {state.error ?? state.message}
+        </p>
+      )}
+    </>
+  );
+}
+
 function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oauthReady: string[] }) {
   const [sel, setSel] = useState<string | null>(null);
   const byPlatform = new Map(accounts.map((a) => [a.platform, a]));
@@ -132,6 +183,7 @@ function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oaut
           <span className="rounded-full bg-panel2 px-2 py-0.5 text-[10px] font-bold uppercase text-mist">
             {selAccount.authKind === "handle" ? "handle only" : "publishes"}
           </span>
+          <CheckConnection key={selected.id} platform={selected.id} />
           <form action={disconnectSocial}>
             <input type="hidden" name="platform" value={selected.id} />
             <button className="text-xs font-semibold text-mist transition hover:text-brand2">Disconnect</button>
@@ -269,7 +321,14 @@ function LiveStreamsForm({
   /** "" while the relay isn't deployed — hides the ingest panel. */
   ingestUrl: string;
   ingestKey: string;
-  streamKeys: { twitch: string; youtube: string; facebook: string };
+  /**
+   * Which keys are SET — never the keys themselves. These are password-grade
+   * credentials (this component's own copy says so), and a client component
+   * serialises whatever it is handed into the RSC payload and into the HTML,
+   * where it lands in browser cache, view-source and any screenshot.
+   * type="password" hides a value on screen; it does not stop it shipping.
+   */
+  streamKeys: { twitch: boolean; youtube: boolean; facebook: boolean };
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveLiveStreams, {});
   const rows: Array<{ platform: PlatformDef; name: string; value: string; placeholder: string }> = [
@@ -277,10 +336,10 @@ function LiveStreamsForm({
     { platform: getPlatform("facebook")!, name: "facebookLiveUrl", value: facebookLiveUrl, placeholder: "https://www.facebook.com/you/videos/..." },
     { platform: getPlatform("instagram")!, name: "instagramLiveUser", value: instagramLiveUser, placeholder: "yourhandle (for Instagram Live)" },
   ];
-  const keyRows: Array<{ platform: PlatformDef; name: string; value: string; hint: string }> = [
-    { platform: getPlatform("twitch")!, name: "twitchStreamKey", value: streamKeys.twitch, hint: "Twitch → Creator Dashboard → Settings → Stream" },
-    { platform: getPlatform("youtube")!, name: "youtubeStreamKey", value: streamKeys.youtube, hint: "YouTube Studio → Go live → Stream settings" },
-    { platform: getPlatform("facebook")!, name: "facebookStreamKey", value: streamKeys.facebook, hint: "Facebook Live Producer → Streaming software" },
+  const keyRows: Array<{ platform: PlatformDef; name: string; saved: boolean; hint: string }> = [
+    { platform: getPlatform("twitch")!, name: "twitchStreamKey", saved: streamKeys.twitch, hint: "Twitch → Creator Dashboard → Settings → Stream" },
+    { platform: getPlatform("youtube")!, name: "youtubeStreamKey", saved: streamKeys.youtube, hint: "YouTube Studio → Go live → Stream settings" },
+    { platform: getPlatform("facebook")!, name: "facebookStreamKey", saved: streamKeys.facebook, hint: "Facebook Live Producer → Streaming software" },
   ];
   return (
     <div className="mt-5 border-t border-edge pt-5">
@@ -324,10 +383,15 @@ function LiveStreamsForm({
                 name={r.name}
                 type="password"
                 autoComplete="off"
-                defaultValue={r.value}
                 className="field flex-1 !py-2 font-mono text-xs"
-                placeholder={r.hint}
+                placeholder={r.saved ? "•••••••••••• saved — leave blank to keep" : r.hint}
+                aria-label={`${r.platform.name} stream key`}
               />
+              {r.saved && (
+                <label className="flex shrink-0 items-center gap-1 text-[11px] text-mist">
+                  <input type="checkbox" name={`${r.name}Clear`} value="1" /> Clear
+                </label>
+              )}
             </div>
           ))}
         </div>
@@ -385,7 +449,8 @@ export function SocialIntegrations({
   showLive: boolean;
   ingestUrl: string;
   ingestKey: string;
-  streamKeys: { twitch: string; youtube: string; facebook: string };
+  /** Which stream keys are set — never the keys. See LiveStreamsForm. */
+  streamKeys: { twitch: boolean; youtube: boolean; facebook: boolean };
 }) {
   return (
     <div className="card">
@@ -519,12 +584,7 @@ function ActivityFeed({ accounts, posts }: { accounts: SocialAccount[]; posts: S
                   );
                 })}
                 <span className="text-[11px] text-mist">{post.createdAt.slice(0, 16).replace("T", " ")}</span>
-                {post.targets.some((t) => t.status !== "posted") && (
-                  <form action={retrySocialPost}>
-                    <input type="hidden" name="postId" value={post.id} />
-                    <button className="text-[11px] font-semibold text-brand hover:underline">Retry</button>
-                  </form>
-                )}
+                {post.targets.some((t) => t.status !== "posted") && <RetryPostButton postId={post.id} />}
               </div>
             </li>
           ))}

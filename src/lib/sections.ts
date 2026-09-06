@@ -1,6 +1,38 @@
 import type { Plan } from "./types";
 import { PLAN_ORDER } from "./plans";
 
+/**
+ * Schemes a creator-supplied URL may use.
+ *
+ * There was no scheme validation anywhere in this write path. The defence held
+ * only because React 19 replaces `javascript:` in href/src with a throwing
+ * stub — an accident of the renderer, not a decision here, and one that says
+ * nothing about `data:`, `blob:` or `vbscript:`, all of which passed straight
+ * through. The embed path already ran every URL through its own safeUrl();
+ * this is the same rule applied where the value is STORED, so both paths agree
+ * and neither depends on the other.
+ */
+const SAFE_URL_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+/**
+ * A creator-supplied URL, or "" if it isn't one we will render.
+ *
+ * Relative and anchor-only values are kept as-is: "#content" and "/about" are
+ * ordinary things to type into a button link, and neither can carry a scheme.
+ */
+export function safeCreatorUrl(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  if (value.startsWith("#") || value.startsWith("/")) return value;
+  try {
+    const parsed = new URL(value);
+    return SAFE_URL_SCHEMES.has(parsed.protocol) ? value : "";
+  } catch {
+    // Not absolute and not obviously relative — treat as a bare host.
+    return /^[\w.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(value) ? `https://${value}` : "";
+  }
+}
+
 export interface FieldSpec {
   key: string;
   label: string;

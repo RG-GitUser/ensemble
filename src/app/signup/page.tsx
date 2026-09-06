@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
+import { SsoButtons } from "@/components/SsoButtons";
 import { getCurrentUser } from "@/lib/auth";
+import { configuredLoginProviderIds } from "@/lib/login-providers";
 
 export default async function SignupPage({
   searchParams,
@@ -23,6 +25,7 @@ export default async function SignupPage({
               ? "Next step: tell us about your current website so we can quote the integration."
               : "Your page is a few pastes away."}
           </p>
+          <SsoButtons ready={configuredLoginProviderIds()} verb="Sign up" />
           <AuthForm mode="signup" intentPlan={plan} intentPath={path} />
         </div>
         <p className="mt-6 text-center text-sm text-mist">

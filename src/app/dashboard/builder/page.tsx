@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getSections, getSiteByUser } from "@/lib/db";
+import { planFor } from "@/lib/billing";
 import { getPlan } from "@/lib/plans";
 import { SectionMarkerField } from "@/components/SectionMarkerField";
 import {
@@ -446,7 +447,7 @@ export default async function BuilderPage({ searchParams }: { searchParams: Prom
   if (!site) redirect("/dashboard");
   const { tab } = await searchParams;
   const designTab = tab === "design";
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   const sections = getSections(site.id);
   const atLimit = sections.length >= plan.maxSections;
 

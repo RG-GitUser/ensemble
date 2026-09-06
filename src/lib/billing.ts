@@ -1,7 +1,7 @@
 import "server-only";
 import Stripe from "stripe";
 import * as store from "./db";
-import { PLANS } from "./plans";
+import { getPlan, PLANS, PLAN_ORDER, type PlanDef } from "./plans";
 import type { Plan, Site, User } from "./types";
 
 /**
@@ -9,19 +9,79 @@ import type { Plan, Site, User } from "./types";
  * without it the app runs in preview mode (plan changes are instant and free).
  *
  * Env:
- *   STRIPE_SECRET_KEY      sk_live_... / sk_test_...
- *   STRIPE_WEBHOOK_SECRET  whsec_... (from `stripe listen` or the dashboard)
- *   APP_URL                public origin for redirect URLs (default http://localhost:3000)
+ *   STRIPE_SECRET_KEY          sk_live_... / sk_test_...
+ *   STRIPE_WEBHOOK_SECRET      whsec_... (from `stripe listen` or the dashboard)
+ *   APP_URL                    public origin for redirect URLs (default http://localhost:3000)
+ *   ENSEMBLE_BILLING_DISABLED  set to 1 to run without billing on purpose
+ *   STRIPE_AUTOMATIC_TAX       set to 1 once Stripe Tax is configured
  */
 
 export function billingEnabled(): boolean {
   return !!process.env.STRIPE_SECRET_KEY;
 }
 
+let warnedMisconfigured = false;
+
+/**
+ * True when plan changes are instant and free.
+ *
+ * This used to be "STRIPE_SECRET_KEY is absent", which is the shipped default
+ * — .env.example has both Stripe lines commented out — so any signed-up user
+ * could POST changePlan and hand themselves Enterprise, unlocking the live
+ * relay, custom domains, chatrooms and newsletters for free. It was intended
+ * as a preview escape hatch, but keying it on a MISSING variable means a
+ * forgotten line of config silently opens the whole paywall.
+ *
+ * Now it has to be asked for. Outside production a missing key is just a dev
+ * machine and still means preview mode; in production it is a misconfiguration,
+ * and the safe reading of "I cannot tell whether this was paid for" is "no".
+ */
+export function billingPreviewMode(): boolean {
+  if (process.env.ENSEMBLE_BILLING_DISABLED === "1") return true;
+  if (billingEnabled()) return false;
+  if (process.env.NODE_ENV === "production") {
+    if (!warnedMisconfigured) {
+      warnedMisconfigured = true;
+      console.error(
+        "[billing] STRIPE_SECRET_KEY is not set in production and ENSEMBLE_BILLING_DISABLED is not 1. " +
+          "Failing closed: paid features are unavailable. Set one of the two."
+      );
+    }
+    return false;
+  }
+  return true;
+}
+
 /** True when the site is allowed to be live under the current billing state. */
 export function billingOk(site: Site): boolean {
-  if (!billingEnabled()) return true;
+  if (billingPreviewMode()) return true;
   return site.billingStatus === "active" || site.billingStatus === "past_due";
+}
+
+/**
+ * The plan a site may actually USE right now.
+ *
+ * Entitlement was previously read straight off `site.plan`, while payment
+ * state lived in a separate column that only four call sites consulted — and
+ * nothing ever lowered the plan, since subscription.deleted set the status and
+ * unpublished the page but left plan at "enterprise". So a cancelled customer
+ * kept every paid feature: their public page went dark while newsletters still
+ * went out through the platform's Resend account and verified sending domain,
+ * social cross-posting still ran, and the live relay still burned the
+ * droplet's egress — the most expensive and most reputation-sensitive
+ * resources here, used for free and without limit.
+ *
+ * Routing entitlement through here makes the correct thing also the obvious
+ * thing: every new paid feature gets this behaviour by default rather than
+ * inheriting the bug.
+ */
+export function effectivePlan(site: Site): Plan {
+  return billingOk(site) ? site.plan : "basic";
+}
+
+/** The plan DEFINITION a site may actually use — the entitlement entry point. */
+export function planFor(site: Site): PlanDef {
+  return getPlan(effectivePlan(site));
 }
 
 function appUrl(): string {
@@ -116,12 +176,27 @@ export async function ensureStripeCustomer(site: Site, user: User): Promise<stri
 /** Start a subscription checkout for a site. Returns the URL to redirect to. */
 export async function createCheckoutUrl(site: Site, user: User, plan: Plan): Promise<string> {
   const customerId = await ensureStripeCustomer(site, user);
+  // Selling subscriptions across borders creates VAT and sales-tax obligations
+  // from the first invoice. This is off unless asked for, because turning it on
+  // before Stripe Tax is configured in the dashboard makes every checkout fail
+  // — see DEPLOY.md. Enabling it is a launch step, not an optional polish one.
+  const automaticTax = process.env.STRIPE_AUTOMATIC_TAX === "1";
+
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
     line_items: [{ price: await priceIdFor(plan), quantity: 1 }],
     customer: customerId,
     metadata: { siteId: String(site.id), plan },
     subscription_data: { metadata: { siteId: String(site.id) } },
+    ...(automaticTax
+      ? {
+          automatic_tax: { enabled: true },
+          // Stripe needs somewhere to derive the tax jurisdiction from, and
+          // refuses automatic_tax on an existing customer without this.
+          customer_update: { address: "auto" as const },
+          tax_id_collection: { enabled: true },
+        }
+      : {}),
     success_url: `${appUrl()}/dashboard?billing=success`,
     cancel_url: `${appUrl()}/dashboard?billing=canceled`,
   });
@@ -141,18 +216,34 @@ export async function createPortalUrl(customerId: string): Promise<string> {
 /**
  * Switch an existing subscription to a different plan.
  *
- * No prorations, and the billing anchor stays put: the month already paid
- * for runs its course and the new price starts with the next invoice. This
- * is exactly what the confirmation dialog on Settings promises, so changing
- * one means changing the other.
+ * Upgrades and downgrades are NOT symmetrical, and treating them as one thing
+ * was a way to give away the difference. With no proration and no move of the
+ * billing anchor, the higher plan took effect immediately and raised no
+ * invoice — so subscribing on Basic, switching to Enterprise on day 2 and back
+ * on day 29 produced a Basic invoice, every month, forever.
+ *
+ * An upgrade therefore invoices straight away, and `error_if_incomplete` means
+ * a card that fails leaves the subscription on the plan it was already paying
+ * for rather than on the one it just failed to buy.
+ *
+ * A downgrade keeps the old behaviour, which is the honest one and is what the
+ * Settings dialog promises: the month already paid for runs its course and the
+ * lower price starts with the next invoice.
  */
 export async function changeSubscriptionPlan(subscriptionId: string, plan: Plan): Promise<void> {
   const sub = await stripe().subscriptions.retrieve(subscriptionId);
   const item = sub.items.data[0];
   if (!item) throw new Error(`Subscription ${subscriptionId} has no items`);
+
+  const currentPlan = planForPrice(item.price);
+  // Unknown current plan (a price we don't recognise) is treated as an upgrade:
+  // billing immediately is the side that cannot give the product away.
+  const isUpgrade = !currentPlan || PLAN_ORDER.indexOf(plan) > PLAN_ORDER.indexOf(currentPlan);
+
   await stripe().subscriptions.update(subscriptionId, {
     items: [{ id: item.id, price: await priceIdFor(plan) }],
-    proration_behavior: "none",
+    proration_behavior: isUpgrade ? "always_invoice" : "none",
+    ...(isUpgrade ? { payment_behavior: "error_if_incomplete" as const } : {}),
   });
 }
 
@@ -190,7 +281,12 @@ export async function reconcileBilling(site: Site): Promise<Site> {
     store.setSiteBilling(site.id, {
       stripeSubscriptionId: current.id,
       billingStatus: mapSubscriptionStatus(current.status),
-      billingEventAt: current.created,
+      // NOW, not the subscription's creation time. Stamping `current.created`
+      // dropped the ordering guard back to whenever the subscription started,
+      // so opening Settings on a ten-month-old subscription re-armed ten
+      // months of stale events. This state was read live from the API a moment
+      // ago, so "as of now" is exactly what it is.
+      billingEventAt: Math.floor(Date.now() / 1000),
     });
     const plan = planForPrice(current.items.data[0]?.price);
     if (plan) store.updateSite(site.id, { plan });

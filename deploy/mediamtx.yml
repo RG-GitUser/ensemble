@@ -13,8 +13,26 @@
 logLevel: info
 
 # RTMP in from creators (and back out to the local ffmpeg forwarders).
+#
+# The ingest key is a 192-bit secret whose own docblock says whoever holds it
+# can broadcast to the creator's channels — and in plain RTMP it travels in the
+# URL PATH in cleartext, on a port open to the world. Creators stream from
+# venue and hotel wifi, which is exactly where an on-path capture happens, and
+# holding the path also denies them their own stream because MediaMTX allows
+# one publisher.
+#
+# rtmps listens alongside rtmp on 1936. Point LIVE_INGEST_URL at
+# rtmps://<host>/live once this is on and a certificate is in place; the plain
+# port stays only because the local ffmpeg forwarders dial 127.0.0.1 with it.
+# Close 1935 at the firewall so only loopback can reach it:
+#   ufw deny 1935 && ufw allow 1936
+encryption: optional
 rtmp: yes
 rtmpAddress: :1935
+rtmpsAddress: :1936
+# Reuse the certificate Caddy already manages for the platform hostname.
+rtmpServerCert: /var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/ensemble.it.com/ensemble.it.com.crt
+rtmpServerKey: /var/lib/caddy/.local/share/caddy/certificates/acme-v02.api.letsencrypt.org-directory/ensemble.it.com/ensemble.it.com.key
 
 # Everything else is off. The relay forwards; it does not serve viewers.
 rtsp: no
@@ -35,7 +53,8 @@ authHTTPAddress: http://127.0.0.1:3000/api/live/auth
 pathDefaults:
   # Started when a stream arrives, killed (SIGTERM) when it ends. The script
   # reads MTX_PATH from the environment and LIVE_HOOK_SECRET from the
-  # service's EnvironmentFile.
+  # service's EnvironmentFile — which is now /etc/ensemble-relay.env, holding
+  # that one secret, rather than the app's whole .env.
   runOnReady: /srv/ensemble/deploy/live-push.sh
   runOnReadyRestart: no
 

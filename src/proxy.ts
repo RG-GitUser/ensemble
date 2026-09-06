@@ -12,6 +12,23 @@ import { isReservedSlug } from "@/lib/slugs";
  * PLATFORM_HOSTS must list the real platform hostnames in production — a
  * platform host missing from the list would be treated as a customer domain.
  */
+/**
+ * The Host header, reduced to a comparable hostname.
+ *
+ * `.split(":")[0]` alone was wrong twice: a trailing dot ("ensemble.it.com.")
+ * is the same host to DNS and to browsers but compared unequal, so every
+ * platform URL 404'd as an unknown customer domain; and an IPv6 literal in
+ * PLATFORM_HOSTS ("[::1]:3000") silently became "[".
+ */
+function normalizeHost(raw: string): string {
+  const h = raw.trim().toLowerCase();
+  if (h.startsWith("[")) {
+    const end = h.indexOf("]");
+    return end === -1 ? h : h.slice(0, end + 1);
+  }
+  return h.split(":")[0].replace(/\.$/, "");
+}
+
 export function proxy(req: NextRequest): NextResponse {
   /**
    * Work-in-progress mode: funnel signed-out visitors to the landing page,
@@ -51,11 +68,24 @@ export function proxy(req: NextRequest): NextResponse {
       path === "/documents" ||
       maybeCreatorPage;
     if (!isPublic) {
+      // A REDIRECT only closes the funnel against a browser following links.
+      //
+      // NextResponse.redirect defaults to 307, which preserves the method and
+      // the body, and server actions are dispatched by an action id in a
+      // header rather than by route — so a POST carrying the signup action id
+      // was redirected to / and the runtime ran it anyway. .env.example claimed
+      // "/signup and /dashboard are redirected away, so the funnel really is
+      // closed"; it was closed against link-following and nothing else.
+      //
+      // Anything that isn't a plain navigation gets a 404 instead.
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return new NextResponse(null, { status: 404 });
+      }
       return NextResponse.redirect(new URL("/", req.url));
     }
   }
 
-  const host = (req.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  const host = normalizeHost(req.headers.get("host") ?? "");
 
   // The CNAME target is plumbing, not a destination. It has to stay a platform
   // host (creators' domains point at it, and a bare visit must not 404 as an
@@ -67,7 +97,28 @@ export function proxy(req: NextRequest): NextResponse {
     return NextResponse.redirect(process.env.APP_URL || `https://${platformHosts().values().next().value ?? host}`);
   }
 
-  if (!host || platformHosts().has(host)) return NextResponse.next();
+  if (!host || platformHosts().has(host)) {
+    // Strip any inbound x-ensemble-domain on the platform path.
+    //
+    // The header is stamped below on a rewrite and is the ONLY thing
+    // /domain/[host] checks to decide a request really came through the proxy.
+    // Passing an incoming copy straight through meant one curl with the header
+    // set rendered a creator's page at a second platform URL — the
+    // duplicate-content case the comment above says is prevented — and ran
+    // touchDomain, whose own comment reads "any request that lands here proves
+    // DNS points at us". So a stranger could tick step 4 green in a creator's
+    // dashboard, or a creator could fake "Connected" without ever adding the
+    // DNS record and then be baffled when the domain didn't work.
+    //
+    // Caddy strips it at the edge too (deploy/Caddyfile); this is the half
+    // that holds if the app is ever reached another way.
+    if (req.headers.has("x-ensemble-domain")) {
+      const headers = new Headers(req.headers);
+      headers.delete("x-ensemble-domain");
+      return NextResponse.next({ request: { headers } });
+    }
+    return NextResponse.next();
+  }
 
   const url = req.nextUrl.clone();
   url.pathname = `/domain/${host}`;

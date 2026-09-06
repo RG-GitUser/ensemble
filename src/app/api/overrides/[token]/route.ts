@@ -1,4 +1,6 @@
+import { billingOk } from "@/lib/billing";
 import { countSiteContent, getConnection, getEditedContent, getSiteByToken, touchConnection } from "@/lib/db";
+import { issueReportNonce } from "@/lib/report-nonce";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,11 +15,24 @@ const CORS = {
  * POST what it finds to /api/content/<token>/report. That happens before the
  * site is paired at all (no connection row yet), which is how pasting the
  * snippet — and nothing else — is enough to connect a website.
+ *
+ * When a report IS wanted, this is also where the permission to perform it is
+ * minted. The report endpoint replaces the whole inventory, and the token in
+ * the snippet is public, so the write cannot be authorised by the token alone
+ * — see lib/report-nonce.ts.
  */
 export async function GET(req: Request, ctx: { params: Promise<{ token: string }> }): Promise<Response> {
   const { token } = await ctx.params;
   const site = getSiteByToken(token);
   if (!site) return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  // /api/content/[token] gets this right, with a comment saying unpublish has
+  // to take content down everywhere at once. This route serves the same
+  // creator's edits to the snippet on their external site and checked neither,
+  // so the kill switch did not kill and a lapsed site kept having its edits
+  // applied indefinitely, for free.
+  if (!site.published || !billingOk(site)) {
+    return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
+  }
 
   const connection = getConnection(site.id);
 
@@ -47,5 +62,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
         }))
       : [];
 
-  return Response.json({ items, report }, { headers: CORS });
+  // Only ever handed out alongside a genuine request to report, so in steady
+  // state the destructive endpoint has no reachable capability at all.
+  const reportNonce = report ? issueReportNonce(site.id) : "";
+
+  return Response.json({ items, report, reportNonce }, { headers: CORS });
 }

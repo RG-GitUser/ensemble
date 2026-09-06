@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { countLeads, countSections, getSiteBySlug, getUserById } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 
 const NAV = ["Overview", "Socials", "Page Builder", "My Website", "Shop", "Analytics", "Audience", "Chatroom", "Integrations", "Support", "Settings", "Profile"];
 
@@ -10,7 +10,7 @@ export default function DemoDashboardPage() {
   const site = getSiteBySlug("demo");
   if (!site) notFound();
   const owner = getUserById(site.userId);
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   const sectionsUsed = countSections(site.id);
   const leads = plan.newsletter ? countLeads(site.id) : 0;
 

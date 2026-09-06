@@ -1,9 +1,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { billingOk } from "@/lib/billing";
+import { billingOk, planFor } from "@/lib/billing";
 import { getConnection, getDomainBySite, getSiteByUser, getSiteContent } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { safeCreatorUrl } from "@/lib/sections";
 import { disconnectWebsite, regenerateEmbedTokenAction, resyncWebsite, saveWebsiteContent, toggleConnection } from "@/lib/actions";
 import { DomainSetup } from "@/components/DomainSetup";
 import { FreeAddressCard } from "@/components/FreeAddressCard";
@@ -228,8 +228,18 @@ export default async function ConnectPage() {
             <div className="min-w-0">
               <p className="text-sm font-semibold">
                 Paired with{" "}
-                <a href={connection.url} target="_blank" rel="noreferrer" className="break-all text-brand hover:underline">
-                  {connection.url || "your website"}
+                {/* safeCreatorUrl, not the raw value. This URL arrives on the
+                    public report endpoint with only a ^https?:// check and is
+                    then rendered as the "your website" link in the creator's
+                    own dashboard — the one link they are most likely to trust
+                    and click. */}
+                <a
+                  href={safeCreatorUrl(connection.url) || "#"}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="break-all text-brand hover:underline"
+                >
+                  {safeCreatorUrl(connection.url) || "your website"}
                 </a>
               </p>
               <p className="mt-0.5 text-xs text-mist">
@@ -287,7 +297,7 @@ export default async function ConnectPage() {
           lastSeen={domain?.lastSeen ?? null}
           published={site.published}
           billingReady={billingOk(site)}
-          allowed={getPlan(site.plan).customDomain}
+          allowed={planFor(site).customDomain}
           aRecord={process.env.DOMAIN_A_RECORD || null}
           cnameTarget={process.env.DOMAIN_CNAME_TARGET || null}
         />

@@ -1,6 +1,6 @@
 import "server-only";
 import { getSections } from "./db";
-import { getPlan } from "./plans";
+import { planFor } from "./billing";
 import { embedUrl, parseLines } from "./sections";
 import type { Site } from "./types";
 
@@ -18,7 +18,7 @@ export interface EmbedPayload {
 }
 
 export function buildEmbedContent(site: Site): EmbedPayload {
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   // Same over-limit rule as the hosted page: extra sections unpublish on downgrade.
   const sections = getSections(site.id).slice(0, plan.maxSections).flatMap((s): Array<Record<string, unknown> & { type: string }> => {
     const c = s.content;

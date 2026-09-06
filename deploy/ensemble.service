@@ -15,5 +15,30 @@ Restart=always
 RestartSec=3
 Environment=NODE_ENV=production
 
+# A crash loop has to STOP eventually. Restart=always with a 3-second delay
+# never trips systemd's default rate limiter, so a corrupt database or a bad
+# env restarted silently forever and nothing outside the box could tell.
+# Five failures inside five minutes and the unit stays down, visibly, for
+# something to alert on. Pair it with an uptime check against /api/health.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Sandboxing. The unit had none of this, on a droplet the runbook says can OOM.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# The only paths the app writes: its SQLite file, uploads and the build output.
+ReadWritePaths=/srv/ensemble/data /srv/ensemble/.next /srv/ensemble/backups
+
+# An OOM kill should take this process, not whatever else the box is doing.
+MemoryMax=1G
+
 [Install]
 WantedBy=multi-user.target

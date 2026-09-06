@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getSiteByUser, getSocialAccounts, getSocialPosts } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialsPanel } from "@/components/SocialDashboard";
 
@@ -9,7 +9,7 @@ export default async function SocialsPage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
 
   const accounts = getSocialAccounts(site.id);
   // The growth tracker moved to Analytics. It is a record of numbers over

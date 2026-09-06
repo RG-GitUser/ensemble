@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { getLeads, getSiteByUser, getSocialAccounts } from "@/lib/db";
 import { liveIngestUrl, relayConfigured } from "@/lib/live";
 import { configuredProviderIds } from "@/lib/oauth";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { IntegrationsForm } from "@/components/IntegrationsForm";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialIntegrations } from "@/components/SocialDashboard";
@@ -31,7 +31,7 @@ export default async function IntegrationsPage({
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   const leads = plan.newsletter ? getLeads(site.id) : [];
   const { oauth, platform } = await searchParams;
 
@@ -54,10 +54,12 @@ export default async function IntegrationsPage({
               showLive={plan.live}
               ingestUrl={relayConfigured() ? liveIngestUrl() : ""}
               ingestKey={site.ingestKey}
+              // Booleans, not the keys. Anything handed to a client component
+              // is serialised into the RSC payload and the HTML.
               streamKeys={{
-                twitch: site.config.twitchStreamKey ?? "",
-                youtube: site.config.youtubeStreamKey ?? "",
-                facebook: site.config.facebookStreamKey ?? "",
+                twitch: !!site.config.twitchStreamKey,
+                youtube: !!site.config.youtubeStreamKey,
+                facebook: !!site.config.facebookStreamKey,
               }}
             />
           );
@@ -76,9 +78,10 @@ export default async function IntegrationsPage({
           calendar={plan.calendar}
           newsletter={plan.newsletter}
           stripeKey={site.config.stripeKey ?? ""}
+          // Boolean, never the credential itself.
+          emailApiKeySet={!!site.config.emailApiKey}
           calendlyUrl={site.config.calendlyUrl ?? ""}
           emailProvider={site.config.emailProvider ?? ""}
-          emailApiKey={site.config.emailApiKey ?? ""}
           emailListId={site.config.emailListId ?? ""}
           newsletterEnabled={site.config.newsletterEnabled ?? true}
         />

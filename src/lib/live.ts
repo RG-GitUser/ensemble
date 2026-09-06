@@ -16,6 +16,49 @@ import type { SiteConfig } from "./types";
 /** RTMP application name — the path prefix MediaMTX sees on every stream. */
 export const INGEST_APP = "live";
 
+/**
+ * The month a stream's egress is charged to: 'YYYY-MM', always UTC.
+ *
+ * Deliberately not local time. The droplet's zone is not the creator's, and a
+ * quota window that moves when someone changes TZ — or that rolls over at a
+ * different instant than the one the next process assumes — hands out free
+ * transfer twice a year at the boundary.
+ */
+export function egressMonth(at: Date = new Date()): string {
+  return `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Bytes of relay egress a site may spend this month.
+ *
+ * Reads the plan, with LIVE_EGRESS_BYTES_PER_SITE as an override for boxes
+ * whose transfer allowance differs from the one the plans were priced against
+ * — the same escape hatch scripts/check-egress.sh offers for the box total.
+ * A non-positive or unparseable override is ignored rather than obeyed: a typo
+ * in an env var must not silently switch the quota off, and must not lock
+ * every creator out either.
+ */
+export function egressAllowance(planEgressBytes: number): number {
+  const raw = process.env.LIVE_EGRESS_BYTES_PER_SITE;
+  if (raw !== undefined) {
+    const override = Number(raw);
+    if (Number.isFinite(override) && override > 0) return Math.floor(override);
+  }
+  return planEgressBytes;
+}
+
+/**
+ * Has this site spent its month's relay allowance?
+ *
+ * An allowance of 0 means the plan does not include the relay at all, which
+ * the caller has already refused on `live`; treated as "no headroom" here so
+ * this can never be the thing that lets it through.
+ */
+export function egressExceeded(usedBytes: number, allowanceBytes: number): boolean {
+  if (!Number.isFinite(usedBytes) || usedBytes < 0) return false;
+  return usedBytes >= allowanceBytes;
+}
+
 export function liveIngestUrl(): string {
   return process.env.LIVE_INGEST_URL ?? "";
 }
@@ -62,6 +105,15 @@ export interface PushTarget {
 /**
  * Where the relay pushes a site's stream, from the keys the creator saved.
  *
+ * Every destination is rtmps://, never rtmp://. The stream key is embedded in
+ * the URL, so a cleartext push publishes the creator's key to every hop
+ * between this droplet and the platform — and that key is exactly the secret
+ * that lets a stranger broadcast to their channel. Ingest was moved to RTMPS
+ * for this reason; egress carries the same secret and needs the same
+ * treatment. Twitch and YouTube both terminate TLS on 443 for these
+ * hostnames, and the relay's ffmpeg already speaks rtmps to Facebook, so this
+ * costs a handshake and nothing else.
+ *
  * Instagram is deliberately absent: it has no official third-party RTMP
  * ingest, and pushing at reverse-engineered endpoints breaks without warning
  * mid-stream — worse than not offering it.
@@ -69,10 +121,10 @@ export interface PushTarget {
 export function pushTargets(config: SiteConfig): PushTarget[] {
   const targets: PushTarget[] = [];
   if (config.twitchStreamKey) {
-    targets.push({ platform: "twitch", url: `rtmp://live.twitch.tv/app/${config.twitchStreamKey}` });
+    targets.push({ platform: "twitch", url: `rtmps://live.twitch.tv/app/${config.twitchStreamKey}` });
   }
   if (config.youtubeStreamKey) {
-    targets.push({ platform: "youtube", url: `rtmp://a.rtmp.youtube.com/live2/${config.youtubeStreamKey}` });
+    targets.push({ platform: "youtube", url: `rtmps://a.rtmp.youtube.com/live2/${config.youtubeStreamKey}` });
   }
   if (config.facebookStreamKey) {
     targets.push({ platform: "facebook", url: `rtmps://live-api-s.facebook.com:443/rtmp/${config.facebookStreamKey}` });

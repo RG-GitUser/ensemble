@@ -11,6 +11,8 @@
 //
 // NOTE: keep EMBED-style template rules — no backticks/${} inside CONNECT_JS.
 
+import { createHash } from "crypto";
+
 const CONNECT_JS = `(function () {
   "use strict";
   var TAG = "[ensemble]";
@@ -37,6 +39,19 @@ const CONNECT_JS = `(function () {
   }
   if (location.protocol === "https:" && origin.indexOf("http://") === 0) {
     console.warn(TAG, "the snippet points at " + origin + " (plain http) but this page is https, so the browser will block it. Copy the https version from your dashboard.");
+  }
+
+  // These values are written onto elements of the creator's REAL website, so
+  // the scheme is allowlisted rather than trusted. embed.js has always done
+  // this; this file did not, which meant a compromised creator account could
+  // turn stored "edits" into whatever a data:/blob: URL will do there.
+  function safeUrl(u) {
+    if (!u) return "";
+    try {
+      var p = new URL(u, document.baseURI);
+      if (p.protocol === "http:" || p.protocol === "https:") return p.href;
+    } catch (e) {}
+    return "";
   }
 
   var TEXT_TAGS = { h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, p: 1, li: 1, blockquote: 1, figcaption: 1 };
@@ -75,16 +90,18 @@ const CONNECT_JS = `(function () {
         if (it.kind === "text") {
           if (el.textContent !== it.value) { el.textContent = it.value; changed++; }
         } else if (it.kind === "image") {
-          if (el.getAttribute("src") !== it.value) {
+          var imgSrc = safeUrl(it.value);
+          if (imgSrc && el.getAttribute("src") !== imgSrc) {
             el.removeAttribute("srcset");
-            el.setAttribute("src", it.value);
+            el.setAttribute("src", imgSrc);
             changed++;
           }
         } else if (it.kind === "video") {
-          if (el.getAttribute("src") !== it.value) {
+          var vidSrc = safeUrl(it.value);
+          if (vidSrc && el.getAttribute("src") !== vidSrc) {
             var source = el.querySelector && el.querySelector("source");
-            if (source) source.setAttribute("src", it.value);
-            el.setAttribute("src", it.value);
+            if (source) source.setAttribute("src", vidSrc);
+            el.setAttribute("src", vidSrc);
             if (el.load) try { el.load(); } catch (e2) {}
             changed++;
           }
@@ -247,7 +264,10 @@ const CONNECT_JS = `(function () {
     return items;
   }
 
-  function send(items) {
+  // The single-use permission to replace this site's inventory, handed to us
+  // by the overrides endpoint when a report is actually wanted. The pairing
+  // token in this snippet is public HTML, so it can only authorise reads.
+  function send(items, nonce) {
     if (!items || !items.length) {
       console.warn(TAG, "found no headings, paragraphs or images on this page. If your site renders with JavaScript, the snippet may be loading before the content does — tell us at your dashboard and we'll look.");
       return;
@@ -257,10 +277,11 @@ const CONNECT_JS = `(function () {
         method: "POST",
         // text/plain keeps this a "simple" request, so there's no CORS preflight.
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ url: location.href, items: items })
+        body: JSON.stringify({ url: location.href, items: items, nonce: nonce })
       })
         .then(function (r) {
           if (r.ok) console.log(TAG, "connected — sent " + items.length + " editable items to your dashboard");
+          else if (r.status === 409) console.warn(TAG, "the dashboard wasn't expecting a content report — reload the page, or press Re-sync content in your dashboard.");
           else console.warn(TAG, "the dashboard rejected this page's contents (HTTP " + r.status + ")");
         })
         .catch(function (e) { console.warn(TAG, "couldn't reach " + origin, e); });
@@ -289,7 +310,7 @@ const CONNECT_JS = `(function () {
         if (!data.report) apply(edits);
 
         whenSettled(function () {
-          if (data.report) send(collect());
+          if (data.report) send(collect(), data.reportNonce);
           apply(edits);
           keepApplied(edits);
           if (!data.report) {
@@ -302,12 +323,30 @@ const CONNECT_JS = `(function () {
 })();
 `;
 
-export function GET(): Response {
-  return new Response(CONNECT_JS, {
-    headers: {
-      "Content-Type": "text/javascript; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-store",
-    },
-  });
+/**
+ * These files are byte-identical for every visitor of every customer site,
+ * and they were served `no-store` with no ETag — so every page load of every
+ * paired website re-fetched them from the single droplet, on the critical
+ * path, for nothing.
+ *
+ * A short max-age keeps a fix propagating quickly; the ETag means the common
+ * case is a 304 with no body at all. stale-while-revalidate lets a browser use
+ * the cached copy while it checks.
+ */
+function staticScriptResponse(req: Request, js: string): Response {
+  const etag = `"${createHash("sha256").update(js).digest("base64url").slice(0, 27)}"`;
+  const headers = {
+    "Content-Type": "text/javascript; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+    ETag: etag,
+  };
+  if (req.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(js, { headers });
+}
+
+export function GET(req: Request): Response {
+  return staticScriptResponse(req, CONNECT_JS);
 }
