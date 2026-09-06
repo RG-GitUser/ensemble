@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { getSiteByIngestKey, updateSite } from "@/lib/db";
 import { hookAuthorized } from "@/lib/live";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 
 /**
  * The relay saw a stream start or stop — flip the on-air badge to match.
@@ -18,7 +18,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const site = getSiteByIngestKey(body.key);
-  if (!site || !getPlan(site.plan).live) return new Response(null, { status: 404 });
+  if (!site || !planFor(site).live) return new Response(null, { status: 404 });
 
   if ((site.config.liveNow === true) !== body.live) {
     updateSite(site.id, { config: { ...site.config, liveNow: body.live } });

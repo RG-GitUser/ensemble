@@ -119,8 +119,18 @@ export const PLANS: Record<Plan, PlanDef> = {
 
 export const PLAN_ORDER: Plan[] = ["basic", "pro", "enterprise"];
 
+/**
+ * The plan definition for a stored plan id, falling back to basic.
+ *
+ * Object.hasOwn, not `in`: `in` walks the prototype chain, so getPlan("__proto__")
+ * returned Object.prototype and getPlan("constructor") returned the Object
+ * constructor — objects with none of PlanDef's fields, so every feature flag
+ * read off them was undefined and `plan.name` was too. The plan column is
+ * free-form TEXT with no CHECK constraint, so those values are reachable from
+ * stored data rather than only from a mistake in code.
+ */
 export function getPlan(id: string | null | undefined): PlanDef {
-  if (id && id in PLANS) return PLANS[id as Plan];
+  if (id && Object.hasOwn(PLANS, id)) return PLANS[id as Plan];
   return PLANS.basic;
 }
 

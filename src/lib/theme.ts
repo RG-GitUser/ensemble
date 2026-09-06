@@ -459,14 +459,27 @@ export interface ButtonStyleDef {
   border: string;
 }
 
+/**
+ * Ink for a button whose background IS the accent.
+ *
+ * "AUTO" rather than a fixed colour, because a hardcoded white is only right
+ * for dark accents. isLight() was already here and already wired into the
+ * background and text pickers, but nothing ever checked the one colour that
+ * paints every call-to-action: the shipped Lime accent gave white-on-lime at
+ * about 1.9:1, a clear WCAG AA failure on every button on the page.
+ */
+const AUTO_INK = "AUTO";
+const INK_ON_LIGHT = "#11131a";
+const INK_ON_DARK = "#ffffff";
+
 export const BUTTON_STYLES: ButtonStyleDef[] = [
-  { id: "solid", label: "Solid", blurb: "Filled with your accent.", bg: "ACCENT", ink: "#fff", border: "transparent" },
+  { id: "solid", label: "Solid", blurb: "Filled with your accent.", bg: "ACCENT", ink: AUTO_INK, border: "transparent" },
   {
     id: "gradient",
     label: "Gradient",
     blurb: "Your accent fading into itself.",
     bg: "linear-gradient(135deg, ACCENT, ACCENTaa)",
-    ink: "#fff",
+    ink: AUTO_INK,
     border: "transparent",
   },
   {
@@ -493,12 +506,18 @@ export function getButtonStyle(id: string | undefined | null): ButtonStyleDef | 
   return BUTTON_STYLES.find((b) => b.id === id) ?? null;
 }
 
+/** Readable ink for text sitting ON the accent colour. */
+export function inkForAccent(accent: string): string {
+  return isLight(accent) ? INK_ON_LIGHT : INK_ON_DARK;
+}
+
 /** The button style as the custom properties the public page reads. */
 export function buttonVars(id: string | undefined | null, accent: string): Record<string, string> {
   const b = getButtonStyle(id) ?? BUTTON_STYLES[0];
+  const ink = b.ink === AUTO_INK ? inkForAccent(accent) : withAccent(b.ink, accent);
   return {
     "--site-btn-bg": withAccent(b.bg, accent),
-    "--site-btn-ink": withAccent(b.ink, accent),
+    "--site-btn-ink": ink,
     "--site-btn-border": withAccent(b.border, accent),
   };
 }

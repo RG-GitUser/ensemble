@@ -59,3 +59,6 @@ data/
 # and broke `tsc` with duplicate-identifier errors before being caught.
 *[[:space:]][0-9].ts
 *[[:space:]][0-9].tsx
+
+# compiled sources for the test runner (scripts/test.mjs)
+/.test-build

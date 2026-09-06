@@ -37,24 +37,50 @@ trap cleanup TERM INT EXIT
 
 notify true
 
-TARGETS=$(curl -fsS -m 10 "$APP/api/live/targets?key=$KEY" -H "x-live-secret: $SECRET" | jq -r '.targets[].url')
+# Fetch and decode separately, so "the app is down" is distinguishable from
+# "this creator saved no stream keys". Previously a failed curl produced empty
+# output and took the no-targets branch, which sleeps for an hour — leaving the
+# on-air badge lit while nothing was being pushed anywhere.
+if ! RAW=$(curl -fsS -m 10 "$APP/api/live/targets?key=$KEY" -H "x-live-secret: $SECRET"); then
+  log "couldn't reach the app to ask where to push — staying up, pushing nowhere"
+  while sleep 60; do :; done
+fi
 
-if [ -z "$TARGETS" ]; then
+# Count first, then stream the targets in NUL-delimited.
+#
+# Stream keys are validated server-side, but this side must not depend on that.
+# `jq -r` prints an embedded newline as a real one, and this loop used to read
+# line by line — so a key containing "\nfile:/srv/ensemble/data/uploads/x.bin"
+# added a SECOND ffmpeg output writing wherever the service user can write, on
+# the same disk as every tenant's database. Every expansion here was already
+# correctly quoted, so this was never shell injection; it was line injection
+# into the argument list, which was enough.
+#
+# The NUL stream is piped STRAIGHT into the loop rather than through a
+# variable: command substitution strips NUL bytes, which would silently throw
+# every target away.
+TARGET_COUNT=$(printf '%s' "$RAW" | jq '.targets | length')
+
+if [ "${TARGET_COUNT:-0}" -eq 0 ]; then
   log "no stream keys saved — ingesting but pushing nowhere"
   # Stay alive so the on-air badge still works; cleanup runs on stream end.
   while sleep 3600; do :; done
 fi
 
 count=0
-while IFS= read -r url; do
+while IFS= read -r -d '' url; do
   [ -z "$url" ] && continue
   count=$((count + 1))
   # -c copy: pure forwarding, no transcode — this is what keeps the relay
   # cheap enough to live beside the app. Egress is logged per push below.
-  ffmpeg -hide_banner -loglevel error \
+  #
+  # -nostdin: without it every ffmpeg child shares this script's stdin and
+  # they fight over it. It also removes the interactive overwrite prompt as
+  # the only thing standing between a file: destination and a clobbered file.
+  ffmpeg -nostdin -hide_banner -loglevel error \
     -i "rtmp://127.0.0.1:1935/$MTX_PATH" \
     -c copy -f flv "$url" &
-done <<< "$TARGETS"
+done < <(printf '%s' "$RAW" | jq -j '.targets[] | .url, "\u0000"')
 
 log "pushing to $count destination(s)"
 

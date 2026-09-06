@@ -2,9 +2,15 @@ import Link from "next/link";
 import { TierBadge } from "@/components/TierBadge";
 
 /**
- * Renders the real feature UI dimmed and inert under a plan badge, so lower
- * tiers see exactly what an upgrade unlocks. Server-side action gates stay the
- * real enforcement — this only handles presentation.
+ * Renders the feature UI dimmed and inert under a plan badge, so lower tiers
+ * see exactly what an upgrade unlocks.
+ *
+ * Presentation only, and that is the point to keep hold of: this is 40%
+ * opacity and a 1.5px blur, which is a visual effect, not a redaction — the
+ * children are fully readable in the HTML. So callers must pass a PLACEHOLDER
+ * for anything the plan hasn't paid for, never the real figures. Server-side
+ * action gates remain the enforcement for writes; for READS, not computing the
+ * data is the enforcement.
  */
 export function LockedOverlay({
   plan,

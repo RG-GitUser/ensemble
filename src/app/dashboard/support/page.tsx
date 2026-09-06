@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getSiteByUser, getTicketsByUser } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { SupportTicketForm } from "@/components/SupportTicketForm";
 import { UpgradeGate } from "@/components/UpgradeGate";
 
@@ -15,7 +15,7 @@ export default async function SupportPage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
 
   if (!plan.helpdesk) {
     return (

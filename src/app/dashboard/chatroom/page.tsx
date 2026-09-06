@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getChatMessages, getSiteByUser } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { deleteChatMessageAction, toggleChatroom } from "@/lib/actions";
 import { UpgradeGate } from "@/components/UpgradeGate";
 import { CloseIcon } from "@/components/icons";
@@ -11,7 +11,7 @@ export default async function ChatroomPage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
 
   if (!plan.chatroom) {
     return (

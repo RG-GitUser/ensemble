@@ -15,7 +15,7 @@ import {
   getTotalViews,
 } from "@/lib/db";
 import { fetchStripeFinance, formatMoney, sampleFinance, type FinanceSummary } from "@/lib/finance";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { LockedOverlay } from "@/components/LockedOverlay";
 import { SocialGrowth } from "@/components/SocialGrowth";
 import { CardIcon, LedgerIcon } from "@/components/icons";
@@ -26,6 +26,19 @@ import { cleanDay, todayISO } from "@/lib/followers";
 import type { Site } from "@/lib/types";
 
 const CHART_DAYS = 30;
+
+/**
+ * What the locked previews render instead of real figures. Shaped like a
+ * normal week so the upgrade card still shows what the feature looks like,
+ * without putting the creator's actual numbers into HTML they haven't bought.
+ */
+const PLACEHOLDER_VIEWS = [12, 19, 8, 24, 31, 17, 22, 14, 27, 11];
+const PLACEHOLDER_REFERRERS = [
+  { referrer: "instagram.com", views: 128 },
+  { referrer: "youtube.com", views: 96 },
+  { referrer: "", views: 74 },
+  { referrer: "tiktok.com", views: 51 },
+];
 
 function dayLabel(iso: string): string {
   const [, m, d] = iso.split("-");
@@ -43,7 +56,7 @@ function MoneyTile({ label, value, sub }: { label: string; value: string; sub?: 
 }
 
 async function FinanceTab({ site }: { site: Site }) {
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   if (!plan.payments) {
     return (
       <div className="card mt-6 border-dashed text-center">
@@ -173,7 +186,7 @@ export default async function AnalyticsPage({
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   const { tab, on, error } = await searchParams;
   const finance = tab === "finance";
   const followers = tab === "followers";
@@ -183,21 +196,30 @@ export default async function AnalyticsPage({
   const subscribers = plan.newsletter ? countLeads(site.id) : null;
   const chatMessages = plan.chatroom ? countChatMessages(site.id) : null;
 
+  // Gated read-only data is NOT computed for plans that can't see it.
+  //
+  // It used to be built unconditionally and handed to LockedOverlay, which
+  // dims it to 40% opacity with a 1.5px blur — much of it readable on screen,
+  // all of it readable in the HTML. That is the creator's own data, so it was
+  // a paywall bypass rather than a leak, but it undercut the upgrade it exists
+  // to sell. The overlay now gets a placeholder shaped like the real thing.
+  //
   // Fill the last CHART_DAYS days so the chart shows gaps, not just active days.
-  // Fetched on every plan — lower tiers see it dimmed behind the upgrade overlay.
-  const daily = getDailyViews(site.id, CHART_DAYS);
-  const byDay = new Map(daily.map((d) => [d.day, d.views]));
+  const byDay = new Map(
+    plan.dailyAnalytics ? getDailyViews(site.id, CHART_DAYS).map((d) => [d.day, d.views] as const) : []
+  );
   const days: Array<{ day: string; views: number }> = [];
   const now = new Date();
   for (let i = CHART_DAYS - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const iso = d.toISOString().slice(0, 10);
-    days.push({ day: iso, views: byDay.get(iso) ?? 0 });
+    // The locked preview shows a plausible shape, not this creator's traffic.
+    days.push({ day: iso, views: plan.dailyAnalytics ? (byDay.get(iso) ?? 0) : PLACEHOLDER_VIEWS[i % PLACEHOLDER_VIEWS.length] });
   }
   const maxViews = Math.max(1, ...days.map((d) => d.views));
 
-  const referrers = getTopReferrers(site.id);
+  const referrers = plan.referrerAnalytics ? getTopReferrers(site.id) : PLACEHOLDER_REFERRERS;
 
   // A date past today would ask the charts about a day that hasn't happened;
   // an unparseable one falls back the same way rather than throwing.

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { billingEnabled, billingOk, reconcileBilling } from "@/lib/billing";
+import { billingEnabled, billingOk, reconcileBilling, planFor } from "@/lib/billing";
 import {
   countLeads,
   countSocialPosts,
@@ -157,7 +157,7 @@ export default async function DashboardPage({
     }
   }
 
-  const plan = site ? getPlan(site.plan) : null;
+  const plan = site ? planFor(site) : null;
   const domain = site ? getDomainBySite(site.id) : null;
   const sections = site ? getSections(site.id) : [];
   const sectionsUsed = sections.length;

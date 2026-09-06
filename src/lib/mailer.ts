@@ -17,6 +17,30 @@ import "server-only";
 
 const BATCH_SIZE = 100; // Resend's /emails/batch ceiling per request.
 
+/**
+ * Every outbound call gets one. These were the only fetches in the codebase
+ * without a deadline, and a large list could hang past the request timeout —
+ * skipping recordNewsletterPost, so a retry re-sent the whole broadcast.
+ */
+const SEND_TIMEOUT_MS = 20_000;
+
+/**
+ * Enough of an address to recognise, not enough to learn.
+ *
+ * Used where a security notice has to say WHICH address without disclosing an
+ * address the reader may not already know.
+ */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "•••";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const head = local.slice(0, 1);
+  const tail = local.length > 3 ? local.slice(-1) : "";
+  const dots = "•".repeat(Math.max(1, local.length - head.length - tail.length));
+  return `${head}${dots}${tail}@${domain}`;
+}
+
 export function mailEnabled(): boolean {
   return !!process.env.RESEND_API_KEY;
 }
@@ -76,6 +100,16 @@ export async function sendNewsletter(opts: {
       reply_to: opts.replyTo,
       subject: opts.subject,
       text: `${opts.body}\n\n—\nUnsubscribe: ${r.unsubUrl}`,
+      // RFC 8058. Without these the ONLY way to unsubscribe is to follow the
+      // link in the body — which is exactly what corporate mail gateways do to
+      // every URL in every message while scanning it, so recipients behind one
+      // were unsubscribed before a human read the mail. With them, Gmail and
+      // Outlook show their own native button and send a POST, which the
+      // unsubscribe route now distinguishes from a scanner's GET.
+      headers: {
+        "List-Unsubscribe": `<${r.unsubUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
       html:
         `<div style="max-width:36em; margin:0 auto; font-family:system-ui,-apple-system,sans-serif; color:#1a1a1a;">` +
         paragraphs +
@@ -89,6 +123,7 @@ export async function sendNewsletter(opts: {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify(batch),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
       if (res.ok) sent += batch.length;
       else failed += batch.length;
@@ -139,6 +174,7 @@ async function sendSystemMail(opts: {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: systemFrom(),
@@ -177,22 +213,47 @@ export async function sendPasswordReset(opts: { to: string; url: string; expires
   });
 }
 
-/** Confirm a recovery address can actually receive mail before trusting it. */
+/**
+ * Confirm a recovery address can actually receive mail before trusting it.
+ *
+ * Names the account (masked). The mail used to say only "an Ensemble account",
+ * so a mistyped address reached a stranger who had no idea what they were
+ * confirming — and confirming grants the power to change that account's login
+ * address and password.
+ */
 export async function sendBackupVerification(opts: {
   to: string;
   url: string;
   expiresMinutes: number;
+  /** Masked login address of the account, so the reader knows what this is. */
+  account: string;
 }): Promise<boolean> {
   return sendSystemMail({
     to: opts.to,
     subject: "Confirm your Ensemble recovery address",
     lead:
-      "This address was added as the recovery address for an Ensemble account. " +
-      "Confirm it and it can be used to get back in if the login address is ever forgotten.",
+      `This address was added as the recovery address for the Ensemble account ${opts.account}. ` +
+      "Confirming it means this mailbox can be used to change that account's login address and password. " +
+      "If that account isn't yours, do not confirm — just ignore this email.",
     cta: { label: "Confirm this address", url: opts.url },
     footer:
       `The link works once and expires in ${opts.expiresMinutes} minutes. ` +
-      `If you weren't expecting this, ignore it — nothing changes unless the link is opened.`,
+      `Nothing changes unless you open it and press the button on the page it opens.`,
+  });
+}
+
+/**
+ * Tell the LOGIN address that something security-relevant happened.
+ *
+ * The account's own mailbox is the one that must never find out after the
+ * fact: password changed, recovery address added, recovery address removed.
+ */
+export async function sendSecurityNotice(opts: { to: string; subject: string; line: string }): Promise<boolean> {
+  return sendSystemMail({
+    to: opts.to,
+    subject: opts.subject,
+    lead: opts.line,
+    footer: "This is an automated notice from Ensemble. You can review your account security in Settings.",
   });
 }
 
@@ -226,6 +287,10 @@ export async function sendLoginChangedNotice(opts: { to: string; newEmail: strin
     lead:
       `The login address for your Ensemble account was changed to ${opts.newEmail} ` +
       `using the account's recovery address. Every signed-in session was ended.`,
-    footer: "If this wasn't you, reply to this message or contact support straight away.",
+    // NOT "reply to this message" — systemFrom() is a send-only mailbox, and
+    // this is the one email a victim of a recovery takeover actually receives.
+    footer:
+      "If this wasn't you, go to ensemble.it.com/forgot and reset the password immediately, " +
+      "then contact support from the Help desk in your dashboard.",
   });
 }

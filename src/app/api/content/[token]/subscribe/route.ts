@@ -1,5 +1,5 @@
 import { addLead, getSiteByToken } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { billingOk, planFor } from "@/lib/billing";
 import { forwardSubscriber } from "@/lib/email-providers";
 import { ipFromHeaders, LIMITS, rateLimit } from "@/lib/ratelimit";
 
@@ -16,10 +16,16 @@ export function OPTIONS(): Response {
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }): Promise<Response> {
   const { token } = await ctx.params;
   const site = getSiteByToken(token);
-  if (!site || !site.published) {
+  // billingOk as well as published: unpublish is documented as taking content
+  // down everywhere at once, and a lapsed site should not keep collecting
+  // subscribers through the embed on its own website.
+  if (!site || !site.published || !billingOk(site)) {
     return Response.json({ error: "Unknown site token" }, { status: 404, headers: CORS });
   }
-  if (!getPlan(site.plan).newsletter) {
+  // newsletterEnabled is the creator's off switch. Both other layers honoured
+  // it at render only, so leads kept arriving through the embed on a form the
+  // creator believed was switched off.
+  if (!planFor(site).newsletter || site.config.newsletterEnabled === false) {
     return Response.json({ error: "Newsletter is not enabled on this page." }, { status: 403, headers: CORS });
   }
 

@@ -1,0 +1,43 @@
+# Continuous integration.
+#
+# There was none, on a codebase handling money and multi-tenant data. These are
+# the cheapest three checks that would have caught a regression in the two
+# places where one is silent and expensive: the billing state machine and the
+# plan-gating layer.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # better-sqlite3 compiles natively; the runner already has the toolchain.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          # The build renders pages, and billing fails closed in production
+          # without a key — which is correct, and would otherwise make the
+          # build log shout about a misconfiguration that isn't one here.
+          ENSEMBLE_BILLING_DISABLED: "1"
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high

@@ -108,6 +108,12 @@ function Group({
  *
  * Only a complete, valid hex is committed, so half-typed input never repaints
  * the preview and the field isn't wiped while someone is still typing.
+ *
+ * "Complete" has to mean length 4 or 7, not "normalizeHex returns something".
+ * normalizeHex expands three-digit hex, so typing #8b5cf6 one character at a
+ * time hit #8b5 at the fourth keystroke, expanded it to #88bb55, committed
+ * that, changed the parent state, and the effect below replaced the field —
+ * making a six-digit colour impossible to type. You had to paste it.
  */
 function HexPicker({
   label,
@@ -124,10 +130,15 @@ function HexPicker({
 }) {
   const hex = normalizeHex(value);
   const [text, setText] = useState(hex);
+  const [focused, setFocused] = useState(false);
   const caution =
     warning ?? (hex && isLight(hex) ? "Light color — your page text is white, so this may be hard to read." : "");
-  // Swatch clicks and Randomize change the value from outside — follow along.
-  useEffect(() => setText(normalizeHex(value)), [value]);
+  // Swatch clicks and Randomize change the value from outside — follow along,
+  // but never while this field has focus: that is the other half of the bug,
+  // because any commit round-trips through the parent and comes back here.
+  useEffect(() => {
+    if (!focused) setText(normalizeHex(value));
+  }, [value, focused]);
 
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -136,9 +147,21 @@ function HexPicker({
         <input
           value={text}
           onChange={(e) => {
-            setText(e.target.value);
-            const normalized = normalizeHex(e.target.value);
-            if (normalized) onPick(normalized);
+            const next = e.target.value;
+            setText(next);
+            // Commit only a COMPLETE hex: #abc or #aabbcc. Anything shorter is
+            // someone mid-keystroke.
+            const trimmed = next.trim();
+            if (trimmed.length === 4 || trimmed.length === 7) {
+              const normalized = normalizeHex(trimmed);
+              if (normalized) onPick(normalized);
+            }
+          }}
+          onFocus={() => setFocused(true)}
+          onBlur={(e) => {
+            setFocused(false);
+            // Tidy whatever is left in the box to the committed value.
+            setText(normalizeHex(e.target.value) || normalizeHex(value));
           }}
           placeholder="#8b5cf6"
           spellCheck={false}
@@ -1179,6 +1202,22 @@ export function ThemeForm({
     glowAlpha,
     glowColor: glowTint,
   });
+  /**
+   * The background image a saved look should record.
+   *
+   * NOT `bgImg`, which is local preview state: right after a file pick it is a
+   * `blob:` URL, and after Randomize it is a `data:` URL. sanitizeDesign
+   * correctly refuses both (a look may only reference an image the site
+   * already has), so the look saved with no background at all — and applyLook
+   * then read that absence as "this look has no background" and deleted the
+   * one the creator actually had.
+   *
+   * So: an explicit clear records "", a stored upload records itself, and
+   * anything still local falls back to the image the site has SAVED.
+   */
+  const lookBgImage = clearBg ? "" : bgImg.startsWith("/api/uploads/") ? bgImg : bgImage;
+  const lookCardImage = clearCard ? "" : cardImg.startsWith("/api/uploads/") ? cardImg : cardImage;
+
   /** Everything the Design tab owns, exactly as it stands right now. */
   const currentDesign = {
     themeColor: accent,
@@ -1187,8 +1226,8 @@ export function ThemeForm({
     containerSize: size,
     containerMinHeight: minH,
     borderStyle: border,
-    bgImage: bgImg,
-    cardImage: cardImg,
+    bgImage: lookBgImage,
+    cardImage: lookCardImage,
     gradient,
     themeId,
     fontId,
@@ -1202,6 +1241,14 @@ export function ThemeForm({
     lightCardColor: lightCard,
     lightTextColor: lightInk,
     lightThemeId,
+    // The half of the Design tab that saved looks used to drop on the floor.
+    buttonStyle,
+    containerHover,
+    buttonHover,
+    glowStrength,
+    glowSize,
+    glowColor,
+    profileFrame: frame,
   };
 
   /** Load a saved look into the form. Nothing is written until Save. */
@@ -1226,10 +1273,25 @@ export function ThemeForm({
     setThemeId(d.themeId ?? "");
     setLightThemeId(d.lightThemeId ?? "");
     setGradient(d.gradient !== false);
+    // The other half of the tab, applied rather than silently left behind.
+    if (d.buttonStyle) setButtonStyle(d.buttonStyle);
+    if (d.containerHover) setContainerHover(d.containerHover);
+    if (d.buttonHover) setButtonHover(d.buttonHover);
+    if (d.glowStrength) setGlowStrength(d.glowStrength);
+    if (d.glowSize) setGlowSize(d.glowSize);
+    if (d.glowColor !== undefined) setGlowColor(d.glowColor);
+    if (d.profileFrame) setFrame(d.profileFrame);
     // Images are files on the site, not part of the palette — a look only
     // restores one if it's still the image the site has.
-    setBgImg(d.bgImage ?? "");
-    setClearBg(!d.bgImage);
+    //
+    // `undefined` means the look does not carry a background, which is NOT the
+    // same as carrying an empty one: only an explicit "" should clear what the
+    // creator currently has. Treating the two alike is what made applying an
+    // old look delete a background nobody asked it to touch.
+    if (d.bgImage !== undefined) {
+      setBgImg(d.bgImage);
+      setClearBg(d.bgImage === "");
+    }
     setBgSvg("");
   }
 
@@ -1638,7 +1700,25 @@ export function ThemeForm({
         {/* 3 — The one color that touches everything. Directly under the
             containers it draws the borders on, so the pair is chosen together. */}
         <Group pane="accent" active={pane} title="Accent" hint="Buttons, links, highlights and the accent border styles above.">
-          <SwatchRow label="Accent color" swatches={ACCENTS} value={accent} onPick={setAccent} custom />
+          {/* The Backdrop pane has always cautioned about a light colour under
+              white text. The accent had no equivalent, and it is the colour
+              that paints every button on the page — a light accent gives
+              white-on-light at well under the 4.5:1 AA floor. Button ink is
+              now chosen to contrast (see theme.ts inkForAccent); this says so,
+              because a creator picking Lime should know their buttons just
+              turned dark rather than wonder why. */}
+          <SwatchRow
+            label="Accent color"
+            swatches={ACCENTS}
+            value={accent}
+            onPick={setAccent}
+            custom
+            warn={
+              isLight(accent)
+                ? "Light accent — button text switches to dark so it stays readable."
+                : undefined
+            }
+          />
           {/* The glow is a layer we add on top, so it's stated as one: a
               choice between the flat color and the color with a wash over it.
               Typing your own color turns it off, because "my color" means

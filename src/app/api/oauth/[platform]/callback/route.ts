@@ -22,11 +22,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
   const provider = getOAuthProvider(platform);
   if (!provider) return Response.redirect(new URL("/dashboard/integrations", base), 302);
 
-  const user = await getCurrentUser();
-  const site = user ? getSiteByUser(user.id) : null;
-  if (!site) return Response.redirect(new URL("/login", base), 302);
-
-  // Single-use state, and it must belong to this platform.
+  // The state cookie is read and cleared FIRST, before the session check.
+  //
+  // Order matters here. Checking the session first and bailing to a bare
+  // /login meant that losing the session during the provider's consent screen
+  // — a long sign-in, a 30-day cookie expiring, a different browser profile —
+  // dropped the authorization code silently, left the single-use state cookie
+  // behind, and told the creator nothing about what had happened or what to do
+  // next. They land on a login form having just approved something.
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -36,6 +39,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
 
   if (url.searchParams.get("error")) return back("denied");
   if (!code || !state || saved !== `${platform}:${state}`) return back("state-mismatch");
+
+  const user = await getCurrentUser();
+  const site = user ? getSiteByUser(user.id) : null;
+  if (!site) {
+    // Say what happened on the login page itself. /login has no `next` support
+    // and giving it one would mean accepting a redirect target from a URL,
+    // which is a bigger door than this problem needs.
+    return Response.redirect(new URL(`/login?oauth=session-lost&platform=${encodeURIComponent(platform)}`, base), 302);
+  }
 
   const creds = providerCredentials(provider);
   if (!creds) return back("not-configured");

@@ -20,12 +20,16 @@ Creators sign up with their name and business name, then pick one of two paths:
 
 | Plan | Price | Includes |
 |------|-------|----------|
-| Basic | $25/mo | Landing page builder, basic database limits (6 sections), standard server, no payment integrations |
-| Pro | $45/mo | Large database (20 sections), fast reliable server, Stripe payment integrations, daily analytics chart |
-| Enterprise | $75/mo* | Everything in Pro + best server, help desk support, 3rd-party calendar integrations, custom chatrooms, newsletters/memberships, referrer analytics, unlimited sections |
+| Basic | $25/mo | Landing page builder, cross-post to 2 social accounts, help desk |
+| Pro | $45/mo | Everything in Basic + Stripe merch payments, unlimited social accounts, follower growth tracking, custom domain with no Ensemble branding, daily analytics chart |
+| Enterprise | $65/mo | Everything in Pro + the live relay (stream once, broadcast everywhere), newsletters/memberships, community chatroom, event calendar, referrer analytics |
 
-\* Enterprise price is a placeholder — edit it in `src/lib/plans.ts` (single source of truth
-for prices, feature lists, and limits; the marketing page, onboarding, and settings all read from it).
+Sections are **unlimited on every tier** — tiers differ by which section TYPES they unlock
+(each template's `requires` in `src/lib/sections.ts`), not by how many blocks a page may have.
+
+`src/lib/plans.ts` is the single source of truth for prices, feature flags and limits; the
+marketing page, onboarding and settings all read from it. This table is prose and can drift —
+when the two disagree, `plans.ts` is right.
 
 ## Run it
 
@@ -54,12 +58,12 @@ Open http://localhost:3000.
 | Page | What it does | Tier |
 |------|--------------|------|
 | Overview | Page status, publish toggle, plan/sections/subscriber stats | all |
-| Page Builder | Copy & paste section editor with per-plan section limits | all |
+| Page Builder | Copy & paste section editor; section TYPES are gated per plan, the count is not | all |
 | My Website | Pair an existing website: scan → edit content → one-line snippet applies edits in place. Pause/resume, rescan, disconnect, reset pairing key | all |
 | Analytics | Page views (hosted + embed, with referrers), totals | totals: all · daily chart: Pro+ · referrers: Ent |
 | Audience | Newsletter subscriber list, delete, CSV export | Enterprise |
 | Chatroom | Real visitor chat on the hosted page; moderate/delete, on/off | Enterprise |
-| Integrations | Stripe key, calendar URL, chatroom/newsletter toggles | per plan |
+| Integrations | Stripe publishable key, calendar URL, email-platform key, newsletter toggle, social connections, live relay | per plan |
 | Support | Help desk tickets (answered from the Admin Inbox) | Enterprise |
 | Settings | Page URL, tagline, accent color, plan switching | all |
 

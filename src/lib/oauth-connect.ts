@@ -27,7 +27,7 @@ export interface Identity {
   externalId: string;
 }
 
-/** Result of asking "will a scheduled post actually go out?" */
+/** Result of asking "will a post to this account actually go out?" */
 export interface Probe {
   postable: boolean;
   /** Creator-facing explanation when postable is false. */
@@ -84,6 +84,14 @@ async function upgradeToLongLived(
   short: TokenSet
 ): Promise<TokenSet | null> {
   const cfg = p.longLived!;
+  // NOTE: the app secret and the short-lived token go in the query string here
+  // because Meta's long-lived exchange is documented as a GET with exactly
+  // these parameters — it is the provider's shape, not a choice. That means
+  // both values are recorded by any intermediary and by Meta's own access
+  // logs. Everything we control uses an Authorization header instead (see
+  // `bearer` in publish.ts). If Meta ever accepts a POST body for this grant,
+  // move it; until then, rotate the app secret if this box's egress is ever
+  // suspect.
   const url = new URL(cfg.url);
   url.searchParams.set("grant_type", cfg.grantType);
   url.searchParams.set("client_secret", creds.clientSecret);
@@ -111,10 +119,18 @@ async function upgradeToLongLived(
  * Trade a refresh token for a fresh access token.
  *
  * Reddit and Pinterest issue access tokens measured in hours, so without this
- * every scheduled post beyond that window fails with an expired-token error
- * that looks, to a creator, exactly like a broken integration. Meta platforms
+ * any post made more than an hour after connecting fails with an
+ * expired-token error that looks, to a creator, exactly like a broken
+ * integration. Meta platforms
  * don't use this grant — they carry an empty refreshToken and are skipped.
  */
+/**
+ * Assumed access-token lifetime when a provider does not state one. Short,
+ * because guessing too long means posts fail; guessing too short costs a
+ * refresh nobody notices.
+ */
+const DEFAULT_TOKEN_TTL_SECONDS = 3600;
+
 export async function refreshAccessToken(
   p: OAuthProvider,
   creds: { clientId: string; clientSecret: string },
@@ -143,7 +159,13 @@ export async function refreshAccessToken(
       accessToken: json.access_token,
       // Reddit omits refresh_token on refresh; keeping the old one is correct.
       refreshToken: json.refresh_token ?? refreshToken,
-      expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : null,
+      // A response WITHOUT expires_in used to store null — and freshToken
+      // treats a null expiry as "not refreshable" and returns the stored token
+      // unconditionally, so that account could never be refreshed again and
+      // every later post failed with an expired-token error that looks like a
+      // broken integration. Assume a short life instead: the worst case is one
+      // unnecessary refresh, which is self-correcting.
+      expiresAt: new Date(Date.now() + (json.expires_in ?? DEFAULT_TOKEN_TTL_SECONDS) * 1000).toISOString(),
     };
   } catch {
     return null;
@@ -195,7 +217,7 @@ export async function fetchIdentity(p: OAuthProvider, token: string): Promise<{ 
           : {
               postable: false,
               reason:
-                "This is a personal Instagram account, and Instagram only allows scheduled posting from Business or Creator accounts.",
+                "This is a personal Instagram account, and Instagram only allows API posting from Business or Creator accounts.",
             },
       };
     }

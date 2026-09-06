@@ -1,6 +1,6 @@
 import { getSiteByIngestKey } from "@/lib/db";
 import { hookAuthorized, pushTargets } from "@/lib/live";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 
 /**
  * Where should this stream be pushed? Called by deploy/live-push.sh the
@@ -14,7 +14,7 @@ export function GET(req: Request): Response {
 
   const key = new URL(req.url).searchParams.get("key") ?? "";
   const site = getSiteByIngestKey(key);
-  if (!site || !getPlan(site.plan).live) return new Response(null, { status: 404 });
+  if (!site || !planFor(site).live) return new Response(null, { status: 404 });
 
   return Response.json({ targets: pushTargets(site.config) });
 }

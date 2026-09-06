@@ -123,6 +123,12 @@ export interface SiteConfig {
  * The slice of SiteConfig the Design tab owns. A saved look stores exactly
  * this and nothing else, so applying one can never disturb sections,
  * integrations or billing.
+ *
+ * This list has to stay honest about what the Design tab ACTUALLY edits. It
+ * used to omit the button style, both hover treatments, all three glow
+ * controls and the profile fields — every one of them edited in this same tab
+ * — so a saved look quietly captured about half the tab and applying it later
+ * left the other half wherever it happened to be.
  */
 export type DesignConfig = Pick<
   SiteConfig,
@@ -147,6 +153,13 @@ export type DesignConfig = Pick<
   | "lightCardColor"
   | "lightTextColor"
   | "lightThemeId"
+  | "buttonStyle"
+  | "containerHover"
+  | "buttonHover"
+  | "glowStrength"
+  | "glowSize"
+  | "glowColor"
+  | "profileFrame"
 >;
 
 export interface SavedLook {

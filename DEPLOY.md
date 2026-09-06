@@ -26,12 +26,17 @@ domains) in front of the Next.js app with its SQLite database.
 
 ```sh
 adduser ensemble
-usermod -aG sudo ensemble
+# NOT in sudo. This account runs the service; the whole point of a service
+# account is that compromising the app is not the same as owning the box.
+# Administer as root or from your own sudo-capable login.
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
 
 # Node 22 LTS + build tools (better-sqlite3 compiles natively)
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs build-essential python3
+# sqlite3 is NOT optional: scripts/backup.sh and the entire documented restore
+# in §8 shell out to it. Leaving it out meant the nightly backup died on its
+# first command every night, under `set -euo pipefail`, silently.
+apt-get install -y nodejs build-essential python3 sqlite3
 
 # Caddy (official repo)
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -49,15 +54,50 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 ## 5. The app
 
+`/srv` is root-owned, so the directory has to exist and belong to `ensemble`
+before the clone — `sudo -iu ensemble; git clone … /srv/ensemble` on its own
+fails with permission denied.
+
 ```sh
+# as root
+mkdir -p /srv/ensemble && chown ensemble:ensemble /srv/ensemble
+
 sudo -iu ensemble
 git clone <your-repo> /srv/ensemble   # or rsync the project up
 cd /srv/ensemble
 cp .env.example .env                  # then EDIT IT:
 #  - DOMAIN_A_RECORD = the reserved IP
-#  - ADMIN_PASSWORD  = a real password (seeded on FIRST start — set it now)
+#  - APP_URL         = the public origin (Checkout returns here)
+#  - PLATFORM_HOSTS  = every hostname Caddy routes to the app
+
+# Every secret lives in this file. Default umask leaves it world-readable.
+chmod 600 .env
+
+mkdir -p backups                      # §8's cron redirect opens this BEFORE
+                                      # the script runs — without it the job
+                                      # never executes and leaves no log
+
 npm ci
 npm run build
+```
+
+**Leave `ADMIN_PASSWORD` commented out.** The admin account is seeded on the
+first start and env changes do nothing afterwards, so this is one-shot and
+permanent. With the line unset, a random password is generated and printed once
+to the log; with it set to the placeholder that used to ship in
+`.env.example`, the admin account is seeded — in a public repo — with a
+password published in that same repo.
+
+After the first start (§6), read it out of the log and store it:
+
+```sh
+journalctl -u ensemble | grep 'Admin seeded with'
+```
+
+Then rotate it deliberately:
+
+```sh
+cd /srv/ensemble && read -rs NEWPW && printf '%s' "$NEWPW" | node scripts/set-admin-password.mjs
 ```
 
 ## 6. Services
@@ -75,8 +115,30 @@ systemctl reload caddy
 
 ```sh
 curl -I https://ensemble.it.com                              # 200, valid cert
+curl -s https://ensemble.it.com/api/health                   # {"status":"ok"}
 curl -s http://localhost:3000/api/domains/check?domain=x.com # 404 (unknown domain)
+curl -sI https://ensemble.it.com/api/domains/check           # 403 (blocked at the edge)
 ```
+
+### Monitoring
+
+Point an uptime check (UptimeRobot, Better Stack, whatever wakes a phone) at
+`https://ensemble.it.com/api/health` on a 1–5 minute interval. It touches the
+database, so it distinguishes "up" from "up and returning 500 to everyone" —
+which nothing outside the box could previously tell.
+
+`ensemble.service` now sets `StartLimitIntervalSec`/`StartLimitBurst`, so a
+crash loop stops after five failures in five minutes instead of restarting
+silently forever. That only helps if something is watching:
+
+```sh
+systemctl status ensemble       # "failed" rather than endlessly "activating"
+journalctl -u ensemble -n 50
+tail -f /var/log/caddy/access.log
+```
+
+Caddy access logs are on (`deploy/Caddyfile`), rotating at 50 MiB and kept for
+30 days. Create the directory once: `mkdir -p /var/log/caddy && chown caddy:caddy /var/log/caddy`.
 
 Then in the dashboard: Settings → connect a custom domain you control, add
 its A record → the first HTTPS visit mints its certificate automatically.
@@ -87,9 +149,16 @@ Everything mutable lives in `/srv/ensemble/data/` (SQLite DB + uploads).
 
 ```sh
 chmod +x /srv/ensemble/scripts/backup.sh
+mkdir -p /srv/ensemble/backups   # MUST exist first — see below
 crontab -e   # as the ensemble user
 0 4 * * * /srv/ensemble/scripts/backup.sh >> /srv/ensemble/backups/backup.log 2>&1
 ```
+
+The `mkdir` is load-bearing and has to happen before the crontab line. The
+redirect is opened by cron's shell **before** the script runs, so on a fresh
+droplet — where `backups/` is created by the script itself — opening the log
+failed, the script never executed, and because the failure was in the redirect
+there was no log to notice it in.
 
 `scripts/backup.sh` writes to `/srv/ensemble/backups/` — deliberately outside
 `data/`. It snapshots the database with `sqlite3 .backup`, tars the uploads,
@@ -109,12 +178,35 @@ S3-compatible) and the script pushes each night's files there too:
 
 ```sh
 apt install -y rclone
-rclone config                      # add a remote, e.g. "spaces"
+
+# As the SERVICE user, not root. The cron job runs as `ensemble`, and rclone
+# reads its config from the running user's home — a remote configured as root
+# is invisible to the job that needs it.
+sudo -iu ensemble rclone config    # add a remote, e.g. "spaces"
+
 echo 'BACKUP_REMOTE=spaces:ensemble-backups' >> /srv/ensemble/.env
 ```
 
+`BACKUP_REMOTE` goes in `.env` and the script now sources that file itself.
+That matters: **cron does not source `.env`**, so a variable documented as
+"add it to .env" was simply absent from the job's environment, and off-droplet
+copies were never made despite the setting being exactly where this page said
+to put it.
+
+These archives carry plaintext OAuth tokens, creators' own Stripe and email
+API keys, and their stream keys. Point `BACKUP_REMOTE` at an rclone `crypt`
+remote so they are encrypted at rest, or accept that the bucket is as sensitive
+as the droplet.
+
 Without `BACKUP_REMOTE` the script still runs and says the copies are local
 only. DigitalOcean droplet snapshots (weekly) cover the rest of the disk.
+
+Verify it actually ran, the morning after:
+
+```sh
+tail -20 /srv/ensemble/backups/backup.log
+ls -la /srv/ensemble/backups/
+```
 
 ### Restoring
 
@@ -122,20 +214,31 @@ only. DigitalOcean droplet snapshots (weekly) cover the rest of the disk.
 systemctl stop ensemble
 
 cd /srv/ensemble/data
-mv app.db app.db.broken                    # keep it: it may still have the WAL
-rm -f app.db-wal app.db-shm                # stale WAL against a new DB corrupts it
+# Move the broken database aside WITH its WAL — the recent writes are in there,
+# and they are exactly what you would want if the backup turns out to be older
+# than you hoped. (The previous version of this page said to keep app.db
+# "because it may still have the WAL" and then deleted the WAL on the next
+# line, which threw away the thing it was keeping it for.)
+mkdir -p ../broken-$(date +%F)
+mv app.db app.db-wal app.db-shm ../broken-$(date +%F)/ 2>/dev/null
+
 cp /srv/ensemble/backups/app-3.db app.db   # pick the day you want
 tar xzf /srv/ensemble/backups/uploads-3.tar.gz -C /srv/ensemble/data
 
 chown -R ensemble:ensemble /srv/ensemble/data
 sqlite3 app.db "PRAGMA integrity_check;"   # expect: ok
 systemctl start ensemble
+curl -fsS https://ensemble.it.com/api/health   # expect: {"status":"ok"}
 ```
 
-Deleting the old `-wal` and `-shm` matters: SQLite will try to replay a
-leftover WAL against the restored file, which is not the database it belongs
-to. Restore is worth rehearsing once on a throwaway droplet — an untested
-backup is a guess.
+There must be no `-wal`/`-shm` sitting beside the restored file: SQLite would
+replay a leftover WAL against a database it does not belong to. Moving all
+three aside together gets that right and keeps the originals.
+
+**Rehearse this before launch, and once a quarter after.** Restore onto a
+throwaway droplet, start the app, sign in. An untested backup is a belief, not
+a backup — and this is the one procedure nobody wants to be reading for the
+first time at 3am.
 
 ## 9. Updating the app
 
@@ -144,7 +247,30 @@ backup is a guess.
 # leaves root-owned .next/ and node_modules/ the service cannot write to.
 sudo -iu ensemble bash -lc 'cd /srv/ensemble && git pull && npm ci && npm run build'
 systemctl restart ensemble
+curl -fsS https://ensemble.it.com/api/health   # expect: {"status":"ok"}
 ```
+
+**This has no rollback, and that is a real risk on a small droplet.** `npm ci`
+deletes `node_modules/` before it starts and `next build` overwrites `.next/`,
+on a box §4 says may need swap to build at all — so a build that OOMs halfway
+leaves no working previous version to fall back to.
+
+Take a snapshot first, always:
+
+```sh
+sudo -iu ensemble bash -lc 'cd /srv/ensemble && cp -a .next ../next-prev && git rev-parse HEAD > ../deployed-sha'
+```
+
+and if the new build fails or misbehaves:
+
+```sh
+sudo -iu ensemble bash -lc 'cd /srv/ensemble && git checkout $(cat ../deployed-sha) && rm -rf .next && cp -a ../next-prev .next'
+systemctl restart ensemble
+```
+
+The durable fix is to build into a timestamped directory behind a `current`
+symlink, so a restart is atomic and a rollback is a symlink swap. Worth doing
+before the customer count makes a failed deploy expensive.
 
 ## 10. Live relay (optional — switches on simulcasting)
 
@@ -160,15 +286,39 @@ curl -fL "https://github.com/bluenviron/mediamtx/releases/download/${MTX_V}/medi
   | tar xz -C /usr/local/bin mediamtx
 chmod +x /srv/ensemble/deploy/live-push.sh
 
-# RTMP in from creators' OBS
-ufw allow 1935/tcp
+# RTMPS in from creators' OBS. 1935 (plain RTMP) stays closed to the world:
+# the ingest key travels in the URL path in cleartext, and creators stream
+# from venue and hotel wifi. Only the local ffmpeg forwarders use 1935, over
+# loopback, which the firewall does not touch.
+ufw allow 1936/tcp
+ufw deny 1935/tcp
 ```
 
 Add to `/srv/ensemble/.env` (then `systemctl restart ensemble`):
 
 ```sh
-LIVE_INGEST_URL=rtmp://ensemble.it.com/live
+LIVE_INGEST_URL=rtmps://ensemble.it.com/live
 LIVE_HOOK_SECRET=$(openssl rand -hex 32)   # paste the value, not the command
+```
+
+The relay needs `LIVE_HOOK_SECRET` too, in **its own file** — not the app's
+`.env`. `EnvironmentFile` loads a whole file, not one line of it, so pointing
+the relay at `/srv/ensemble/.env` put every platform secret (Stripe, Resend,
+the admin password) into its environment and into every `ffmpeg`, `curl` and
+`jq` child it spawns:
+
+```sh
+# as root — paste the same value you put in .env
+printf 'LIVE_HOOK_SECRET=%s\n' 'the-value-you-generated' > /etc/ensemble-relay.env
+chown root:ensemble /etc/ensemble-relay.env
+chmod 640 /etc/ensemble-relay.env
+```
+
+MediaMTX reads the TLS certificate Caddy already manages, so it needs to be
+able to read that directory:
+
+```sh
+usermod -aG caddy ensemble   # or copy the cert/key somewhere ensemble owns
 ```
 
 Then the unit:

@@ -33,13 +33,21 @@ export function cleanDay(value: string): string {
   return Number.isNaN(d.getTime()) || isoDay(d) !== value ? "" : value;
 }
 
-/** The last `n` days ending today, oldest first. */
+/**
+ * The last `n` days ending today, oldest first.
+ *
+ * UTC arithmetic throughout. setDate/getDate step in LOCAL time while
+ * toISOString cuts in UTC, so on a machine that crosses a DST boundary inside
+ * the window the two disagree: the list came back with one day duplicated and
+ * another missing. Harmless on a UTC droplet, wrong on a developer's laptop —
+ * the kind of bug that only appears twice a year. A UTC day is always exactly
+ * 86,400,000 ms, so stepping by that is exact.
+ */
 export function lastDays(n: number, end = new Date()): string[] {
   const out: string[] = [];
+  const base = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(end);
-    d.setDate(d.getDate() - i);
-    out.push(isoDay(d));
+    out.push(new Date(base - i * 86_400_000).toISOString().slice(0, 10));
   }
   return out;
 }
@@ -55,6 +63,11 @@ export function buildSeries(snapshots: FollowerSnapshot[], days: string[]): Foll
   const current: Record<string, number> = {};
   let i = 0;
 
+  // A platform contributes NOTHING to a day before its first reading — it is
+  // simply absent from byPlatform rather than present as 0. Carrying a 0
+  // forward made "we had no reading yet" render identically to "they had no
+  // followers", which is the one thing a growth chart must not do, and it
+  // contradicted this function's own docblock.
   return days.map((day) => {
     while (i < sorted.length && sorted[i].day <= day) {
       current[sorted[i].platform] = sorted[i].count;

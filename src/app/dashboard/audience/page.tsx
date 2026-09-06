@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getActiveLeads, getLeads, getNewsletterPosts, getSiteByUser } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
+import { planFor } from "@/lib/billing";
 import { mailEnabled } from "@/lib/mailer";
 import { deleteLeadAction } from "@/lib/actions";
 import { NewsletterComposer } from "@/components/NewsletterComposer";
@@ -12,7 +12,7 @@ export default async function AudiencePage() {
   const user = await requireUser();
   const site = getSiteByUser(user.id);
   if (!site) redirect("/dashboard");
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
 
   if (!plan.newsletter) {
     return (

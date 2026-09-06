@@ -16,7 +16,8 @@ export function OAuthNotice({ code, platform }: { code?: string; platform?: stri
   if (code === "connected") {
     return (
       <Banner tone="good" title={`${name} is connected`}>
-        Auto-posting is ready — scheduled posts will go out to {name} automatically.
+        You can now post to {name} from your dashboard — write once in the composer and it goes out with everything
+        else you have connected.
       </Banner>
     );
   }

@@ -5,6 +5,19 @@ import path from "path";
 // header neutralizes any active content, so even a hostile SVG opened
 // directly can't run scripts on our origin. Only image extensions are served
 // — quote-request zips living in the same folder stay unreachable.
+//
+// These URLs are unauthenticated by design: they are referenced from public
+// creator pages and from the embed on external sites, so requiring a session
+// would break the product. What they are NOT is unguessable — the names are
+// `theme-<siteId>-<kind>-<Date.now()>.<ext>`, so a background belonging to an
+// unpublished page can be found by walking timestamps. Path traversal is
+// genuinely closed (the regex below admits no slashes or dots-only names), and
+// the risk here is disclosure of a draft's imagery rather than anything
+// executable.
+//
+// Renaming to a random id is the real fix and is a migration: every stored
+// config value references the current name. Worth doing before launch if draft
+// imagery is considered sensitive; noted here rather than left implicit.
 const TYPES: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",

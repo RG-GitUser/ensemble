@@ -15,15 +15,66 @@
 # through a site block — blocking it at the edge costs nothing and stops
 # anyone enumerating which hostnames are customers (it answers 200 vs 404).
 # Imported into EVERY site block; a block missing it re-exposes the endpoint.
-(block-ask-endpoint) {
+#
+# /api/live/* goes with it. The live auth hook answers 200 vs 401 for any
+# candidate ingest key with no rate limit — not brute-forceable at 192 bits,
+# but it confirms a leaked one, and MediaMTX reaches it over loopback so the
+# edge has no reason to serve it at all.
+(block-internal-endpoints) {
 	handle /api/domains/check* {
 		respond 403
+	}
+	handle /api/live/* {
+		respond 403
+	}
+}
+
+# Sent on every HTML response from both site blocks.
+#
+# Nothing set HSTS, X-Content-Type-Options, frame-ancestors or Referrer-Policy,
+# and poweredByHeader was left on. The dashboard was framable, and its publish,
+# plan and domain controls are all single-button server-action forms behind a
+# SameSite=Lax cookie.
+#
+# The CSP is deliberately frame-ancestors only: creator pages carry inline
+# styles and embed YouTube/Vimeo/Calendly, so a full policy needs writing
+# against those and is a bigger change than this file should make.
+(sec-headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "frame-ancestors 'self'"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}
+
+# x-ensemble-domain decides whether a request is treated as arriving on a
+# creator's custom domain. src/proxy.ts stamps it on rewrites and now strips
+# any inbound copy, but stripping it here too means a client can never put it
+# on the wire in the first place.
+(strip-forged-headers) {
+	request_header -x-ensemble-domain
+}
+
+# Access logs. There was no forensic record of an abuse incident at all.
+(access-log) {
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
 	}
 }
 
 # The platform itself — normal managed certificates.
 ensemble.it.com, www.ensemble.it.com, sites.ensemble.it.com {
-	import block-ask-endpoint
+	import block-internal-endpoints
+	import strip-forged-headers
+	import sec-headers
+	import access-log
 	handle {
 		reverse_proxy localhost:3000
 	}
@@ -36,8 +87,22 @@ https:// {
 	tls {
 		on_demand
 	}
-	import block-ask-endpoint
+	import block-internal-endpoints
+	import strip-forged-headers
+	import sec-headers
+	import access-log
 	handle {
 		reverse_proxy localhost:3000
 	}
+}
+
+# Plain http on a custom domain.
+#
+# The catch-all above is declared `https://` with no hostname, so Caddy had
+# nothing to synthesise an HTTP redirect from and there was no http:// block at
+# all. A visitor typing the bare domain — exactly what the setup instructions
+# tell them to do — got a blank 404, touchDomain never fired, and the creator
+# concluded their DNS was broken.
+http:// {
+	redir https://{host}{uri} permanent
 }

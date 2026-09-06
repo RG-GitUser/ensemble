@@ -1,8 +1,7 @@
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
-import { billingOk } from "@/lib/billing";
+import { billingOk, planFor } from "@/lib/billing";
 import { getChatMessages, getSections, getSocialAccounts, getUserById, recordPageView } from "@/lib/db";
-import { getPlan } from "@/lib/plans";
 import { calendarEmbedUrl, embedUrl, parseLines } from "@/lib/sections";
 import { DEFAULT_LIGHT_TEXT_COLOR, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_SIZE, getFont, getTextSize } from "@/lib/fonts";
 import { borderVars, buttonVars, clampMinHeight, DEFAULT_FRAME, DEFAULT_GLOW, DEFAULT_GLOW_SIZE, DEFAULT_LIGHT_BG, DEFAULT_LIGHT_CARD, DEFAULT_SIZE, edgeForLight, FULL_WIDTH_TYPES, DEFAULT_BULLET_SHAPE, DEFAULT_MARKER, getBulletShape, getColorMode, getCorner, getFrame, buttonHoverClass, containerHoverClass, getGlow, getGlowSize, getLayout, getMarkerMode, getSpacing, getTextAlign, markerFor, resolveMarkerPosition } from "@/lib/theme";
@@ -498,7 +497,7 @@ export async function PublicSite({ site, preview = false }: { site: Site; previe
     );
   }
 
-  const plan = getPlan(site.plan);
+  const plan = planFor(site);
   // Sections beyond the plan's limit stay in the builder but come off the
   // live page ("sections above a lower plan's limit just unpublish").
   const sections = getSections(site.id).slice(0, plan.maxSections);

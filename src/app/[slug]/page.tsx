@@ -6,6 +6,20 @@ import { creatorMetadata } from "@/lib/publicsite";
 import { PublicSite } from "@/components/PublicSite";
 
 /**
+ * Rendering this page WRITES: recordPageView counts the visit, and on a custom
+ * domain touchDomain stamps that DNS reached us. Both are side effects of a
+ * render, which is why this route must never be cached — a cached render
+ * serves the page and silently stops counting, and the creator's analytics
+ * quietly flatline with nothing to show why.
+ *
+ * It is dynamic today because every read here is uncached; this makes that a
+ * stated requirement rather than an accident that a later change could undo.
+ * The honest fix is to move the write out of render into a beacon, which is a
+ * bigger change than this note.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Creator pages at the root of the platform: ensemble.it.com/nova-rae.
  *
  * Static routes win over this segment, so /login and /dashboard are never in

@@ -41,8 +41,8 @@ export interface OAuthProvider {
   tokenAuth: TokenAuth;
   /**
    * Meta platforms return a ~1 hour token that must be swapped for a ~60 day
-   * one. Skipping this step is silent: connecting looks fine and every
-   * scheduled post more than an hour out fails.
+   * one. Skipping this step is silent: connecting looks fine, and then posting
+   * fails for everyone who comes back more than an hour later.
    */
   longLived?: { url: string; grantType: string; tokenParam: string; sendClientId?: boolean };
   /** Shown before the connect button, so nobody discovers a blocker mid-flow. */
@@ -75,7 +75,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         steps: ["Open the Threads app and make sure you can post normally", "That's it — nothing to switch on"],
       },
     ],
-    can: ["Publish text posts on a schedule", "Publish posts with one image"],
+    can: ["Publish text posts from your dashboard", "Publish posts with one image"],
     cannot: ["Reply to comments", "Post to someone else's Threads account"],
     consoleUrl: "https://developers.facebook.com/apps",
   },
@@ -96,7 +96,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
     prereqs: [
       {
         // The single biggest source of "it connected but doesn't work".
-        need: "A Business or Creator account — Instagram blocks scheduled posting on personal accounts",
+        need: "A Business or Creator account — Instagram blocks API posting from personal accounts",
         steps: [
           "Open Instagram → your profile",
           "Tap the menu button (three lines, top right) → Settings and privacy",
@@ -105,7 +105,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         ],
       },
     ],
-    can: ["Publish photos, videos and Reels on a schedule", "Publish carousels"],
+    can: ["Publish photos, videos and Reels from your dashboard", "Publish carousels"],
     cannot: [
       "Post to a personal account",
       "Post Stories",
@@ -138,7 +138,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         ],
       },
     ],
-    can: ["Publish text, link and photo posts to your Page on a schedule"],
+    can: ["Publish text, link and photo posts to your Page from your dashboard"],
     cannot: ["Post to your personal profile", "Post to Groups"],
     consoleUrl: "https://developers.facebook.com/apps",
   },
@@ -161,7 +161,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         ],
       },
     ],
-    can: ["Publish pins with an image to a board you pick", "Schedule pins ahead"],
+    can: ["Publish pins with an image to a board you pick"],
     cannot: ["Pin without an image", "Post to secret boards"],
     consoleUrl: "https://developers.pinterest.com/apps",
   },
@@ -174,7 +174,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
     tokenUrl: "https://www.reddit.com/api/v1/access_token",
     scopes: ["identity", "submit"],
     // Without this Reddit issues a 1-hour token and no refresh token, which
-    // would break every scheduled post more than an hour out.
+    // would break any post made more than an hour after connecting.
     extraAuthParams: { duration: "permanent" },
     tokenAuth: "basic",
     prereqs: [
@@ -186,7 +186,7 @@ export const OAUTH_PROVIDERS: OAuthProvider[] = [
         ],
       },
     ],
-    can: ["Submit text posts to your Reddit profile on a schedule"],
+    can: ["Submit text posts to your Reddit profile from your dashboard"],
     cannot: ["Post into a subreddit (coming when there's somewhere to choose one)", "Bypass a subreddit's karma or age rules"],
     consoleUrl: "https://www.reddit.com/prefs/apps",
   },
@@ -243,6 +243,7 @@ export type ConnectErrorCode =
   | "token-failed"
   | "identity-failed"
   | "not-postable"
+  | "session-lost"
   | "network";
 
 /**
@@ -275,6 +276,10 @@ export const CONNECT_ERRORS: Record<ConnectErrorCode, { reason: string; fix: str
     reason: "Your account is connected, but this platform won't let us post for you yet.",
     fix: "Check the requirements above — an account-type switch is usually all that's missing.",
   },
+  "session-lost": {
+    reason: "You were signed out while the platform's permission screen was open.",
+    fix: "Nothing was connected. Sign in and start the connection again — it usually takes a few seconds.",
+  },
   network: {
     reason: "We couldn't reach the platform.",
     fix: "This is almost always temporary. Try again in a minute.",
@@ -291,8 +296,13 @@ export type HealthState = "ready" | "expiring" | "expired" | "unknown";
 
 /**
  * Turns a stored expiry into something worth showing. Warning at 7 days is the
- * point: a creator with posts scheduled a fortnight out needs to reconnect
- * before the token dies, not after their posts have already failed.
+ * point: a creator should reconnect before the token dies, not discover it at
+ * the moment they press Post.
+ *
+ * NOTE: there is no scheduler. This copy used to talk about "posts scheduled a
+ * fortnight out", which described a feature that does not exist — social_posts
+ * has no scheduled_at column, there is no queue and no cron. Everything here
+ * publishes at the moment the creator presses the button.
  */
 export function parseExpiry(expiresAt: string): number {
   // SQLite hands back "2026-01-02 03:04:05"; treat a bare timestamp as UTC.
@@ -304,7 +314,7 @@ export function connectionHealth(expiresAt: string | null): { state: HealthState
   const ms = parseExpiry(expiresAt);
   if (Number.isNaN(ms)) return { state: "unknown", daysLeft: null, message: "Connected" };
   const daysLeft = Math.floor((ms - Date.now()) / 86_400_000);
-  if (daysLeft < 0) return { state: "expired", daysLeft, message: "Reconnect needed — scheduled posts won't send" };
+  if (daysLeft < 0) return { state: "expired", daysLeft, message: "Reconnect needed — posting will fail" };
   if (daysLeft <= 7)
     return {
       state: "expiring",

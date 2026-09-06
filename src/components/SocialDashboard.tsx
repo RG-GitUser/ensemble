@@ -17,6 +17,27 @@ import { CopyButton } from "@/components/CopyButton";
 import { getPlatform, iconFill, PLATFORMS, type PlatformDef } from "@/lib/social";
 import type { SocialAccount, SocialPost } from "@/lib/types";
 
+/**
+ * Retry, with the outcome shown next to it.
+ *
+ * retrySocialPost used to report nothing at all, so pressing this and having
+ * every target fail again looked identical to it working.
+ */
+function RetryPostButton({ postId }: { postId: number }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(retrySocialPost, {});
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="postId" value={postId} />
+      <button className="text-[11px] font-semibold text-brand hover:underline" disabled={pending}>
+        {pending ? "Retrying…" : "Retry"}
+      </button>
+      {(state.error || state.message) && (
+        <span className={`text-[11px] ${state.error ? "text-brand2" : "text-good"}`}>{state.error ?? state.message}</span>
+      )}
+    </form>
+  );
+}
+
 function PlatformIcon({ platform, size = 18 }: { platform: PlatformDef; size?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
@@ -269,7 +290,14 @@ function LiveStreamsForm({
   /** "" while the relay isn't deployed — hides the ingest panel. */
   ingestUrl: string;
   ingestKey: string;
-  streamKeys: { twitch: string; youtube: string; facebook: string };
+  /**
+   * Which keys are SET — never the keys themselves. These are password-grade
+   * credentials (this component's own copy says so), and a client component
+   * serialises whatever it is handed into the RSC payload and into the HTML,
+   * where it lands in browser cache, view-source and any screenshot.
+   * type="password" hides a value on screen; it does not stop it shipping.
+   */
+  streamKeys: { twitch: boolean; youtube: boolean; facebook: boolean };
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveLiveStreams, {});
   const rows: Array<{ platform: PlatformDef; name: string; value: string; placeholder: string }> = [
@@ -277,10 +305,10 @@ function LiveStreamsForm({
     { platform: getPlatform("facebook")!, name: "facebookLiveUrl", value: facebookLiveUrl, placeholder: "https://www.facebook.com/you/videos/..." },
     { platform: getPlatform("instagram")!, name: "instagramLiveUser", value: instagramLiveUser, placeholder: "yourhandle (for Instagram Live)" },
   ];
-  const keyRows: Array<{ platform: PlatformDef; name: string; value: string; hint: string }> = [
-    { platform: getPlatform("twitch")!, name: "twitchStreamKey", value: streamKeys.twitch, hint: "Twitch → Creator Dashboard → Settings → Stream" },
-    { platform: getPlatform("youtube")!, name: "youtubeStreamKey", value: streamKeys.youtube, hint: "YouTube Studio → Go live → Stream settings" },
-    { platform: getPlatform("facebook")!, name: "facebookStreamKey", value: streamKeys.facebook, hint: "Facebook Live Producer → Streaming software" },
+  const keyRows: Array<{ platform: PlatformDef; name: string; saved: boolean; hint: string }> = [
+    { platform: getPlatform("twitch")!, name: "twitchStreamKey", saved: streamKeys.twitch, hint: "Twitch → Creator Dashboard → Settings → Stream" },
+    { platform: getPlatform("youtube")!, name: "youtubeStreamKey", saved: streamKeys.youtube, hint: "YouTube Studio → Go live → Stream settings" },
+    { platform: getPlatform("facebook")!, name: "facebookStreamKey", saved: streamKeys.facebook, hint: "Facebook Live Producer → Streaming software" },
   ];
   return (
     <div className="mt-5 border-t border-edge pt-5">
@@ -324,10 +352,15 @@ function LiveStreamsForm({
                 name={r.name}
                 type="password"
                 autoComplete="off"
-                defaultValue={r.value}
                 className="field flex-1 !py-2 font-mono text-xs"
-                placeholder={r.hint}
+                placeholder={r.saved ? "•••••••••••• saved — leave blank to keep" : r.hint}
+                aria-label={`${r.platform.name} stream key`}
               />
+              {r.saved && (
+                <label className="flex shrink-0 items-center gap-1 text-[11px] text-mist">
+                  <input type="checkbox" name={`${r.name}Clear`} value="1" /> Clear
+                </label>
+              )}
             </div>
           ))}
         </div>
@@ -385,7 +418,8 @@ export function SocialIntegrations({
   showLive: boolean;
   ingestUrl: string;
   ingestKey: string;
-  streamKeys: { twitch: string; youtube: string; facebook: string };
+  /** Which stream keys are set — never the keys. See LiveStreamsForm. */
+  streamKeys: { twitch: boolean; youtube: boolean; facebook: boolean };
 }) {
   return (
     <div className="card">
@@ -519,12 +553,7 @@ function ActivityFeed({ accounts, posts }: { accounts: SocialAccount[]; posts: S
                   );
                 })}
                 <span className="text-[11px] text-mist">{post.createdAt.slice(0, 16).replace("T", " ")}</span>
-                {post.targets.some((t) => t.status !== "posted") && (
-                  <form action={retrySocialPost}>
-                    <input type="hidden" name="postId" value={post.id} />
-                    <button className="text-[11px] font-semibold text-brand hover:underline">Retry</button>
-                  </form>
-                )}
+                {post.targets.some((t) => t.status !== "posted") && <RetryPostButton postId={post.id} />}
               </div>
             </li>
           ))}
