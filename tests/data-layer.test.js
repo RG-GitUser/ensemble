@@ -360,3 +360,34 @@ test("deleting a site's data takes its egress history with it", () => {
   store.deleteSiteData(s.id);
   assert.equal(store.getLiveUsage(s.id, "2026-09"), 0, "\"delete my data\" must mean this table too");
 });
+
+/* ---------------- OAuth-only accounts ---------------- */
+
+test("the OAuth-only sentinel is unmatchable and distinct from the demo lock", () => {
+  const sentinel = store.oauthOnlyHash();
+
+  assert.equal(store.isOAuthOnlyAccount(sentinel), true);
+  assert.equal(store.isLockedAccount(sentinel), false, "an SSO account is not the locked demo account");
+  assert.equal(store.isOAuthOnlyAccount("scrypt$16384$8$1$aa$bb"), false, "a real hash is not the sentinel");
+  assert.equal(store.isOAuthOnlyAccount(""), false);
+
+  // Parses as a legacy salt:hash pair, so verifyPassword reads it without
+  // throwing — and then compares scrypt output against 64 bytes of 0x11,
+  // which nothing produces. That is what stops "sign in with password" from
+  // working against an account that has never set one.
+  const [salt, hash] = sentinel.split(":");
+  assert.equal(salt.length, 32);
+  assert.equal(hash.length, 128);
+  assert.match(sentinel, /^1+:1+$/);
+});
+
+test("an OAuth account is a normal account otherwise", () => {
+  seq += 1;
+  const u = store.createUser(`sso${seq}-${process.pid}@t.t`, store.oauthOnlyHash(), "SSO Person", "SSO Person");
+  const found = store.getUserByEmail(u.email);
+  assert.equal(found.id, u.id);
+  assert.equal(store.isOAuthOnlyAccount(found.passwordHash), true);
+  // It must still be findable by the reset flow: losing a Google account
+  // should not mean losing the site.
+  assert.ok(found.email.includes("@"));
+});

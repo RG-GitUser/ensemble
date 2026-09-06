@@ -23,6 +23,15 @@ export const LIMITS = {
   /** Chat is conversational, so the cap sits well above a normal typing pace. */
   chat: { max: 10, windowMs: 60_000 },
   /**
+   * Sign-in callbacks from Google, Microsoft and Yahoo.
+   *
+   * The callback mints a session, so it is a credential endpoint and gets the
+   * same treatment as the rest of them. It also makes two outbound calls per
+   * hit (token exchange, then userinfo), which is worth capping on its own so
+   * a loop against this URL cannot be used to spend our provider quota.
+   */
+  sso: { max: 20, windowMs: 15 * 60_000 },
+  /**
    * Checking a social connection still works. Each check is an outbound call
    * to the platform on the creator's token, so an unbounded button is a way to
    * spend someone else's API quota and to get this droplet's address rate

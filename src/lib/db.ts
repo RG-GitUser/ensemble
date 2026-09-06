@@ -1333,6 +1333,34 @@ export function isLockedAccount(passwordHash: string): boolean {
 }
 
 /**
+ * The stored hash for an account that has only ever signed in with Google,
+ * Microsoft or Yahoo.
+ *
+ * password_hash is NOT NULL and every login path reads it, so an OAuth-only
+ * account still needs a value there. Same trick as the demo lock, different
+ * constant so the two can never be mistaken for each other: it parses as a
+ * legacy `salt:hash` pair, and verifying any password against it would mean
+ * finding an input whose scrypt output is 64 bytes of 0x11. Nothing matches
+ * it, so "sign in with password" cannot be used against an account that has
+ * never set one.
+ *
+ * Password reset deliberately still works on these accounts. The provider has
+ * verified the address, so the mailbox is genuinely theirs, and someone who
+ * loses access to their Google account should not lose their site with it.
+ * Setting a password simply replaces this sentinel.
+ */
+const OAUTH_ONLY_HASH = "1".repeat(32) + ":" + "1".repeat(128);
+
+export function oauthOnlyHash(): string {
+  return OAUTH_ONLY_HASH;
+}
+
+/** True when this account has no password of its own — it signs in elsewhere. */
+export function isOAuthOnlyAccount(passwordHash: string): boolean {
+  return passwordHash === OAUTH_ONLY_HASH;
+}
+
+/**
  * The single account holding this address as a verified backup, if any.
  *
  * ORDER BY id so the answer is deterministic. Combined with the unique index

@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
+import { SsoButtons, SSO_ERRORS } from "@/components/SsoButtons";
 import { getCurrentUser } from "@/lib/auth";
+import { configuredLoginProviderIds } from "@/lib/login-providers";
 import { getPlatform } from "@/lib/social";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reset?: string; recovered?: string; oauth?: string; platform?: string }>;
+  searchParams: Promise<{ reset?: string; recovered?: string; oauth?: string; platform?: string; sso?: string }>;
 }) {
   if (await getCurrentUser()) redirect("/dashboard");
   // Set by the reset flow on its way here, so a new password lands on a page
   // that acknowledges it rather than a bare login form.
-  const { reset, recovered, oauth, platform } = await searchParams;
+  const { reset, recovered, oauth, platform, sso } = await searchParams;
+  // Only a known code is echoed — never the provider's own message, which is
+  // where an attacker-controlled string would otherwise land on our page.
+  const ssoError = sso ? SSO_ERRORS[sso] : "";
   // Only a known platform id is echoed back into the page.
   const lostPlatform = oauth === "session-lost" ? (getPlatform(platform ?? "")?.name ?? "that platform") : "";
   return (
@@ -24,6 +29,10 @@ export default async function LoginPage({
         <div className="card">
           <h1 className="text-2xl font-bold">Welcome back</h1>
           <p className="mt-1 mb-6 text-sm text-mist">Log in to manage your page.</p>
+          {ssoError && (
+            <p className="mb-4 rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm text-warn">{ssoError}</p>
+          )}
+          <SsoButtons ready={configuredLoginProviderIds()} verb="Continue" />
           {lostPlatform && (
             <p className="mb-4 rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm text-warn">
               You were signed out while {lostPlatform}&apos;s permission screen was open, so nothing was connected. Sign
