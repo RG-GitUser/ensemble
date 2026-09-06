@@ -72,7 +72,15 @@ while IFS= read -r -d '' url; do
   [ -z "$url" ] && continue
   count=$((count + 1))
   # -c copy: pure forwarding, no transcode — this is what keeps the relay
-  # cheap enough to live beside the app. Egress is logged per push below.
+  # cheap enough to live beside the app.
+  #
+  # Egress is NOT accounted per creator anywhere. scripts/check-egress.sh
+  # watches the whole droplet with vnstat and warns once the month is heading
+  # somewhere bad, which catches the bill but cannot attribute it, cannot stop
+  # it, and cannot tell one heavy streamer from ten light ones. At roughly
+  # 8 GB/hour to three destinations, one continuous streamer clears a 1 TB
+  # allowance in about five days. A per-site quota needs byte accounting that
+  # does not exist yet — see the launch notes before selling this at volume.
   #
   # -nostdin: without it every ffmpeg child shares this script's stdin and
   # they fight over it. It also removes the interactive overwrite prompt as

@@ -35,7 +35,7 @@ const compiled = run(
   "npx",
   [
     "tsc", "src/lib/billing.ts", "src/lib/db.ts", "src/lib/plans.ts", "src/lib/sections.ts",
-    "src/lib/followers.ts", "src/lib/ratelimit.ts", "src/lib/siteurl.ts",
+    "src/lib/followers.ts", "src/lib/ratelimit.ts", "src/lib/siteurl.ts", "src/lib/live.ts",
     "--outDir", build,
     "--module", "commonjs", "--target", "es2022",
     "--esModuleInterop", "--skipLibCheck", "--moduleResolution", "node",
