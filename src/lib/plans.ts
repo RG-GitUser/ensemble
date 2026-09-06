@@ -43,6 +43,22 @@ export interface PlanDef {
    * platform the creator saved a key for. See live.ts and deploy/mediamtx.yml.
    */
   live: boolean;
+  /**
+   * Monthly relay egress this plan includes, in bytes. 0 where `live` is off.
+   *
+   * The relay forwards one incoming stream to every saved destination, so a
+   * creator's egress is their stream bitrate multiplied by how many platforms
+   * they picked — roughly 8 GB/hour at three. The droplet's whole allowance is
+   * measured in terabytes, which means one creator streaming continuously can
+   * spend everyone's transfer in a few days and the first sign of it is an
+   * overage bill.
+   *
+   * Like maxSocialAccounts, this is a reach limit rather than a lockout: it is
+   * checked when a stream starts and never interrupts one already running.
+   * Being cut off mid-broadcast, in front of an audience, is a worse failure
+   * than going slightly over.
+   */
+  liveEgressBytes: number;
   /** Daily view charts in Analytics. */
   dailyAnalytics: boolean;
   /** Referrer breakdown in Analytics. */
@@ -72,6 +88,7 @@ export const PLANS: Record<Plan, PlanDef> = {
     social: true,
     maxSocialAccounts: 2,
     live: false,
+    liveEgressBytes: 0,
     dailyAnalytics: false,
     referrerAnalytics: false,
   },
@@ -91,6 +108,7 @@ export const PLANS: Record<Plan, PlanDef> = {
     social: true,
     maxSocialAccounts: Infinity,
     live: false,
+    liveEgressBytes: 0,
     dailyAnalytics: true,
     referrerAnalytics: false,
     highlight: true,
@@ -112,6 +130,7 @@ export const PLANS: Record<Plan, PlanDef> = {
     social: true,
     maxSocialAccounts: Infinity,
     live: true,
+    liveEgressBytes: 250 * 1024 ** 3,
     dailyAnalytics: true,
     referrerAnalytics: true,
   },

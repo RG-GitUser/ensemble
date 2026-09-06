@@ -17,20 +17,51 @@ SECRET="${LIVE_HOOK_SECRET:?LIVE_HOOK_SECRET missing — check mediamtx.service 
 
 log() { echo "[live-push ${KEY:0:6}…] $*"; }
 
+# Where each ffmpeg writes its -progress report, one file per destination.
+# Cleared on the way out; mktemp -d so two concurrent streams never collide.
+PROGRESS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/live-push.XXXXXX")
+
+# $1 = live (true/false), $2 = bytes (optional)
 notify() {
+  local payload="{\"key\":\"$KEY\",\"live\":$1}"
+  [ -n "${2:-}" ] && payload="{\"key\":\"$KEY\",\"live\":$1,\"bytes\":$2}"
   curl -fsS -m 10 -X POST "$APP/api/live/status" \
     -H "x-live-secret: $SECRET" -H "Content-Type: application/json" \
-    -d "{\"key\":\"$KEY\",\"live\":$1}" >/dev/null || log "status notify ($1) failed"
+    -d "$payload" >/dev/null || log "status notify ($1) failed"
+}
+
+# Total bytes this stream pushed, summed across destinations.
+#
+# ffmpeg rewrites total_size= on every progress tick, so the LAST one in each
+# file is that destination's final figure. Egress is the sum, not the input
+# size: forwarding to three platforms costs three times the bytes, which is
+# the entire reason this number is worth collecting.
+#
+# Prints 0 rather than nothing when there is no usable report — the caller
+# interpolates this straight into JSON, and an empty string there would make
+# the request malformed and lose the badge flip along with the accounting.
+pushed_bytes() {
+  local total=0 n
+  for f in "$PROGRESS_DIR"/*; do
+    [ -f "$f" ] || continue
+    n=$(awk -F= '/^total_size=/ { v = $2 } END { print (v ~ /^[0-9]+$/) ? v : 0 }' "$f" 2>/dev/null)
+    total=$((total + ${n:-0}))
+  done
+  echo "$total"
 }
 
 cleanup() {
   trap - TERM INT EXIT
-  notify false
-  # Take the ffmpeg children down with us; stray pushes would keep the
-  # platform "live" with a frozen frame after the creator stopped.
+  # Stop the pushes BEFORE reading their progress files, so each ffmpeg has
+  # flushed its final total_size. Stray pushes would also keep the platform
+  # "live" with a frozen frame after the creator stopped.
   pkill -P $$ 2>/dev/null
   wait 2>/dev/null
-  log "stream ended"
+  local bytes
+  bytes=$(pushed_bytes)
+  notify false "$bytes"
+  rm -rf "$PROGRESS_DIR"
+  log "stream ended — pushed ${bytes} bytes"
   exit 0
 }
 trap cleanup TERM INT EXIT
@@ -61,6 +92,17 @@ fi
 # every target away.
 TARGET_COUNT=$(printf '%s' "$RAW" | jq '.targets | length')
 
+# Over the monthly relay allowance. Reported as its own flag rather than as an
+# empty target list, so this reads distinctly in the log from "saved no keys"
+# and from "the app didn't answer" — three situations that look identical from
+# a bare count and need different things done about them.
+if [ "$(printf '%s' "$RAW" | jq -r '.overQuota // false')" = "true" ]; then
+  USED=$(printf '%s' "$RAW" | jq -r '.used // 0')
+  ALLOWED=$(printf '%s' "$RAW" | jq -r '.allowance // 0')
+  log "over the monthly relay allowance (${USED}/${ALLOWED} bytes) — ingesting but pushing nowhere"
+  while sleep 3600; do :; done
+fi
+
 if [ "${TARGET_COUNT:-0}" -eq 0 ]; then
   log "no stream keys saved — ingesting but pushing nowhere"
   # Stay alive so the on-air badge still works; cleanup runs on stream end.
@@ -85,7 +127,13 @@ while IFS= read -r -d '' url; do
   # -nostdin: without it every ffmpeg child shares this script's stdin and
   # they fight over it. It also removes the interactive overwrite prompt as
   # the only thing standing between a file: destination and a clobbered file.
+  #
+  # -progress writes total_size= to its own file per destination; cleanup sums
+  # the last figure from each to report the stream's egress. A file, not a
+  # pipe: the pipe would need a reader for the whole stream, and a reader that
+  # dies takes the push down with it.
   ffmpeg -nostdin -hide_banner -loglevel error \
+    -progress "$PROGRESS_DIR/$count" \
     -i "rtmp://127.0.0.1:1935/$MTX_PATH" \
     -c copy -f flv "$url" &
 done < <(printf '%s' "$RAW" | jq -j '.targets[] | .url, "\u0000"')

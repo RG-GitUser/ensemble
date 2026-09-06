@@ -312,3 +312,51 @@ test("the locked demo account is recognisable as unreachable", () => {
   if (!demo) return; // demo seeding is skipped in some environments
   assert.equal(store.isLockedAccount(demo.passwordHash), true);
 });
+
+/* ---------------- Relay egress accounting ---------------- */
+
+test("relay egress accumulates per site per month, and sites cannot see each other's", () => {
+  const a = freshSite("enterprise");
+  const b = freshSite("enterprise");
+
+  assert.equal(store.getLiveUsage(a.id, "2026-09"), 0, "a site with no streams has spent nothing");
+
+  // One month holds many streams, so each report adds rather than replaces.
+  store.addLiveUsage(a.id, "2026-09", 1000);
+  store.addLiveUsage(a.id, "2026-09", 2500);
+  assert.equal(store.getLiveUsage(a.id, "2026-09"), 3500);
+
+  // A new month starts from zero — that is the whole point of the window.
+  assert.equal(store.getLiveUsage(a.id, "2026-10"), 0);
+  store.addLiveUsage(a.id, "2026-10", 42);
+  assert.equal(store.getLiveUsage(a.id, "2026-10"), 42);
+  assert.equal(store.getLiveUsage(a.id, "2026-09"), 3500, "the old month is untouched");
+
+  // One creator's streaming must never count against another's allowance.
+  assert.equal(store.getLiveUsage(b.id, "2026-09"), 0);
+});
+
+test("a garbled byte report cannot lock a creator out or hand them free transfer", () => {
+  const s = freshSite("enterprise");
+  store.addLiveUsage(s.id, "2026-09", 500);
+
+  // This number decides whether someone may broadcast. A relay that reports
+  // nonsense must change nothing rather than bank it.
+  for (const bad of [0, -1, -99999, NaN, Infinity, -Infinity]) {
+    store.addLiveUsage(s.id, "2026-09", bad);
+  }
+  assert.equal(store.getLiveUsage(s.id, "2026-09"), 500, "nothing nonsensical was banked");
+
+  // Fractional bytes floor rather than throw or store a float.
+  store.addLiveUsage(s.id, "2026-09", 10.9);
+  assert.equal(store.getLiveUsage(s.id, "2026-09"), 510);
+});
+
+test("deleting a site's data takes its egress history with it", () => {
+  const s = freshSite("enterprise");
+  store.addLiveUsage(s.id, "2026-09", 1234);
+  assert.equal(store.getLiveUsage(s.id, "2026-09"), 1234);
+
+  store.deleteSiteData(s.id);
+  assert.equal(store.getLiveUsage(s.id, "2026-09"), 0, "\"delete my data\" must mean this table too");
+});

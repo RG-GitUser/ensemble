@@ -61,6 +61,48 @@ test("an ingest key is only read from this relay's own app path", () => {
   assert.equal(live.pathIngestKey("live"), "", "no key at all");
 });
 
+test("the egress month is UTC, so the quota window cannot be shifted", () => {
+  // Late on the 31st in UTC+13 is still January in UTC. Charging it to
+  // February would hand out a second allowance at every month boundary.
+  assert.equal(live.egressMonth(new Date("2026-01-31T23:59:59Z")), "2026-01");
+  assert.equal(live.egressMonth(new Date("2026-02-01T00:00:00Z")), "2026-02");
+  assert.equal(live.egressMonth(new Date("2026-09-06T12:00:00Z")), "2026-09");
+  // Zero-padded, so string comparison and grouping behave.
+  assert.equal(live.egressMonth(new Date("2026-03-05T00:00:00Z")), "2026-03");
+});
+
+test("the allowance override is ignored unless it is a sane positive number", () => {
+  const prev = process.env.LIVE_EGRESS_BYTES_PER_SITE;
+  const PLAN = 250 * 1024 ** 3;
+  try {
+    delete process.env.LIVE_EGRESS_BYTES_PER_SITE;
+    assert.equal(live.egressAllowance(PLAN), PLAN, "no override, plan wins");
+
+    process.env.LIVE_EGRESS_BYTES_PER_SITE = "1000";
+    assert.equal(live.egressAllowance(PLAN), 1000, "a real override is honoured");
+
+    // A typo must not silently switch the quota off, and must not lock every
+    // creator out either — both are worse than ignoring it.
+    for (const bad of ["", "lots", "0", "-5", "NaN"]) {
+      process.env.LIVE_EGRESS_BYTES_PER_SITE = bad;
+      assert.equal(live.egressAllowance(PLAN), PLAN, `override ${JSON.stringify(bad)} should be ignored`);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.LIVE_EGRESS_BYTES_PER_SITE;
+    else process.env.LIVE_EGRESS_BYTES_PER_SITE = prev;
+  }
+});
+
+test("the quota blocks at the allowance, and a plan without the relay has none", () => {
+  assert.equal(live.egressExceeded(0, 100), false);
+  assert.equal(live.egressExceeded(99, 100), false);
+  assert.equal(live.egressExceeded(100, 100), true, "at the line is over — the next stream starts, it does not stop");
+  assert.equal(live.egressExceeded(101, 100), true);
+  // A zero allowance is a plan without the relay. This must never be the
+  // thing that lets a stream through.
+  assert.equal(live.egressExceeded(0, 0), true);
+});
+
 test("the hook secret compare rejects near-misses and does not early-exit", () => {
   const prev = process.env.LIVE_HOOK_SECRET;
   process.env.LIVE_HOOK_SECRET = "correct-horse-battery";

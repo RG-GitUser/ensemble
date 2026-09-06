@@ -257,6 +257,22 @@ function createDb(): Database.Database {
       source TEXT NOT NULL DEFAULT 'manual',
       PRIMARY KEY (site_id, platform, day)
     );
+    -- Relay egress, per site per calendar month.
+    --
+    -- Forwarding one stream to three platforms is roughly 8 GB/hour, against a
+    -- droplet allowance measured in terabytes, so a single creator can spend
+    -- the whole month's transfer in a few days. Nothing counted it: the only
+    -- control was a box-level vnstat warning that fires after the overage is
+    -- already committed and cannot say who caused it.
+    --
+    -- Bytes are reported by the relay at the end of each stream. Month is
+    -- 'YYYY-MM' in UTC, so the window does not shift with the server's zone.
+    CREATE TABLE IF NOT EXISTS live_usage (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      month TEXT NOT NULL,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (site_id, month)
+    );
   `);
 
   // Publisher-pipeline columns arrived after the social tables shipped.
@@ -1034,6 +1050,7 @@ export function deleteSiteData(siteId: number): void {
     d.prepare("DELETE FROM follower_counts WHERE site_id = ?").run(siteId);
     d.prepare("DELETE FROM newsletter_posts WHERE site_id = ?").run(siteId);
     d.prepare("DELETE FROM site_content WHERE site_id = ?").run(siteId);
+    d.prepare("DELETE FROM live_usage WHERE site_id = ?").run(siteId);
   });
   tx();
 }
@@ -1457,6 +1474,34 @@ export function updateSite(id: number, fields: { slug?: string; plan?: string; p
  * never persists a default the creator did not pick. An explicit `undefined`
  * in the patch removes the key.
  */
+/**
+ * Add relay egress to a site's running total for a month.
+ *
+ * Accumulated rather than set, because one month holds many streams and the
+ * relay reports each one as it ends. Non-finite, negative and absurd values
+ * are dropped rather than stored: this number decides whether someone may
+ * broadcast, so a garbled report must not be able to lock a creator out (or,
+ * with a negative, hand them free transfer).
+ */
+export function addLiveUsage(siteId: number, month: string, bytes: number): void {
+  if (!Number.isFinite(bytes) || bytes <= 0) return;
+  const safe = Math.min(Math.floor(bytes), Number.MAX_SAFE_INTEGER);
+  db()
+    .prepare(
+      `INSERT INTO live_usage (site_id, month, bytes) VALUES (?, ?, ?)
+       ON CONFLICT(site_id, month) DO UPDATE SET bytes = bytes + excluded.bytes`
+    )
+    .run(siteId, month, safe);
+}
+
+/** Relay egress a site has already spent this month, in bytes. */
+export function getLiveUsage(siteId: number, month: string): number {
+  const row = db()
+    .prepare("SELECT bytes FROM live_usage WHERE site_id = ? AND month = ?")
+    .get(siteId, month) as { bytes: number } | undefined;
+  return row?.bytes ?? 0;
+}
+
 export function patchSiteConfig(id: number, patch: Record<string, unknown>): void {
   const d = db();
   d.transaction(() => {
