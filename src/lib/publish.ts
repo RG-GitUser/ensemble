@@ -7,7 +7,7 @@ import {
   upsertSocialAccount,
 } from "./db";
 import { getOAuthProvider, parseExpiry, providerCredentials } from "./oauth";
-import { refreshAccessToken } from "./oauth-connect";
+import { fetchIdentity, refreshAccessToken } from "./oauth-connect";
 import { getPlatform } from "./social";
 import type { SocialAccountAuth } from "./types";
 
@@ -150,6 +150,79 @@ async function freshToken(siteId: number, account: SocialAccountAuth): Promise<s
 
   refreshLocks.set(key, run);
   return run;
+}
+
+export interface AccountCheck {
+  platform: string;
+  ok: boolean;
+  /** What to tell the creator — a confirmation, or the thing to go fix. */
+  detail: string;
+}
+
+/**
+ * Can this account still publish, asked without publishing anything.
+ *
+ * Everything needed to answer this already ran once, at connect time:
+ * fetchIdentity settles both "who is this" and "can we post as them", and it
+ * knows the traps that authenticate happily and then refuse every publish — a
+ * personal Instagram account, a Facebook login with no Page it may post to, a
+ * Pinterest account with no board for a pin to land on.
+ *
+ * It just never ran again. Permissions get revoked, an account gets switched
+ * back to personal, the last board gets deleted, a refresh token quietly
+ * expires — and none of it surfaced until a real post failed in public, in
+ * front of the creator's audience. This is the same question, on demand,
+ * against a read-only endpoint, so the first post to a provider stops being
+ * the thing that discovers the problem.
+ *
+ * A refresh is attempted first, exactly as publishing would, so this exercises
+ * the same path a real post takes rather than a friendlier one.
+ */
+export async function checkAccount(siteId: number, platform: string): Promise<AccountCheck> {
+  const name = getPlatform(platform)?.name ?? platform;
+  const account = getSocialAccountAuth(siteId, platform);
+  if (!account) return { platform, ok: false, detail: `${name} is not connected.` };
+
+  // Handle-only and webhook connections have no token to check. Say what the
+  // account can actually do rather than implying a check happened.
+  if (account.authKind !== "oauth") {
+    switch (platform) {
+      case "bluesky":
+      case "discord":
+        return { platform, ok: true, detail: `${name} publishes directly — no token to expire.` };
+      default:
+        return {
+          platform,
+          ok: false,
+          detail: `${name} is connected by handle only, so nothing can be published to it yet.`,
+        };
+    }
+  }
+
+  const provider = getOAuthProvider(platform);
+  if (!provider) return { platform, ok: false, detail: `${name} publishing isn't available yet.` };
+
+  let token: string;
+  try {
+    token = await freshToken(siteId, account);
+  } catch {
+    return { platform, ok: false, detail: `Couldn't refresh the ${name} token — reconnect ${name}.` };
+  }
+
+  const found = await fetchIdentity(provider, token);
+  if (!found) {
+    return {
+      platform,
+      ok: false,
+      detail: `${name} rejected the saved token. Reconnect ${name} to publish again.`,
+    };
+  }
+  if (!found.probe.postable) {
+    return { platform, ok: false, detail: found.probe.reason ?? `${name} won't accept posts from this account.` };
+  }
+
+  const handle = found.identity.handle;
+  return { platform, ok: true, detail: handle ? `Ready to publish as ${handle}.` : `${name} is ready to publish.` };
 }
 
 /** Reddit and Pinterest need a title; the first non-empty line is it. */

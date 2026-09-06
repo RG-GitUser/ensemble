@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import {
+  checkSocialAccount,
   connectSocial,
   createSocialPostAction,
   disconnectSocial,
@@ -106,6 +107,35 @@ function ConnectForm({ platform, oauthReady }: { platform: PlatformDef; oauthRea
   );
 }
 
+/**
+ * Ask the platform whether this connection still publishes, without posting.
+ *
+ * Rendered with key={platform} by the caller so switching accounts clears the
+ * previous answer — a stale green "Ready to publish as @someone" sitting under
+ * a different account is worse than no answer at all.
+ */
+function CheckConnection({ platform }: { platform: string }) {
+  const [state, formAction, pending] = useActionState<FormState, FormData>(checkSocialAccount, {});
+  return (
+    <>
+      <form action={formAction}>
+        <input type="hidden" name="platform" value={platform} />
+        <button
+          className="text-xs font-semibold text-mist transition hover:text-brand disabled:opacity-50"
+          disabled={pending}
+        >
+          {pending ? "Checking…" : "Check connection"}
+        </button>
+      </form>
+      {(state.message || state.error) && (
+        <p className={`w-full text-xs ${state.error ? "text-brand2" : "text-good"}`}>
+          {state.error ?? state.message}
+        </p>
+      )}
+    </>
+  );
+}
+
 function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oauthReady: string[] }) {
   const [sel, setSel] = useState<string | null>(null);
   const byPlatform = new Map(accounts.map((a) => [a.platform, a]));
@@ -153,6 +183,7 @@ function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oaut
           <span className="rounded-full bg-panel2 px-2 py-0.5 text-[10px] font-bold uppercase text-mist">
             {selAccount.authKind === "handle" ? "handle only" : "publishes"}
           </span>
+          <CheckConnection key={selected.id} platform={selected.id} />
           <form action={disconnectSocial}>
             <input type="hidden" name="platform" value={selected.id} />
             <button className="text-xs font-semibold text-mist transition hover:text-brand2">Disconnect</button>

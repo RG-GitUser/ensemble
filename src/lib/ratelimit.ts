@@ -22,6 +22,14 @@ export interface Limit {
 export const LIMITS = {
   /** Chat is conversational, so the cap sits well above a normal typing pace. */
   chat: { max: 10, windowMs: 60_000 },
+  /**
+   * Checking a social connection still works. Each check is an outbound call
+   * to the platform on the creator's token, so an unbounded button is a way to
+   * spend someone else's API quota and to get this droplet's address rate
+   * limited by Meta for everyone. Generous enough to walk down a list of
+   * connected accounts fixing them one at a time.
+   */
+  socialCheck: { max: 12, windowMs: 5 * 60_000 },
   /** A real visitor subscribes once. Past a handful it is a script. */
   newsletter: { max: 5, windowMs: 10 * 60_000 },
   /**

@@ -27,7 +27,7 @@ import {
 } from "./sections";
 import { getThemeDef } from "./themes";
 import { cleanFacebookLiveUrl, cleanHandle, cleanInstagramUser, cleanTwitchChannel, DEFAULT_METRIC, getMetric, getPlatform, isDiscordWebhook, parseCount } from "./social";
-import { blueskySession, publishPost, summarisePublish } from "./publish";
+import { blueskySession, checkAccount, publishPost, summarisePublish } from "./publish";
 import {
   mailEnabled,
   maskEmail,
@@ -2003,6 +2003,35 @@ export async function retrySocialPost(_prev: FormState, fd: FormData): Promise<F
   const summary = summarisePublish(await publishPost(site.id, postId));
   revalidatePath("/dashboard/integrations");
   return summary.ok ? { ok: true, message: summary.message } : { error: summary.message };
+}
+
+/**
+ * "Does this connection still work?" — answered without posting anything.
+ *
+ * The publish path was correct by inspection long before anyone knew whether
+ * it worked against a live API, because the only way to find out was to post
+ * something public and watch. This makes the check cheap and private, so a
+ * broken connection is found by the creator on purpose rather than by their
+ * audience by accident.
+ *
+ * Rate limited because each call spends the creator's platform quota and, on
+ * Meta's side, is attributed to this droplet's address for every tenant.
+ */
+export async function checkSocialAccount(_prev: FormState, fd: FormData): Promise<FormState> {
+  const { site } = await requireSite();
+  if (!planFor(site).social) return { error: "Posting is a Pro feature — upgrade in Settings." };
+
+  const platform = str(fd, "platform");
+  if (!platform) return { error: "Nothing to check." };
+
+  const limit = rateLimit(`social-check:${site.id}`, LIMITS.socialCheck);
+  if (!limit.ok) {
+    return { error: `Too many checks at once — try again in ${Math.ceil(limit.retryAfter / 1000)}s.` };
+  }
+
+  const result = await checkAccount(site.id, platform);
+  revalidatePath("/dashboard/integrations");
+  return result.ok ? { ok: true, message: result.detail } : { error: result.detail };
 }
 
 export async function saveLiveStreams(_prev: FormState, fd: FormData): Promise<FormState> {
