@@ -1,0 +1,33 @@
+# Line endings and binary handling.
+#
+# core.autocrlf is true on at least one clone of this repo, and with no rules
+# here Git decides text-vs-binary by sniffing each file. It guessed wrong twice,
+# both in ways that only surface somewhere else:
+#
+#   docs/launch-checklist.pdf committed with "LF will be replaced by CRLF" -
+#   line-ending translation applied to a PDF. The blob went in intact, but a
+#   fresh clone would have had every 0x0A in it rewritten on checkout, and the
+#   file would no longer open.
+#
+#   scripts/backup.sh and deploy/live-push.sh are stored LF and correct, but
+#   checked out with CRLF on Windows. DEPLOY.md offers "rsync the project up"
+#   as an alternative to cloning on the droplet, and a shell script copied that
+#   way runs on Linux with a trailing \r on every line - the shebang fails with
+#   a bare "not found", and backup.sh dies on its first command under
+#   set -euo pipefail, nightly, in a cron job whose output nobody reads.
+#
+# Declaring them is the fix. The heuristic is not something to rely on for
+# files this repo commits deliberately and then ships to a server.
+
+*.sh    text eol=lf
+*.mjs   text eol=lf
+
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.db    binary
