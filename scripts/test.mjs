@@ -17,8 +17,20 @@ import { mkdtempSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// tsc is invoked as `node <path-to-tsc>` rather than `npx tsc`. On Windows npx
+// is npx.cmd, and spawnSync without shell:true does not resolve .cmd — Node 22
+// dropped that fallback deliberately (CVE-2024-27980), so the compile step
+// exited ENOENT before it ran and the suite reported "failed to compile" on a
+// tree that compiles fine. Turning on shell:true would fix the lookup and hand
+// the whole argv back to cmd.exe for re-parsing, which is the trade this repo
+// keeps refusing elsewhere. Resolving the module and running it under the same
+// interpreter needs no shell and behaves identically on every platform.
+const require = createRequire(import.meta.url);
+const tsc = require.resolve("typescript/bin/tsc");
 const build = path.join(root, ".test-build");
 const sandbox = mkdtempSync(path.join(tmpdir(), "ensemble-test-"));
 
@@ -32,9 +44,9 @@ rmSync(build, { recursive: true, force: true });
 // server-only is a build-time marker with no runtime behaviour; the stub in
 // tests/stubs lets the compiled modules load outside Next.
 const compiled = run(
-  "npx",
+  process.execPath,
   [
-    "tsc", "src/lib/billing.ts", "src/lib/db.ts", "src/lib/plans.ts", "src/lib/sections.ts",
+    tsc, "src/lib/billing.ts", "src/lib/db.ts", "src/lib/plans.ts", "src/lib/sections.ts",
     "src/lib/followers.ts", "src/lib/ratelimit.ts", "src/lib/siteurl.ts", "src/lib/live.ts", "src/lib/login-providers.ts",
     "--outDir", build,
     "--module", "commonjs", "--target", "es2022",
@@ -76,7 +88,7 @@ if (testFiles.length === 0) {
   process.exit(1);
 }
 
-const status = run("node", ["--test", "--test-concurrency=1", ...testFiles], {
+const status = run(process.execPath, ["--test", "--test-concurrency=1", ...testFiles], {
   cwd: sandbox,
   env: {
     ...process.env,
