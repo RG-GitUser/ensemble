@@ -66,7 +66,9 @@ sudo -iu ensemble
 git clone <your-repo> /srv/ensemble   # or rsync the project up
 cd /srv/ensemble
 cp .env.example .env                  # then EDIT IT:
-#  - DOMAIN_A_RECORD = the reserved IP
+#  - DOMAIN_A_RECORD = the reserved IP (UNCOMMENT it — it ships commented
+#                      out so a forgotten edit shows no DNS step rather than
+#                      a confident, wrong one)
 #  - APP_URL         = the public origin (Checkout returns here)
 #  - PLATFORM_HOSTS  = every hostname Caddy routes to the app
 
