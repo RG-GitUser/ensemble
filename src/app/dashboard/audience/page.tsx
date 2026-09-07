@@ -1,12 +1,22 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getActiveLeads, getLeads, getNewsletterPosts, getSiteByUser } from "@/lib/db";
+import {
+  getActiveLeads,
+  getLeads,
+  getNewsletterPosts,
+  getRecentNewsletterOutcomes,
+  getScheduledNewsletters,
+  getSiteByUser,
+  getUserPrefs,
+} from "@/lib/db";
 import { planFor } from "@/lib/billing";
 import { mailEnabled } from "@/lib/mailer";
-import { deleteLeadAction } from "@/lib/actions";
+import { cancelScheduledNewsletterAction, deleteLeadAction } from "@/lib/actions";
 import { NewsletterComposer } from "@/components/NewsletterComposer";
 import { UpgradeGate } from "@/components/UpgradeGate";
 import { CloseIcon } from "@/components/icons";
+import { ScheduledQueue, type QueueItem } from "@/components/ScheduledQueue";
+import { describeSchedule } from "@/lib/schedule";
 
 export default async function AudiencePage() {
   const user = await requireUser();
@@ -28,6 +38,14 @@ export default async function AudiencePage() {
   const active = getActiveLeads(site.id).length;
   const posts = getNewsletterPosts(site.id);
   const mailReady = mailEnabled();
+  const zone = getUserPrefs(user.id).timezone;
+  const queue: QueueItem[] = getScheduledNewsletters(site.id).map((n) => ({
+    id: n.id,
+    label: n.subject,
+    publishAt: n.publishAt,
+    status: n.status === "sending" ? "sending" : "scheduled",
+  }));
+  const outcomes = getRecentNewsletterOutcomes(site.id);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -56,7 +74,36 @@ export default async function AudiencePage() {
             .env.example). Your list keeps collecting in the meantime.
           </p>
         )}
-        <NewsletterComposer recipients={active} mailReady={mailReady} fromName={user.businessName} />
+        <NewsletterComposer recipients={active} mailReady={mailReady} fromName={user.businessName} zone={zone} />
+      </div>
+
+      <div className="card mt-6">
+        <h2 className="font-bold">Scheduled</h2>
+        <p className="mt-1 text-sm text-mist">
+          Waiting to go out. Cancel any of them until they start sending.
+        </p>
+        <ScheduledQueue
+          items={queue}
+          zone={zone}
+          cancelAction={cancelScheduledNewsletterAction}
+          emptyText="Nothing scheduled. Pick “Schedule” in the composer to queue a send."
+        />
+        {/* A send that failed leaves nothing in the Sent list, so without this
+            a scheduled newsletter could simply never arrive and never say so. */}
+        {outcomes.length > 0 && (
+          <ul className="mt-4 space-y-1.5 border-t border-edge pt-3 text-xs">
+            {outcomes.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="min-w-0 truncate text-mist">{o.subject}</span>
+                <span className={o.status === "failed" ? "text-brand2" : "text-mist/70"}>
+                  {o.status === "cancelled"
+                    ? "Cancelled"
+                    : `${describeSchedule(o.publishAt, zone)} — ${o.detail || o.status}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {posts.length > 0 && (

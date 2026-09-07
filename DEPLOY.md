@@ -340,6 +340,60 @@ egress. One regular streamer fits the droplet's included transfer; check
 `vnstat` monthly before inviting more, and move the relay to its own droplet
 when it outgrows this one.
 
+## 11. Scheduled posts and newsletters (optional)
+
+Creators can write a post or a newsletter now and have it go out later. The app
+is request-driven and has nothing that wakes itself up, so cron does it.
+
+```sh
+# A secret only cron knows. Unset, /api/cron/run-due answers 404 and
+# scheduling is simply off.
+openssl rand -hex 32
+```
+
+Put it in `/srv/ensemble/.env` as `CRON_SECRET=`, restart, then add the tick as
+the **service** user — the same user the backup job runs as:
+
+```sh
+crontab -e -u ensemble
+* * * * * curl -fsS -X POST -H "x-cron-secret: THE-SECRET" http://127.0.0.1:3000/api/cron/run-due >> /srv/ensemble/backups/cron.log 2>&1
+```
+
+Three things about that line are deliberate:
+
+**`127.0.0.1:3000`, not the public hostname.** The request never leaves the box,
+so it does not consume a Caddy connection, and the secret is not sent over the
+network at all.
+
+**`-X POST`.** The route refuses GET. Anything that follows links in a page —
+a scanner, a prefetch, a preview bot — must not be able to trigger a send by
+fetching a URL.
+
+**Redirecting into a directory that already exists.** `/srv/ensemble/backups` is
+created in §8. Cron's shell opens the redirect *before* the command runs, so
+pointing this at a directory that does not exist yet means the job never
+executes and leaves no log saying why — the same trap the backup line documents.
+
+Check it is running:
+
+```sh
+tail -f /srv/ensemble/backups/cron.log      # {"ok":true,"posts":0,...} once a minute
+journalctl -u ensemble | grep '\[cron\]'    # one line per item actually sent
+```
+
+Every minute is deliberate: a creator who schedules 09:00 means 09:00, and the
+work is one indexed query when there is nothing due.
+
+Overlapping runs are safe. Each due row is claimed with a single UPDATE before
+anything is sent, so a fan-out that outlasts the minute cannot be picked up
+twice — which for a newsletter would mean mailing a list twice, and that cannot
+be taken back. A run killed mid-send leaves rows claimed; they are swept back up
+15 minutes later rather than stalling forever.
+
+**Times are stored in UTC.** Creators pick a time in their own zone (Settings →
+Time zone) and it is converted on the way in, so the droplet's `TZ` does not
+matter and never needs setting.
+
 ## Notes
 
 - **PLATFORM_HOSTS matters**: any hostname *not* in that list is treated as a
