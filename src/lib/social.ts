@@ -38,9 +38,19 @@ export interface PlatformDef {
 /** Most popular platforms first — this order drives the connect grid. */
 export const PLATFORMS: PlatformDef[] = [
   { id: "instagram", name: "Instagram", iconPath: siInstagram.path, color: `#${siInstagram.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://instagram.com/${h}`, authType: "oauth" },
-  // TikTok has no OAUTH_PROVIDERS entry yet (its content API needs video
-  // uploads and an audited app), so it stays handle-only until one is added.
-  { id: "tiktok", name: "TikTok", iconPath: siTiktok.path, color: `#${siTiktok.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://tiktok.com/@${h}`, authType: "oauth" },
+  // TikTok is "handle", not "oauth", and the difference is a promise the UI
+  // makes. An unconfigured "oauth" platform tells the creator that one-click
+  // connect and real publishing "unlock when Ensemble's app credentials are
+  // added" — true for Instagram, Facebook, Threads, Pinterest and Reddit,
+  // which each have an OAUTH_PROVIDERS entry waiting on env values. TikTok has
+  // none, so no value anyone can put in the environment unlocks anything, and
+  // the platform we were selling one-click publishing for could never do it.
+  //
+  // Its content API needs video/photo uploads and an audited app, which is a
+  // provider to write rather than credentials to paste. Until that exists this
+  // reads like YouTube and X: connect the handle, no claim about publishing.
+  // Flip it back to "oauth" in the same commit that adds the provider.
+  { id: "tiktok", name: "TikTok", iconPath: siTiktok.path, color: `#${siTiktok.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://tiktok.com/@${h}`, authType: "handle" },
   { id: "youtube", name: "YouTube", iconPath: siYoutube.path, color: `#${siYoutube.hex}`, placeholder: "yourchannel", profileUrl: (h) => `https://youtube.com/@${h}`, authType: "handle" },
   { id: "x", name: "X", iconPath: siX.path, color: `#${siX.hex}`, placeholder: "yourhandle", profileUrl: (h) => `https://x.com/${h}`, authType: "handle" },
   { id: "facebook", name: "Facebook", iconPath: siFacebook.path, color: `#${siFacebook.hex}`, placeholder: "yourpage", profileUrl: (h) => `https://facebook.com/${h}`, authType: "oauth" },
