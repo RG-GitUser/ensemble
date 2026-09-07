@@ -15,6 +15,8 @@ import {
   type FormState,
 } from "@/lib/actions";
 import { CopyButton } from "@/components/CopyButton";
+import { ScheduleField } from "@/components/ScheduleField";
+import { ScheduledQueue, type QueueItem } from "@/components/ScheduledQueue";
 import { getPlatform, iconFill, PLATFORMS, type PlatformDef } from "@/lib/social";
 import type { SocialAccount, SocialPost } from "@/lib/types";
 
@@ -194,12 +196,13 @@ function ConnectGrid({ accounts, oauthReady }: { accounts: SocialAccount[]; oaut
   );
 }
 
-function Composer({ accounts }: { accounts: SocialAccount[] }) {
+function Composer({ accounts, zone }: { accounts: SocialAccount[]; zone: string }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(createSocialPostAction, {});
   return (
     <form action={formAction} className="mt-4">
       <textarea name="body" maxLength={2000} className="field min-h-20 text-sm" placeholder="What's happening?" required />
       <input name="mediaUrl" className="field mt-2 font-mono text-xs" placeholder="Image or video link (optional) — https://…" />
+      <ScheduleField zone={zone} />
       {/* No per-platform picker: posts go everywhere you're connected, and the
           Integrations connect grid is already the source of truth for what that is. */}
       {accounts.length === 0 && (
@@ -210,7 +213,14 @@ function Composer({ accounts }: { accounts: SocialAccount[] }) {
       {state.error && (
         <p className="mt-3 rounded-xl border border-brand2/40 bg-brand2/10 px-3 py-2 text-sm text-brand2">{state.error}</p>
       )}
-      {state.ok && <p className="mt-3 text-sm font-semibold text-good">Post queued for every connected platform.</p>}
+      {/* The action's own message: "Scheduled for Tue 9 Sep, 14:30 (…)" or the
+          publish summary. A fixed string here used to say a scheduled post had
+          gone out. */}
+      {state.ok && (
+        <p className="mt-3 text-sm font-semibold text-good">
+          {state.message ?? "Post queued for every connected platform."}
+        </p>
+      )}
       <div className="mt-3 flex items-center gap-3">
         <button className="btn-primary !py-2 text-sm" disabled={pending || accounts.length === 0}>
           {pending ? "Posting…" : "Post everywhere"}
@@ -482,13 +492,45 @@ export function SocialIntegrations({
  * platform icon appears in the feed header — lit in its brand color when
  * connected, greyed out when not — with the posting activity below.
  */
-export function SocialsPanel({ accounts, posts }: { accounts: SocialAccount[]; posts: SocialPost[] }) {
+export function SocialsPanel({
+  accounts,
+  posts,
+  scheduled,
+  zone,
+  cancelAction,
+}: {
+  accounts: SocialAccount[];
+  posts: SocialPost[];
+  /** Queued and in-flight posts, soonest first. */
+  scheduled: SocialPost[];
+  /** IANA zone the creator reads and writes times in. */
+  zone: string;
+  cancelAction: (fd: FormData) => Promise<void>;
+}) {
+  const queue: QueueItem[] = scheduled.map((p) => ({
+    id: p.id,
+    // The body is the only thing that identifies a post at a glance, and a
+    // long one would push the time off the row.
+    label: p.body.length > 80 ? `${p.body.slice(0, 80)}…` : p.body,
+    publishAt: p.publishAt,
+    status: p.status === "sending" ? "sending" : "scheduled",
+  }));
   return (
     <>
       <div className="card">
         <h2 className="font-bold">Post everywhere at once</h2>
         <p className="mt-1 text-sm text-mist">One post, every connected account.</p>
-        <Composer accounts={accounts} />
+        <Composer accounts={accounts} zone={zone} />
+      </div>
+      <div className="card">
+        <h2 className="font-bold">Scheduled posts</h2>
+        <p className="mt-1 text-sm text-mist">Waiting to go out. Cancel any of them until they start sending.</p>
+        <ScheduledQueue
+          items={queue}
+          zone={zone}
+          cancelAction={cancelAction}
+          emptyText="Nothing scheduled. Pick “Schedule” in the composer to queue a post."
+        />
       </div>
       <ActivityFeed accounts={accounts} posts={posts} />
     </>

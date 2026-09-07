@@ -4,7 +4,8 @@ import { billingEnabled, billingOk, planFor } from "@/lib/billing";
 import { getDomainBySite, getSiteByUser, getUserPrefs } from "@/lib/db";
 import { domainProgress } from "@/lib/domains";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
-import { changePlan, openBillingPortal, toggleTutorials } from "@/lib/actions";
+import { changePlan, openBillingPortal, setTimezoneAction, toggleTutorials } from "@/lib/actions";
+import { COMMON_ZONES, describeSchedule, safeZone } from "@/lib/schedule";
 import { DangerButton } from "@/components/DangerButton";
 import { SettingsForm } from "@/components/SettingsForm";
 import { BackupEmailCard } from "@/components/BackupEmailCard";
@@ -102,6 +103,28 @@ export default async function SettingsPage() {
               </button>
             </form>
           </div>
+        </div>
+
+        {/* Time zone. Only used for scheduling, so it says so - a bare
+            "Time zone" setting invites the assumption that it changes every
+            date on the dashboard, which it does not. */}
+        <div className="card">
+          <h2 className="font-bold">Time zone</h2>
+          <p className="mt-1 text-sm text-mist">
+            The clock scheduled posts and newsletters are set by. Everything is stored in UTC, so changing this
+            re-reads what is already queued rather than moving it.
+          </p>
+          <form action={setTimezoneAction} className="mt-3 flex flex-wrap items-center gap-3">
+            <select name="timezone" defaultValue={safeZone(prefs.timezone)} className="field max-w-xs text-sm">
+              {COMMON_ZONES.map((z) => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
+            <button className="btn-ghost !py-2 text-sm">Save time zone</button>
+          </form>
+          <p className="mt-2 text-xs text-mist/70">
+            Right now that reads {describeSchedule(new Date().toISOString(), prefs.timezone)}.
+          </p>
         </div>
 
         <div className="card" data-tour="plan">

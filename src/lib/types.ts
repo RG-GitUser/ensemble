@@ -386,6 +386,9 @@ export interface SocialPostTarget {
   detail: string;
 }
 
+/** Where a composed post is in its life. Historic rows read as 'sent'. */
+export type SocialPostStatus = "sent" | "scheduled" | "sending" | "cancelled";
+
 /** One composed post, fanned out to the selected platforms. */
 export interface SocialPost {
   id: number;
@@ -393,5 +396,23 @@ export interface SocialPost {
   body: string;
   mediaUrl: string;
   createdAt: string;
+  /** UTC 'YYYY-MM-DDTHH:MM:SSZ' for a scheduled post; '' for one sent on submit. */
+  publishAt: string;
+  status: SocialPostStatus;
   targets: SocialPostTarget[];
+}
+
+/** A newsletter written now and sent at publishAt. */
+export interface ScheduledNewsletter {
+  id: number;
+  siteId: number;
+  subject: string;
+  body: string;
+  /** UTC 'YYYY-MM-DDTHH:MM:SSZ'. */
+  publishAt: string;
+  status: "scheduled" | "sending" | "sent" | "cancelled" | "failed";
+  /** Why it failed, or how many it reached. Empty until it runs. */
+  detail: string;
+  createdAt: string;
+  sentAt: string;
 }

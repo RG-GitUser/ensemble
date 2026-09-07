@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { sendNewsletterAction, type FormState } from "@/lib/actions";
+import { ScheduleField } from "@/components/ScheduleField";
 
 /**
  * The Audience tab's "write to everyone" form.
@@ -14,6 +15,7 @@ export function NewsletterComposer({
   recipients,
   mailReady,
   fromName,
+  zone,
 }: {
   /** How many subscribers the send will reach right now. */
   recipients: number;
@@ -21,6 +23,8 @@ export function NewsletterComposer({
   mailReady: boolean;
   /** The display name recipients will see it from. */
   fromName: string;
+  /** IANA zone the creator picks send times in. */
+  zone: string;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(sendNewsletterAction, {});
   const disabled = pending || !mailReady || recipients === 0;
@@ -35,12 +39,16 @@ export function NewsletterComposer({
         maxLength={10000}
         required
       />
+      <ScheduleField zone={zone} verb="Send" />
       {state.error && (
         <p className="rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-2.5 text-sm text-brand2">{state.error}</p>
       )}
+      {/* The action says what actually happened - "Scheduled for …" or how many
+          it reached. The old fixed string told a creator who scheduled a send
+          for next week that it was already on its way. */}
       {state.ok && (
         <p className="rounded-xl border border-good/40 bg-good/10 px-4 py-2.5 text-sm text-good">
-          Sent — it&apos;s on its way to your subscribers.
+          {state.message ?? "Sent — it's on its way to your subscribers."}
         </p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">

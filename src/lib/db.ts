@@ -19,6 +19,7 @@ import type {
   SocialAccount,
   SocialAccountAuth,
   SocialPost,
+  ScheduledNewsletter,
   SocialStat,
   SupportTicket,
   User,
@@ -107,6 +108,35 @@ function createDb(): Database.Database {
       body TEXT NOT NULL,
       recipients INTEGER NOT NULL,
       sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    -- A newsletter written now and sent later. Separate from newsletter_posts
+    -- because that table is the record of what actually went out, to how many
+    -- people: a scheduled send that is later cancelled must never appear there,
+    -- and a send that half-fails still has to.
+    --
+    -- publish_at is UTC, always, stored as 'YYYY-MM-DDTHH:MM:SSZ'. The creator
+    -- picks a time in their own zone and it is converted on the way in - see
+    -- user_prefs.timezone. Storing local time would mean a row whose meaning
+    -- changes if they ever move or the zone's offset does.
+    CREATE TABLE IF NOT EXISTS scheduled_newsletters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      publish_at TEXT NOT NULL,
+      -- scheduled -> sending -> sent | failed, or cancelled from scheduled.
+      -- 'sending' exists so two overlapping runner passes cannot both claim
+      -- the same row; see claimDueNewsletters.
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      detail TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      sent_at TEXT NOT NULL DEFAULT '',
+      -- When a runner took this row. A process killed mid-send leaves 'sending'
+      -- behind, and without a timestamp there is no way to tell that from a
+      -- send still in flight - so the row would sit unsent forever and nothing
+      -- would say why. Recovery re-claims anything held longer than
+      -- CLAIM_STALE_MINUTES.
+      claimed_at TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -339,6 +369,23 @@ function createDb(): Database.Database {
 
   const tCols = new Set((db.prepare("PRAGMA table_info(social_post_targets)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!tCols.has("detail")) db.exec("ALTER TABLE social_post_targets ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+
+  // Scheduling arrived after social_posts shipped. Both columns take a DEFAULT,
+  // so SQLite backfills every existing row inside the ALTER itself - no
+  // separate UPDATE, and therefore nothing for an interrupt to land between.
+  //
+  // publish_at is '' for anything posted immediately, which is every row that
+  // existed before this and every post that still goes out on submit. Empty is
+  // meaningful here rather than NULL, matching how the rest of this file treats
+  // "no value" on a NOT NULL column.
+  //
+  // status defaults to 'sent' so historic rows read as already delivered. A
+  // scheduled post goes 'scheduled' -> 'sending' -> 'sent', and 'sending' is
+  // what stops two overlapping cron passes publishing the same post twice.
+  const spCols = new Set((db.prepare("PRAGMA table_info(social_posts)").all() as Array<{ name: string }>).map((c) => c.name));
+  if (!spCols.has("publish_at")) db.exec("ALTER TABLE social_posts ADD COLUMN publish_at TEXT NOT NULL DEFAULT ''");
+  if (!spCols.has("status")) db.exec("ALTER TABLE social_posts ADD COLUMN status TEXT NOT NULL DEFAULT 'sent'");
+  if (!spCols.has("claimed_at")) db.exec("ALTER TABLE social_posts ADD COLUMN claimed_at TEXT NOT NULL DEFAULT ''");
   // Domain ownership verification arrived after custom_domains shipped.
   // Existing rows are marked verified: they were added under the old rules,
   // where saving a hostname was all there was, and silently unpublishing
@@ -375,6 +422,13 @@ function createDb(): Database.Database {
   const prefCols = new Set((db.prepare("PRAGMA table_info(user_prefs)").all() as Array<{ name: string }>).map((c) => c.name));
   if (!prefCols.has("setup_dismissed")) {
     db.exec("ALTER TABLE user_prefs ADD COLUMN setup_dismissed INTEGER NOT NULL DEFAULT 0");
+  }
+  // IANA zone name for reading and writing scheduled times. Empty means UTC,
+  // which is what an account that has never opened Settings gets - and is the
+  // only honest default, since guessing from an IP would silently reschedule
+  // somebody's queue the first time they travelled.
+  if (!prefCols.has("timezone")) {
+    db.exec("ALTER TABLE user_prefs ADD COLUMN timezone TEXT NOT NULL DEFAULT ''");
   }
   // One transaction: dying between the ALTER and the backfill would greet every
   // existing customer with the first-run walkthrough, which is precisely what
@@ -535,6 +589,9 @@ function createDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_content_snapshots_site ON content_snapshots(site_id, id);
     CREATE INDEX IF NOT EXISTS idx_social_posts_site ON social_posts(site_id, id);
     CREATE INDEX IF NOT EXISTS idx_social_post_targets_post ON social_post_targets(post_id);
+    CREATE INDEX IF NOT EXISTS idx_social_posts_due ON social_posts(status, publish_at);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_newsletters_due ON scheduled_newsletters(status, publish_at);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_newsletters_site ON scheduled_newsletters(site_id, id);
     CREATE INDEX IF NOT EXISTS idx_sites_stripe_subscription ON sites(stripe_subscription_id);
     CREATE INDEX IF NOT EXISTS idx_sites_stripe_customer ON sites(stripe_customer_id);
   `);
@@ -1603,39 +1660,49 @@ export interface UserPrefs {
   welcomed: boolean;
   /** Whether the finished setup checklist has been put away. */
   setupDismissed: boolean;
+  /** IANA zone for reading and writing scheduled times. '' means UTC. */
+  timezone: string;
 }
 
 /** Preferences for a user, with the shipped defaults when they have none. */
 export function getUserPrefs(userId: number): UserPrefs {
   const r = db().prepare("SELECT * FROM user_prefs WHERE user_id = ?").get(userId) as
-    | { tutorials_enabled: number; tours_seen: string; welcomed: number; setup_dismissed: number }
+    | { tutorials_enabled: number; tours_seen: string; welcomed: number; setup_dismissed: number; timezone: string }
     | undefined;
   // No row at all is the truest "brand new": nothing has been answered yet.
-  if (!r) return { tutorialsEnabled: true, toursSeen: [], welcomed: false, setupDismissed: false };
+  if (!r) return { tutorialsEnabled: true, toursSeen: [], welcomed: false, setupDismissed: false, timezone: "" };
   return {
     tutorialsEnabled: r.tutorials_enabled === 1,
     toursSeen: r.tours_seen ? r.tours_seen.split(",").filter(Boolean) : [],
     welcomed: r.welcomed === 1,
     setupDismissed: r.setup_dismissed === 1,
+    timezone: r.timezone ?? "",
   };
 }
 
 function writePrefs(userId: number, p: UserPrefs): void {
   db()
     .prepare(
-      `INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed, setup_dismissed)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO user_prefs (user_id, tutorials_enabled, tours_seen, welcomed, setup_dismissed, timezone)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET tutorials_enabled = excluded.tutorials_enabled,
          tours_seen = excluded.tours_seen, welcomed = excluded.welcomed,
-         setup_dismissed = excluded.setup_dismissed`
+         setup_dismissed = excluded.setup_dismissed, timezone = excluded.timezone`
     )
     .run(
       userId,
       p.tutorialsEnabled ? 1 : 0,
       p.toursSeen.join(","),
       p.welcomed ? 1 : 0,
-      p.setupDismissed ? 1 : 0
+      p.setupDismissed ? 1 : 0,
+      p.timezone
     );
+}
+
+/** '' stores as UTC. Validated by the caller against the offered list. */
+export function setUserTimezone(userId: number, timezone: string): void {
+  const p = getUserPrefs(userId);
+  writePrefs(userId, { ...p, timezone });
 }
 
 /** Switching tutorials back on replays them, so the seen list is cleared. */
@@ -2644,21 +2711,248 @@ interface SocialPostRow {
   body: string;
   media_url: string;
   created_at: string;
+  publish_at: string;
+  status: string;
+  claimed_at: string;
 }
 
-export function createSocialPost(siteId: number, body: string, mediaUrl: string, platforms: string[]): number {
+/**
+ * Attach each post's targets in one query.
+ *
+ * This used to be inline in getSocialPosts, which re-ran the whole
+ * ORDER BY / LIMIT subquery a second time just to scope the target lookup - so
+ * the two halves could disagree if a row was written between them, and the
+ * scheduled-post list would have needed a third copy of it.
+ */
+function hydratePosts(rows: SocialPostRow[]): SocialPost[] {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const targets = db()
+    .prepare(
+      `SELECT post_id, platform, status, detail FROM social_post_targets
+       WHERE post_id IN (${ids.map(() => "?").join(",")})`
+    )
+    .all(...ids) as Array<{ post_id: number; platform: string; status: string; detail: string }>;
+  return rows.map((p) => ({
+    id: p.id,
+    siteId: p.site_id,
+    body: p.body,
+    mediaUrl: p.media_url,
+    createdAt: p.created_at,
+    publishAt: p.publish_at,
+    status: p.status as SocialPost["status"],
+    targets: targets
+      .filter((t) => t.post_id === p.id)
+      .map((t) => ({ platform: t.platform, status: t.status as SocialPost["targets"][number]["status"], detail: t.detail })),
+  }));
+}
+
+/**
+ * How long a claimed row may sit in 'sending' before a later pass takes it
+ * back. Long enough that a genuinely slow fan-out is never stolen mid-flight -
+ * publishing to five platforms with a per-call timeout cannot approach this -
+ * and short enough that a killed process costs one window, not a silent
+ * permanent stall.
+ */
+export const CLAIM_STALE_MINUTES = 15;
+
+/**
+ * @param publishAt UTC 'YYYY-MM-DDTHH:MM:SSZ' to send later, or '' for now.
+ */
+export function createSocialPost(
+  siteId: number,
+  body: string,
+  mediaUrl: string,
+  platforms: string[],
+  publishAt = ""
+): number {
   const d = db();
   let postId = 0;
   const tx = d.transaction(() => {
+    // A scheduled post is 'scheduled' and its targets wait; an immediate one
+    // keeps the old shape exactly, so the existing publish path is unchanged.
     const info = d
-      .prepare("INSERT INTO social_posts (site_id, body, media_url) VALUES (?, ?, ?)")
-      .run(siteId, body, mediaUrl);
+      .prepare("INSERT INTO social_posts (site_id, body, media_url, publish_at, status) VALUES (?, ?, ?, ?, ?)")
+      .run(siteId, body, mediaUrl, publishAt, publishAt ? "scheduled" : "sent");
     postId = Number(info.lastInsertRowid);
-    const insert = d.prepare("INSERT INTO social_post_targets (post_id, platform) VALUES (?, ?)");
-    for (const p of platforms) insert.run(postId, p);
+    const insert = d.prepare("INSERT INTO social_post_targets (post_id, platform, status, detail) VALUES (?, ?, ?, ?)");
+    for (const p of platforms) {
+      insert.run(postId, p, publishAt ? "scheduled" : "queued", publishAt ? "Waiting for its send time." : "");
+    }
   });
   tx();
   return postId;
+}
+
+/**
+ * Take ownership of every post due at `nowIso`, and return their ids.
+ *
+ * The UPDATE is the claim. Selecting due rows and then marking them would be
+ * two statements with a gap, and cron firing every minute against a fan-out
+ * that can outlast a minute puts two passes in that gap - which for a social
+ * post means posting twice to somebody's followers, and for the newsletter
+ * twin means mailing a list twice. Neither can be taken back.
+ *
+ * Rows stuck in 'sending' past CLAIM_STALE_MINUTES are swept back in: that is
+ * a previous pass that died between claiming and finishing, and without this
+ * they would never send and never explain themselves.
+ */
+export function claimDueSocialPosts(nowIso: string, limit = 25): Array<{ id: number; siteId: number }> {
+  const d = db();
+  const stale = new Date(Date.parse(nowIso) - CLAIM_STALE_MINUTES * 60_000).toISOString();
+  // site_id comes back with the claim rather than from a second lookup: the
+  // runner needs it to publish, and re-reading the row afterwards would be a
+  // read the claim has already paid for.
+  const rows = d
+    .prepare(
+      `UPDATE social_posts SET status = 'sending', claimed_at = ?
+       WHERE id IN (
+         SELECT id FROM social_posts
+         WHERE publish_at != '' AND publish_at <= ?
+           AND (status = 'scheduled' OR (status = 'sending' AND claimed_at < ?))
+         ORDER BY publish_at
+         LIMIT ?
+       )
+       RETURNING id, site_id`
+    )
+    .all(nowIso, nowIso, stale, limit) as Array<{ id: number; site_id: number }>;
+  return rows.map((r) => ({ id: r.id, siteId: r.site_id }));
+}
+
+/** Mark a claimed post delivered. Its per-target rows carry the detail. */
+export function finishSocialPost(postId: number): void {
+  db().prepare("UPDATE social_posts SET status = 'sent' WHERE id = ?").run(postId);
+}
+
+/** Posts a creator has queued and can still cancel, soonest first. */
+export function getScheduledSocialPosts(siteId: number): SocialPost[] {
+  const rows = db()
+    .prepare(
+      `SELECT * FROM social_posts
+       WHERE site_id = ? AND status IN ('scheduled', 'sending')
+       ORDER BY publish_at, id`
+    )
+    .all(siteId) as SocialPostRow[];
+  return hydratePosts(rows);
+}
+
+/**
+ * Cancel a queued post. Scoped to the site, and refuses anything already
+ * claimed: once a runner holds a row the send may already be in flight, and a
+ * cancel that silently succeeds after the post went out is worse than one that
+ * says it was too late.
+ */
+export function cancelScheduledSocialPost(siteId: number, postId: number): boolean {
+  const info = db()
+    .prepare("UPDATE social_posts SET status = 'cancelled' WHERE id = ? AND site_id = ? AND status = 'scheduled'")
+    .run(postId, siteId);
+  return info.changes === 1;
+}
+
+/* ---------------- scheduled newsletters ---------------- */
+
+interface ScheduledNewsletterRow {
+  id: number;
+  site_id: number;
+  subject: string;
+  body: string;
+  publish_at: string;
+  status: string;
+  detail: string;
+  created_at: string;
+  sent_at: string;
+  claimed_at: string;
+}
+
+function toScheduledNewsletter(r: ScheduledNewsletterRow): ScheduledNewsletter {
+  return {
+    id: r.id,
+    siteId: r.site_id,
+    subject: r.subject,
+    body: r.body,
+    publishAt: r.publish_at,
+    status: r.status as ScheduledNewsletter["status"],
+    detail: r.detail,
+    createdAt: r.created_at,
+    sentAt: r.sent_at,
+  };
+}
+
+/** @param publishAt UTC 'YYYY-MM-DDTHH:MM:SSZ'. */
+export function createScheduledNewsletter(siteId: number, subject: string, body: string, publishAt: string): number {
+  const info = db()
+    .prepare("INSERT INTO scheduled_newsletters (site_id, subject, body, publish_at) VALUES (?, ?, ?, ?)")
+    .run(siteId, subject, body, publishAt);
+  return Number(info.lastInsertRowid);
+}
+
+/**
+ * Claim every newsletter due at `nowIso`, as one statement.
+ *
+ * The same race as claimDueSocialPosts, with a worse ending: a social post sent
+ * twice can be deleted, and a newsletter sent twice cannot be recalled from
+ * anybody's inbox. A send to a large list can also comfortably outlast the
+ * minute between cron passes, so the overlap is expected rather than unlucky.
+ */
+export function claimDueNewsletters(nowIso: string, limit = 5): ScheduledNewsletter[] {
+  const stale = new Date(Date.parse(nowIso) - CLAIM_STALE_MINUTES * 60_000).toISOString();
+  const rows = db()
+    .prepare(
+      `UPDATE scheduled_newsletters SET status = 'sending', claimed_at = ?
+       WHERE id IN (
+         SELECT id FROM scheduled_newsletters
+         WHERE publish_at <= ?
+           AND (status = 'scheduled' OR (status = 'sending' AND claimed_at < ?))
+         ORDER BY publish_at
+         LIMIT ?
+       )
+       RETURNING *`
+    )
+    .all(nowIso, nowIso, stale, limit) as ScheduledNewsletterRow[];
+  return rows.map(toScheduledNewsletter);
+}
+
+/** Record the outcome of a claimed newsletter. */
+export function finishScheduledNewsletter(
+  id: number,
+  status: "sent" | "failed",
+  detail: string
+): void {
+  db()
+    .prepare("UPDATE scheduled_newsletters SET status = ?, detail = ?, sent_at = ? WHERE id = ?")
+    .run(status, detail.slice(0, 500), new Date().toISOString(), id);
+}
+
+/** The queue a creator can see and cancel, soonest first. */
+export function getScheduledNewsletters(siteId: number): ScheduledNewsletter[] {
+  const rows = db()
+    .prepare(
+      `SELECT * FROM scheduled_newsletters
+       WHERE site_id = ? AND status IN ('scheduled', 'sending')
+       ORDER BY publish_at, id`
+    )
+    .all(siteId) as ScheduledNewsletterRow[];
+  return rows.map(toScheduledNewsletter);
+}
+
+/** The last few that ran, so a failure is visible rather than just absent. */
+export function getRecentNewsletterOutcomes(siteId: number, limit = 5): ScheduledNewsletter[] {
+  const rows = db()
+    .prepare(
+      `SELECT * FROM scheduled_newsletters
+       WHERE site_id = ? AND status IN ('sent', 'failed', 'cancelled')
+       ORDER BY id DESC LIMIT ?`
+    )
+    .all(siteId, limit) as ScheduledNewsletterRow[];
+  return rows.map(toScheduledNewsletter);
+}
+
+/** Refuses anything already claimed, for the reason cancelScheduledSocialPost does. */
+export function cancelScheduledNewsletter(siteId: number, id: number): boolean {
+  const info = db()
+    .prepare("UPDATE scheduled_newsletters SET status = 'cancelled' WHERE id = ? AND site_id = ? AND status = 'scheduled'")
+    .run(id, siteId);
+  return info.changes === 1;
 }
 
 /** Targets of one post that still need a publish attempt, with ownership check. */
@@ -2751,21 +3045,19 @@ export function countSocialPosts(siteId: number): number {
   return r.c;
 }
 
+/**
+ * The history: posts that have already been attempted.
+ *
+ * Anything still queued or cancelled is excluded - those belong to
+ * getScheduledSocialPosts, and a post that has not gone out yet appearing in
+ * the sent list, with targets reading 'scheduled', is the kind of half-truth
+ * this dashboard keeps having to walk back.
+ */
 export function getSocialPosts(siteId: number, limit = 20): SocialPost[] {
-  const posts = db()
-    .prepare("SELECT * FROM social_posts WHERE site_id = ? ORDER BY id DESC LIMIT ?")
+  const rows = db()
+    .prepare("SELECT * FROM social_posts WHERE site_id = ? AND status = 'sent' ORDER BY id DESC LIMIT ?")
     .all(siteId, limit) as SocialPostRow[];
-  const targets = db().prepare("SELECT post_id, platform, status, detail FROM social_post_targets WHERE post_id IN (SELECT id FROM social_posts WHERE site_id = ? ORDER BY id DESC LIMIT ?)").all(siteId, limit) as Array<{ post_id: number; platform: string; status: string; detail: string }>;
-  return posts.map((p) => ({
-    id: p.id,
-    siteId: p.site_id,
-    body: p.body,
-    mediaUrl: p.media_url,
-    createdAt: p.created_at,
-    targets: targets
-      .filter((t) => t.post_id === p.id)
-      .map((t) => ({ platform: t.platform, status: t.status as SocialPost["targets"][number]["status"], detail: t.detail })),
-  }));
+  return hydratePosts(rows);
 }
 
 export interface LatestStat {

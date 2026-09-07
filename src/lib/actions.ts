@@ -43,6 +43,8 @@ import { randomBytes } from "node:crypto";
 import { checkDomainOwnership } from "./domain-verify";
 import { cleanHostname, platformHosts } from "./domains";
 import { isReservedSlug } from "./slugs";
+import { deliverNewsletter } from "./newsletter";
+import { checkSchedule, COMMON_ZONES, describeSchedule } from "./schedule";
 import { forwardSubscriber, getEmailProvider } from "./email-providers";
 import { clientIp, LIMITS, rateLimit } from "./ratelimit";
 import { fetchPageHtml, inspectSnippet, UnsafeUrlError, validateSiteUrl, type SnippetCheck } from "./siteurl";
@@ -1738,45 +1740,43 @@ export async function sendNewsletterAction(_prev: FormState, fd: FormData): Prom
   // Mail leaves under the creator's display name from the PLATFORM's
   // SPF/DKIM-aligned domain, so every complaint lands on a reputation shared
   // by every other creator here. A send limit is the cheapest bound on that.
+  //
+  // It covers scheduling too: the cost being bounded is Resend throughput and
+  // sender reputation, and a queue filled in one burst spends both just the
+  // same, a few minutes later.
   const sendLimit = rateLimit(`newsletter-send:${site.id}`, LIMITS.newsletterSend);
   if (!sendLimit.ok) {
     return { error: "You've sent several newsletters just now. Give it a few minutes before the next one." };
   }
 
-  const leads = store.getActiveLeads(site.id);
-  if (leads.length === 0) return { error: "Nobody to send to yet — the Newsletter section on your page collects subscribers." };
-  if (leads.length > MAX_NEWSLETTER_RECIPIENTS) {
-    return {
-      error: `Your list is over ${MAX_NEWSLETTER_RECIPIENTS.toLocaleString()} addresses, which is past what this server sends in one go. Contact support and we'll raise it.`,
-    };
+  const prefs = store.getUserPrefs(site.userId);
+  const when = checkSchedule(str(fd, "scheduledFor"), prefs.timezone);
+  if (when.kind === "error") return { error: when.error };
+
+  if (when.kind === "at") {
+    // Nothing is sent now, so the preconditions that matter are re-checked at
+    // send time by deliverNewsletter. Only the two a creator can act on are
+    // worth refusing here, while they are still looking at the composer.
+    if (!planFor(site).newsletter) return { error: "Newsletters are an Enterprise feature." };
+    if (!mailEnabled()) {
+      return { error: "Email sending isn't switched on for this server yet — set RESEND_API_KEY and MAIL_FROM (see .env.example)." };
+    }
+    store.createScheduledNewsletter(site.id, subject, body, when.utc);
+    revalidatePath("/dashboard/audience");
+    return { ok: true, message: `Scheduled for ${describeSchedule(when.utc, prefs.timezone)}.` };
   }
 
-  const owner = store.getUserById(site.userId);
-  if (!owner) return { error: "Account not found." };
-
-  const base = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  const { sent, failed } = await sendNewsletter({
-    fromName: owner.businessName,
-    replyTo: owner.email,
-    subject,
-    body,
-    recipients: leads.map((l) => ({ email: l.email, unsubUrl: `${base}/api/unsubscribe?t=${l.unsubToken}` })),
-  });
-
-  // Recorded whenever ANY mail went out, before deciding what to report. A
-  // partial failure used to return an error with no broadcast written, so
-  // "try again" re-sent to everyone who had already received it and then
-  // recorded a second broadcast.
-  if (sent > 0) store.recordNewsletterPost(site.id, subject, body, sent);
+  const result = await deliverNewsletter(site, subject, body);
   revalidatePath("/dashboard/audience");
+  return result.ok ? { ok: true, message: result.message } : { error: result.message };
+}
 
-  if (sent === 0) return { error: "Nothing went out — the mail service rejected the send. Check the server's mail configuration." };
-  return failed > 0
-    ? {
-        ok: true,
-        message: `Sent to ${sent} subscriber${sent === 1 ? "" : "s"}. ${failed} didn't go through — this send is recorded, so don't resend to the whole list.`,
-      }
-    : { ok: true, message: `Sent to ${sent} subscriber${sent === 1 ? "" : "s"}.` };
+/** Drop a queued newsletter. Refuses one the runner already holds. */
+export async function cancelScheduledNewsletterAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "id"));
+  if (id) store.cancelScheduledNewsletter(site.id, id);
+  revalidatePath("/dashboard/audience");
 }
 
 /* ---------------- connect website ---------------- */
@@ -1952,6 +1952,20 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
   const platforms = requested.length > 0 ? requested : connected;
   if (platforms.length === 0) return { error: "Connect a platform above before posting." };
 
+  const prefs = store.getUserPrefs(site.userId);
+  const when = checkSchedule(str(fd, "scheduledFor"), prefs.timezone);
+  if (when.kind === "error") return { error: when.error };
+
+  if (when.kind === "at") {
+    // Nothing is published now; the row waits for the runner. Connected
+    // accounts are re-read at send time, so a platform disconnected in the
+    // meantime fails on its own target rather than taking the post with it.
+    store.createSocialPost(site.id, body, mediaUrl, platforms, when.utc);
+    revalidatePath("/dashboard/integrations");
+    revalidatePath("/dashboard/socials");
+    return { ok: true, message: `Scheduled for ${describeSchedule(when.utc, prefs.timezone)}.` };
+  }
+
   const postId = store.createSocialPost(site.id, body, mediaUrl, platforms);
   const summary = summarisePublish(await publishPost(site.id, postId));
   revalidatePath("/dashboard/integrations");
@@ -1959,6 +1973,33 @@ export async function createSocialPostAction(_prev: FormState, fd: FormData): Pr
   // the post, and the creator is the only one who can fix it (usually by
   // reconnecting). Saying so beats a green tick and a silent gap.
   return summary.ok ? { ok: true, message: summary.message } : { error: summary.message };
+}
+
+/** Drop a queued post. Refuses one the runner already holds. */
+export async function cancelScheduledPostAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const id = Number(str(fd, "id"));
+  if (id) store.cancelScheduledSocialPost(site.id, id);
+  revalidatePath("/dashboard/socials");
+  revalidatePath("/dashboard/integrations");
+}
+
+/**
+ * Set the zone scheduled times are read and written in.
+ *
+ * Only names from the offered list are stored. An arbitrary string would reach
+ * Intl.DateTimeFormat, and while safeZone already falls back to UTC rather
+ * than throwing, storing something no picker can render leaves an account
+ * whose Settings page cannot show its own value back.
+ */
+export async function setTimezoneAction(fd: FormData): Promise<void> {
+  const { site } = await requireSite();
+  const zone = str(fd, "timezone");
+  if (zone && !(COMMON_ZONES as readonly string[]).includes(zone)) return;
+  store.setUserTimezone(site.userId, zone === "UTC" ? "" : zone);
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/socials");
+  revalidatePath("/dashboard/audience");
 }
 
 /**
