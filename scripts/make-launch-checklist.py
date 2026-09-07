@@ -7,7 +7,7 @@ terminal while someone works through a droplet — so the artifact is committed
 alongside this script rather than generated on demand. This file is the source
 of record: change the text here and re-run, never edit the PDF.
 
-Every command in Part 3 is lifted from DEPLOY.md. When that runbook changes,
+Every command in Part 5 is lifted from DEPLOY.md. When that runbook changes,
 this needs the same edit, and the reason each step exists is written next to it
 so the two can be compared rather than guessed at.
 
@@ -71,7 +71,7 @@ def page_furniture(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 7.4)
     canvas.setFillColor(MUTED)
-    canvas.drawString(0.85 * inch, 0.55 * inch, "Ensemble - launch checklist - 6 Sep 2026")
+    canvas.drawString(0.85 * inch, 0.55 * inch, "Ensemble - path to production - 7 Sep 2026")
     canvas.drawRightString(LETTER[0] - 0.85 * inch, 0.55 * inch, "Page %d" % doc.page)
     canvas.setStrokeColor(RULE)
     canvas.setLineWidth(0.5)
@@ -131,44 +131,143 @@ story = []
 A = story.append
 
 # ---------------------------------------------------------------- header
-A(Paragraph("Ensemble: what to do next", H1))
+A(Paragraph("Ensemble: the path to production", H1))
 A(Paragraph(
-    "Prepared 6 September 2026 &nbsp;|&nbsp; RG-GitUser/ensemble &nbsp;|&nbsp; branch "
-    "<font face='Courier'>fix/audit-remediation</font> &nbsp;|&nbsp; PR #3", SUB))
+    "Prepared 7 September 2026 &nbsp;|&nbsp; RG-GitUser/ensemble &nbsp;|&nbsp; "
+    "main at <font face='Courier'>c059e23</font>", SUB))
 
 A(Paragraph("Where things stand", H2))
 A(Paragraph(
-    "PR #3 is open and <b>CI is green for the first time</b> - all five steps passed "
-    "(npm ci, typecheck, 61 tests, production build, dependency audit) on a clean "
-    "Ubuntu install with Node 22. The branch carries 6 commits, 92 files, "
-    "+5,726 / -600: the 57 audit findings, RTMPS stream keys, the social connection "
-    "check, per-creator relay egress metering, sign-in with Google/Microsoft/Yahoo, "
-    "and the fix that made CI actually run its tests.", BODY))
+    "<b>PR #3 is merged.</b> main carries the 57 audit findings, RTMPS stream keys, the "
+    "social connection check, per-creator relay egress metering, and sign-in with Google, "
+    "Microsoft and Yahoo. CI is green on it.", BODY))
+A(Paragraph(
+    "<b>The hardening branch question is settled.</b> Roughly 25 of its fixes were checked "
+    "against main one at a time. Every one was already there, and where the two differed "
+    "main's was better placed: referrer sanitising moved inside recordPageView so no caller "
+    "can skip it, stream-key injection closed with NUL-delimited targets rather than base64, "
+    "the unpublished-metadata gate moved into siteForHost so the title and body cannot "
+    "disagree. A test merge conflicted in 30 of 32 files, which is what two parallel rewrites "
+    "of the same code look like. It is archived as the tag "
+    "<font face='Courier'>archive/hardening</font> and the branch is deleted. Four other "
+    "merged branches were removed with it.", BODY))
+A(Paragraph(
+    "<b>Two PRs are open and green.</b> #4 fixes a test runner that could not execute on "
+    "Windows at all. #5 closes two places the app promised something no configuration could "
+    "deliver.", BODY))
+A(Paragraph(
+    "<b>Still true from the last checklist:</b> nothing enforces that CI passes before a "
+    "merge, and none of the non-code launch blockers have moved.", BODY))
 
-A(Paragraph("Part 1 - Do these first", H2))
-A(Paragraph("Ten minutes, and everything else builds on them.", H2NOTE))
+# ---------------------------------------------------------------- part 1
+A(Paragraph("Part 1 - Merge what is ready", H2))
+A(Paragraph("Ten minutes. Everything after this assumes main is current.", H2NOTE))
 
 A(check_row(
-    "Merge PR #3",
-    "It is green and every later change stacks on it. Merging also puts ci.yml on main, "
-    "which is what makes the push trigger start working for future commits."))
+    "Merge PR #4 - the test runner",
+    "npm test printed 'Test sources failed to compile' on a tree that compiles clean, because "
+    "the compile never ran: npx on Windows is npx.cmd and spawnSync will not resolve .cmd. "
+    "Until this merges, the suite cannot run on the machine the work happens on."))
+A(check_row(
+    "Merge PR #5 - two promises the app could not keep",
+    "TikTok advertised one-click publishing that no environment value could unlock, and "
+    ".env.example shipped an RFC 5737 documentation IP as live DNS instructions."))
+A(check_row(
+    "Merge this checklist",
+    "The PDF and the script that renders it. A checked-in binary nobody can regenerate goes "
+    "stale silently, which is the failure this repo keeps finding in its own comments."))
 A(check_row(
     "Make the CI check required on main",
-    "Settings -> Branches -> add a rule for main -> require the 'check' status. Right now "
-    "GitHub reports mergeable_state=unstable, which means nothing enforces that CI must "
-    "pass. Without this a future red build will not block a merge."))
-A(check_row(
-    "Reconcile or close origin/hardening",
-    "6 commits, 32 files, overlapping scope with this branch, never merged. Leave it much "
-    "longer and nobody will remember which of the two is authoritative."))
+    "Settings -> Branches -> add a rule for main -> require the 'check' status. Both open PRs "
+    "are mergeable right now with nothing verifying that CI passed. They happen to be green. "
+    "The next one might not be.",
+    warn=True))
 
-A(Paragraph("Part 2 - Launch blockers that are not code", H2))
-A(Paragraph("None of these can be written for you. The first is the longest pole - start it today.", H2NOTE))
+# ---------------------------------------------------------------- part 2
+A(Paragraph("Part 2 - The droplet's .env", H2))
+A(Paragraph(
+    "New in this revision. The app was run in production mode and every environment gate read "
+    "in the code. These are the values whose absence does not announce itself.", H2NOTE))
+
+A(check_row(
+    "APP_URL is the public origin",
+    "It defaults to http://localhost:3000, and that default is what builds password-reset and "
+    "account-recovery links. Unset in production, the mail sends successfully and every "
+    "recipient gets a link to their own machine. Nothing errors.",
+    ["APP_URL=https://ensemble.it.com"],
+    warn=True))
+A(check_row(
+    "RESEND_API_KEY and MAIL_FROM are set",
+    "All outbound mail is gated on RESEND_API_KEY. Without it there is no password reset, no "
+    "account recovery and no newsletters - the Forgot page says so on screen. In development "
+    "that is a banner; in production it means a locked-out customer has no way back in.",
+    ["RESEND_API_KEY=re_...        # domain verified at resend.com",
+     "MAIL_FROM=Ensemble <news@ensemble.it.com>",
+     "AUTH_MAIL_FROM=Ensemble <noreply@ensemble.it.com>"],
+    warn=True))
+A(check_row(
+    "PLATFORM_HOSTS lists every hostname Caddy routes to the app",
+    "Defaults to localhost,127.0.0.1. Sites.* included, or a direct visit to the CNAME target "
+    "404s as an unknown customer domain.",
+    ["PLATFORM_HOSTS=ensemble.it.com,www.ensemble.it.com,sites.ensemble.it.com"]))
+A(check_row(
+    "DOMAIN_A_RECORD is uncommented and set to the reserved IP",
+    "It now ships commented out on purpose. The value that used to ship, 203.0.113.10, is "
+    "documentation space routed by nobody - so forgetting this edit did not fail, it told "
+    "every creator to point their apex A record at an address that never answers. Commented, "
+    "the DNS step hides instead.",
+    ["#DOMAIN_A_RECORD=203.0.113.10     <- as shipped",
+     "DOMAIN_A_RECORD=104.248.107.30    <- the droplet's reserved IP"],
+    warn=True))
+A(check_row(
+    "Stripe keys are set, or billing is disabled on purpose",
+    "With NODE_ENV=production and no STRIPE_SECRET_KEY, billing fails closed and logs why. "
+    "That is the fix for free-Enterprise-by-default. Paid features are then unavailable to "
+    "everyone until one of the two lines below exists.",
+    ["STRIPE_SECRET_KEY=sk_live_...",
+     "STRIPE_WEBHOOK_SECRET=whsec_...",
+     "# or, deliberately:",
+     "ENSEMBLE_BILLING_DISABLED=1"],
+    warn=True))
+A(check_row(
+    "ADMIN_PASSWORD is still commented out",
+    "It is seeded once and the mistake is permanent, against an admin address published in "
+    "this repo. Unset, a random password is generated and printed to the log on first start.",
+    ["grep -n '^ADMIN_PASSWORD' /srv/ensemble/.env    # expect: no output",
+     "journalctl -u ensemble | grep -i 'admin password'"],
+    warn=True))
+A(check_row(
+    "Optional, and safe to leave unset",
+    "Each is inert when absent rather than broken. SSO providers missing either value are "
+    "simply not rendered on the login page. The relay needs both of its values or neither.",
+    ["GOOGLE_/MICROSOFT_/YAHOO_CLIENT_ID + _CLIENT_SECRET   # sign-in",
+     "THREADS_/INSTAGRAM_/FACEBOOK_/PINTEREST_/REDDIT_APP_ID + _APP_SECRET",
+     "LIVE_INGEST_URL + LIVE_HOOK_SECRET                    # relay; both or neither",
+     "LIVE_EGRESS_BYTES_PER_SITE                            # default 250 GB/creator/month",
+     "INTUIT_CLIENT_ID + INTUIT_CLIENT_SECRET               # QuickBooks",
+     "STRIPE_AUTOMATIC_TAX=1                                # only after Tax is configured",
+     "WIP_MODE=1                                            # holding page"]))
+
+story.extend(callout(
+    "<b>Set Stripe Tax up in the dashboard BEFORE setting the flag.</b> In that order. "
+    "STRIPE_AUTOMATIC_TAX=1 before Tax is configured makes every checkout fail."))
+
+A(check_row(
+    "The file is not world-readable",
+    "Every secret lives in it. The default umask leaves it mode 644.",
+    ["chmod 600 /srv/ensemble/.env",
+     "stat -c '%a %U:%G' /srv/ensemble/.env    # expect: 600 ensemble:ensemble"]))
+
+# ---------------------------------------------------------------- part 3
+A(Paragraph("Part 3 - Launch blockers that are not code", H2))
+A(Paragraph(
+    "None of these can be written for you. The first is the longest pole - start it today.",
+    H2NOTE))
 
 A(check_row(
     "Legal review by a qualified person",
-    "Terms with governing law, dispute resolution and a refund policy (you bill monthly and "
-    "deliberately do not prorate - that has to be somewhere a customer agreed to). A privacy "
+    "Terms with governing law, dispute resolution and a refund policy - you bill monthly and "
+    "deliberately do not prorate, which has to be somewhere a customer agreed to. A privacy "
     "page naming Stripe, Resend and DigitalOcean as subprocessors, with retention periods and "
     "data-subject rights. An acceptable-use policy with an abuse contact and a DMCA process.",
     warn=True))
@@ -176,12 +275,8 @@ A(check_row(
     "Stripe: live mode and one full lifecycle",
     "Register the webhook against the six events billing.ts handles, then run it end to end: "
     "subscribe, upgrade, downgrade, fail a payment, cancel, delete the account - and confirm "
-    "the card actually stops. That last step is the finding most likely to become a chargeback.",
-    warn=True))
-A(check_row(
-    "Configure Stripe Tax in the dashboard, THEN set the flag",
-    "In that order. STRIPE_AUTOMATIC_TAX=1 before Tax is configured makes every checkout fail.",
-    ["STRIPE_AUTOMATIC_TAX=1   # only after the Stripe dashboard is configured"],
+    "the card actually stops. That last step is the finding most likely to become a "
+    "chargeback.",
     warn=True))
 A(check_row(
     "Restore a backup onto a scratch droplet",
@@ -190,26 +285,17 @@ A(check_row(
     warn=True))
 A(check_row(
     "Make one real post per social provider",
-    "You have OAuth apps on prod now, but that path has never been proven against a live API. "
-    "Treat the first post to each provider as a test, not as a launch. The new 'Check "
-    "connection' button on Integrations verifies the token without publishing anything."))
+    "OAuth apps are on production now, but that path has never been proven against a live API. "
+    "Treat the first post to each provider as a test, not as a launch. The 'Check connection' "
+    "button on Integrations verifies a token without publishing anything."))
 A(check_row(
     "Register the SSO apps, if you want sign-in live",
     "Optional. Any provider missing either value is simply not rendered on the login page, so "
     "leaving these unset keeps email-and-password as the only way in. Redirect URIs are in "
-    ".env.example.",
-    ["GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET=",
-     "MICROSOFT_CLIENT_ID= / MICROSOFT_CLIENT_SECRET=",
-     "YAHOO_CLIENT_ID= / YAHOO_CLIENT_SECRET="]))
+    ".env.example."))
 
-story.extend(callout(
-    "<b>One behaviour change before you deploy.</b> With NODE_ENV=production and no "
-    "STRIPE_SECRET_KEY, billing now <b>fails closed</b> and logs why. That is the fix for "
-    "free-Enterprise-by-default. An install relying on the old permissive behaviour needs "
-    "<font face='Courier'>ENSEMBLE_BILLING_DISABLED=1</font> set on purpose."))
-
-# ---------------------------------------------------------------- security
-A(Paragraph("Part 3 - Server security checklist", H2))
+# ---------------------------------------------------------------- part 4
+A(Paragraph("Part 4 - Server security checklist", H2))
 A(Paragraph(
     "Run as root on the droplet unless a line says otherwise. Commands are from DEPLOY.md; "
     "each box is one thing to confirm rather than assume.", H2NOTE))
@@ -228,20 +314,7 @@ A(check_row(
     ["ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable",
      "ufw status verbose"]))
 
-A(Paragraph("B. Secrets and file permissions", H3))
-A(check_row(
-    "The env file is not world-readable",
-    "Every secret lives in it - Stripe, Resend, the live hook secret, the admin password. The "
-    "default umask leaves it mode 644.",
-    ["chmod 600 /srv/ensemble/.env",
-     "stat -c '%a %U:%G' /srv/ensemble/.env    # expect: 600 ensemble:ensemble"]))
-A(check_row(
-    "ADMIN_PASSWORD was never copied from the example",
-    "It used to ship set to a known value with the runbook telling you to copy the file, which "
-    "defeated the random-password safety net four lines above it. It is a one-shot, permanent "
-    "mistake against an admin address published in the repo.",
-    ["grep -n '^ADMIN_PASSWORD' /srv/ensemble/.env    # expect: no output",
-     "journalctl -u ensemble | grep -i 'admin password'"]))
+A(Paragraph("B. Secrets and service hardening", H3))
 A(check_row(
     "The relay has its OWN env file, not the app's",
     "EnvironmentFile loads a whole file, not one line. Pointing the relay at the app's .env put "
@@ -250,8 +323,6 @@ A(check_row(
     ["printf 'LIVE_HOOK_SECRET=%s\\n' 'the-value-you-generated' > /etc/ensemble-relay.env",
      "chown root:ensemble /etc/ensemble-relay.env",
      "chmod 640 /etc/ensemble-relay.env"]))
-
-A(Paragraph("C. Service hardening", H3))
 A(check_row(
     "systemd sandboxing is actually in effect",
     "These are set in deploy/ensemble.service. Confirm the running unit picked them up rather "
@@ -260,7 +331,7 @@ A(check_row(
      "  -p MemoryMax -p StartLimitBurst -p StartLimitIntervalSec",
      "# expect NoNewPrivileges=yes, ProtectSystem=strict, a real MemoryMax"]))
 
-A(Paragraph("D. Backups", H3))
+A(Paragraph("C. Backups", H3))
 A(check_row(
     "sqlite3 is installed",
     "Not optional: backup.sh and the whole documented restore shell out to it. Without it the "
@@ -281,21 +352,15 @@ A(check_row(
     "remote configured as root is invisible to the job that needs it.",
     ["sudo -iu ensemble rclone config",
      "grep -n '^BACKUP_REMOTE' /srv/ensemble/.env"]))
-A(check_row(
-    "A backup has been restored end to end, on a real box",
-    "An untested backup is a belief, not a backup.",
-    ["ls -la /srv/ensemble/backups/",
-     "tail -20 /srv/ensemble/backups/backup.log"],
-    warn=True))
 
 story.extend(callout(
     "<b>Never back up the database with cp.</b> It runs in WAL mode, so at any moment the most "
-    "recent writes are in app.db-wal rather than app.db. Copying app.db alone gets you an almost "
-    "empty database that still opens cleanly - the worst kind of bad backup. Use "
+    "recent writes are in app.db-wal rather than app.db. Copying app.db alone gets you an "
+    "almost empty database that still opens cleanly - the worst kind of bad backup. Use "
     "<font face='Courier'>sqlite3 .backup</font>, or take app.db, app.db-wal and app.db-shm "
     "together."))
 
-A(Paragraph("E. Live relay", H3))
+A(Paragraph("D. Live relay", H3))
 A(check_row(
     "RTMPS is open; plain RTMP is closed to the world",
     "The ingest key travels in the URL path in cleartext, and creators stream from venue and "
@@ -303,14 +368,8 @@ A(check_row(
     "does not touch.",
     ["ufw allow 1936/tcp", "ufw deny 1935/tcp",
      "chmod +x /srv/ensemble/deploy/live-push.sh"]))
-A(check_row(
-    "Set a relay egress allowance if 250 GB/month per creator is wrong for your droplet",
-    "Optional. Forwarding one stream to three platforms is roughly 8 GB/hour, so one continuous "
-    "streamer clears a 1 TB allowance in about five days. The quota is now enforced when a "
-    "stream starts and never interrupts one already running.",
-    ["LIVE_EGRESS_BYTES_PER_SITE=268435456000   # bytes; omit to use the plan default"]))
 
-A(Paragraph("F. Monitoring", H3))
+A(Paragraph("E. Monitoring", H3))
 A(check_row(
     "Caddy's log directory exists",
     None,
@@ -327,7 +386,39 @@ A(check_row(
      "journalctl -u ensemble -n 50",
      "tail -f /var/log/caddy/access.log"]))
 
-A(Paragraph("G. Verify from OUTSIDE the box", H3))
+# ---------------------------------------------------------------- part 5
+A(Paragraph("Part 5 - Deploy, and be able to undo it", H2))
+A(Paragraph(
+    "main is 17 commits ahead of what is running. Do not deploy until Part 2 is done: this "
+    "release is the one where billing fails closed.", H2NOTE))
+
+A(check_row(
+    "Snapshot first, always",
+    "npm ci deletes node_modules before it starts and next build overwrites .next, on a box "
+    "that may need swap to build at all. A build that OOMs halfway leaves no working previous "
+    "version to fall back to.",
+    ["sudo -iu ensemble bash -lc 'cd /srv/ensemble && cp -a .next ../next-prev \\",
+     "  && git rev-parse HEAD > ../deployed-sha'"],
+    warn=True))
+A(check_row(
+    "Update as the service user, never as root",
+    "The repo is owned by ensemble, and building as root leaves root-owned .next/ and "
+    "node_modules/ the service cannot write to.",
+    ["sudo -iu ensemble bash -lc 'cd /srv/ensemble && git pull && npm ci && npm run build'",
+     "systemctl restart ensemble",
+     "curl -fsS https://ensemble.it.com/api/health   # expect: {\"status\":\"ok\"}"]))
+A(check_row(
+    "Know the rollback before you need it",
+    None,
+    ["sudo -iu ensemble bash -lc 'cd /srv/ensemble \\",
+     "  && git checkout $(cat ../deployed-sha) && rm -rf .next && cp -a ../next-prev .next'",
+     "systemctl restart ensemble"]))
+A(check_row(
+    "Take the pending reboot at a time you choose",
+    "The droplet login banner reports a required restart. Better now, deliberately, than "
+    "halfway through a deploy."))
+
+A(Paragraph("F. Verify from OUTSIDE the box", H3))
 A(Paragraph(
     "Run these from your laptop, not the droplet. Several of these controls only mean anything "
     "when tested from the internet.", H2NOTE))
@@ -338,7 +429,7 @@ A(check_row(
 A(check_row(
     "Security headers are present and http redirects to https",
     None,
-    ["curl -sI https://ensemble.it.com | grep -iE 'strict-transport|x-content-type|referrer-policy'",
+    ["curl -sI https://ensemble.it.com | grep -iE 'strict-transport|x-content-type'",
      "curl -sI http://ensemble.it.com | head -1        # expect 301/308"]))
 A(check_row(
     "The on-demand-TLS ask endpoint is blocked at the edge",
@@ -350,21 +441,22 @@ A(check_row(
     None,
     ["curl -s -o /dev/null -w '%{http_code}\\n' \\",
      "  'https://ensemble.it.com/api/live/targets?key=whatever'          # expect 401"]))
+A(check_row(
+    "A password reset arrives, and its link points at the real domain",
+    "The single check that proves Part 2 landed: mail configured, and APP_URL not left on its "
+    "localhost default.",
+    warn=True))
 
-# ---------------------------------------------------------------- open items
-A(Paragraph("Part 4 - Still open in the code", H2))
+# ---------------------------------------------------------------- part 6
+A(Paragraph("Part 6 - Still open in the code", H2))
 A(Paragraph("Not blocking a launch, but worth knowing they are outstanding.", H2NOTE))
 A(check_row(
     "Newsletter sending from the creator's own mailbox",
-    "The other half of the email work. Gmail caps at ~500 recipients/day (2,000 on Workspace), "
-    "Outlook ~300, Yahoo similar, and all three treat list mail through a personal mailbox as a "
-    "ToS matter. Proposed design: show the cap against their real subscriber count before they "
-    "send, refuse rather than half-deliver, keep Resend for anyone above it."))
-A(check_row(
-    "TikTok publishing",
-    "It sits in the UI registry as authType 'oauth' with no entry in OAUTH_PROVIDERS, so it "
-    "connects handle-only and can never publish. Either wire the provider or drop it from the "
-    "registry - right now it is a visible hole in a feature you are selling."))
+    "The other half of the email work. Gmail caps at about 500 recipients/day (2,000 on "
+    "Workspace), Outlook about 300, Yahoo similar, and all three treat list mail through a "
+    "personal mailbox as a ToS matter. Proposed design: show the cap against their real "
+    "subscriber count before they send, refuse rather than half-deliver, keep Resend for "
+    "anyone above it."))
 A(check_row(
     "Relay push retry",
     "If one ffmpeg dies on a platform hiccup, that destination is gone for the rest of the "
@@ -376,16 +468,22 @@ A(check_row(
     "theme-<siteId>-<kind>-<timestamp>. Renaming to random ids is a migration touching every "
     "stored config value, and the exposure is a draft's imagery rather than anything "
     "executable. Documented in the route and left deliberately."))
+A(check_row(
+    "TikTok publishing - resolved in PR #5, but not implemented",
+    "It no longer advertises one-click publishing it cannot do. Wiring it for real needs a "
+    "provider written against an API that wants video uploads and an audited app, which is not "
+    "a gap the runbook can close. Flip authType back to 'oauth' in the same commit that adds "
+    "the provider."))
 
 story.extend(hr(10, 4))
 A(Paragraph(
-    "Every command above is from DEPLOY.md as it stands on fix/audit-remediation. Items marked "
-    "with a red box are the ones that cost real money or real trust if skipped.", WHY))
+    "Every command above is from DEPLOY.md as it stands on main. Items marked with a red box "
+    "are the ones that cost real money or real trust if skipped.", WHY))
 
 doc = BaseDocTemplate(OUT, pagesize=LETTER,
                       leftMargin=0.85 * inch, rightMargin=0.85 * inch,
                       topMargin=0.7 * inch, bottomMargin=0.85 * inch,
-                      title="Ensemble - launch checklist",
+                      title="Ensemble - path to production",
                       author="Prepared for Riley Gaffney")
 frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="f")
 doc.addPageTemplates([PageTemplate(id="all", frames=[frame], onPage=page_furniture)])
